@@ -345,12 +345,45 @@ svg .fg-limb { fill: none; }
     <h2>Holds, routes and climbers</h2>
     <p class="lede">The inputs: what a hold is, how a route is written down, and the four climbers who try every route.</p>
   </header>
+  <h3 id="data-wall">The wall</h3>
+  <p>Every route is set on the same flat, vertical wall. The figures on this site all use the same marks for walls, holds and climbers, so each mark is introduced here once.</p>
+  <figure class="fig" id="fig-wall">
+    <div class="fig-row">
+      <div class="fig-main" data-draw="wall"></div>
+      <div class="fig-key">
+        <p class="key-h">The wall</p>
+        <p class="key-note">A flat vertical wall seen from the front. Lengths are in metres, with the origin at the bottom-left corner, \(x\) to the right and \(y\) up. Grid lines are every half metre.</p>
+      </div>
+    </div>
+    <figcaption><b>Wall.</b> <span data-text="wall-size"></span></figcaption>
+  </figure>
+
   <h3 id="data-holds">Hold types</h3>
+  <figure class="fig" id="fig-holds">
+    <div class="hold-grid" data-draw="hold-types"></div>
+    <figcaption><b>The eight hold types.</b> Each type has its own shape: a jug is a big round hold with a pocket, a pinch is narrow at the waist, and the two foot-only holds are a ledge and a small chip. A small arrow marks a hold that only works in one direction: it points the way the hold can push on the hand.</figcaption>
+  </figure>
   <div class="planned"><span class="chip">Planned · unit 1.1</span><p>The eight hold types, each with the range of directions it can support you in and its strength parameters.</p></div>
+
   <h3 id="data-routes">Route format</h3>
+  <figure class="fig" id="fig-marks">
+    <div data-draw="markings"></div>
+    <figcaption><b>Hold markings.</b> Start holds carry an <b>S</b>, the finish hold carries <b>TOP</b>. Holds the current beta uses have a heavy outline; holds it never touches are faded.</figcaption>
+  </figure>
   <div class="planned"><span class="chip">Planned · unit 1.1</span><p>How a route is written: holds, start hands, finish hold.</p></div>
+
   <h3 id="data-climbers">The climbers</h3>
   <div class="planned"><span class="chip">Planned · unit 1.2</span><p>Profile cards for Ava, Ben, Cal and Ava (injured).</p></div>
+
+  <h3 id="data-figures">Reading the figures</h3>
+  <p>On the example pages a climber moves across the wall. This is how a climber, the forces and the balance are drawn.</p>
+  <figure class="fig" id="fig-climber">
+    <div class="fig-row">
+      <div class="fig-main" data-draw="climber"></div>
+      <div class="fig-key" data-draw="climber-key"></div>
+    </div>
+    <figcaption><b>The climber.</b> Torso and head in the climber's colour, each limb coloured by how much of its strength it is using. Arrows are the forces the holds put on the body in the plane of the wall. The inset at the bottom right is a side view: hands are pulled in toward the wall, feet are pushed out. The pose uses the body proportions of step 2; the forces and efforts in this figure are example values.</figcaption>
+  </figure>
 </section>
 
 <section class="chapter" id="body" data-group="The model" data-short="The body model" hidden>
@@ -483,38 +516,7 @@ svg .fg-limb { fill: none; }
 </section>
 <section class="chapter" id="appendix" data-group="Notes" data-short="Implementation and tests" hidden>
   <header><p class="eyebrow">Appendix</p><h2>Implementation and tests</h2>
-  <p class="lede">Data format, test results, how to reproduce everything, and the legend for the figures.</p></header>
-  <h3 id="appendix-legend">Legend</h3>
-  <p>Every figure on this site is drawn by the same few functions, so a mark means the same thing everywhere. This section is the key.</p>
-
-  <figure class="fig" id="fig-wall">
-    <div class="fig-row">
-      <div class="fig-main" data-draw="wall"></div>
-      <div class="fig-key">
-        <p class="key-h">The wall</p>
-        <p class="key-note">A flat vertical wall seen from the front. Lengths are in metres, with the origin at the bottom-left corner, \(x\) to the right and \(y\) up. Grid lines are every half metre.</p>
-      </div>
-    </div>
-    <figcaption><b>Wall.</b> <span data-text="wall-size"></span></figcaption>
-  </figure>
-
-  <figure class="fig" id="fig-holds">
-    <div class="hold-grid" data-draw="hold-types"></div>
-    <figcaption><b>The eight hold types.</b> Each type has its own shape: a jug is a big round hold with a pocket, a pinch is narrow at the waist, and the two foot-only holds are a ledge and a small chip. A small arrow marks a hold that only works in one direction: it points the way the hold can push on the hand.</figcaption>
-  </figure>
-
-  <figure class="fig" id="fig-marks">
-    <div data-draw="markings"></div>
-    <figcaption><b>Hold markings.</b> Start holds carry an <b>S</b>, the finish hold carries <b>TOP</b>. Holds the current beta uses have a heavy outline; holds it never touches are faded.</figcaption>
-  </figure>
-
-  <figure class="fig" id="fig-climber">
-    <div class="fig-row">
-      <div class="fig-main" data-draw="climber"></div>
-      <div class="fig-key" data-draw="climber-key"></div>
-    </div>
-    <figcaption><b>The climber.</b> Torso and head in the climber's colour, each limb coloured by how much of its strength it is using. Arrows are the forces the holds put on the body in the plane of the wall. The inset at the bottom right is a side view: hands are pulled in toward the wall, feet are pushed out. The pose uses the body proportions of step 2; the forces and efforts in this figure are example values.</figcaption>
-  </figure>
+  <p class="lede">Data format, test results and how to reproduce everything.</p></header>
   <h3 id="appendix-format">Data format</h3>
   <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
   <h3 id="appendix-tests">Test results</h3>
