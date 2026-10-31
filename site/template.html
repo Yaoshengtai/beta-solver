@@ -27,6 +27,7 @@
   --hold: #7a6f62;
   --hold-foot: #a39887;
   --hold-edge: #3b342c;
+  --hold-pocket: #2b2520;
   --force: #15191e;
   --c-A: #2563b0;
   --c-B: #c8611a;
@@ -52,7 +53,7 @@
     --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
     --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
     --wall: #2a2723; --wall-edge: #45403a; --wall-grid: #36322d;
-    --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --force: #e6e9ed;
+    --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --hold-pocket: #14120f; --force: #e6e9ed;
     --c-A: #6ea8ec; --c-B: #f0904e; --c-C: #b590e6; --c-D: #ec7aa9;
     color-scheme: dark;
   }
@@ -62,7 +63,7 @@
   --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
   --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
   --wall: #2a2723; --wall-edge: #45403a; --wall-grid: #36322d;
-  --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --force: #e6e9ed;
+  --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --hold-pocket: #14120f; --force: #e6e9ed;
   --c-A: #6ea8ec; --c-B: #f0904e; --c-C: #b590e6; --c-D: #ec7aa9;
   color-scheme: dark;
 }
@@ -190,13 +191,13 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 
 .fig { margin: 20px 0 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
 .fig figcaption { font-size: 0.92rem; color: var(--muted); line-height: 1.5; margin-top: 12px; max-width: 68ch; }
 .fig figcaption b { color: var(--ink); font-weight: 600; }
-.fig svg { display: block; max-width: 100%; height: auto; }
+.fig svg.drawing { display: block; max-width: 100%; height: auto; }
 .fig-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .fig-row > .fig-main { flex: 1 1 300px; min-width: 0; display: flex; justify-content: center; }
 .fig-row > .fig-key { flex: 1 1 220px; min-width: 0; }
 .hold-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .hold-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 8px 4px; border-radius: 6px; background: var(--bg); }
-.hold-cell svg { width: 84px; height: 84px; }
+.hold-cell svg.drawing { width: 84px; height: 84px; }
 .hold-cell b { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; }
 .hold-cell span { font-size: 0.78rem; color: var(--muted); }
 .key { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 0.92rem; line-height: 1.4; }
@@ -211,6 +212,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 
 .w-axis { fill: var(--muted); font: 11px var(--font-body); }
 .h-shape { fill: var(--hold); stroke: var(--hold-edge); stroke-width: 1; }
 .h-shape.foot { fill: var(--hold-foot); }
+.h-pocket { fill: var(--hold-pocket); stroke: none; }
 .h-dir { stroke: var(--hold-edge); fill: var(--hold-edge); stroke-width: 1.6; }
 .hold.used .h-shape { stroke-width: 2.6; }
 .hold.unused { opacity: 0.35; }
@@ -498,7 +500,7 @@ svg .fg-limb { fill: none; }
 
   <figure class="fig" id="fig-holds">
     <div class="hold-grid" data-draw="hold-types"></div>
-    <figcaption><b>The eight hold types.</b> Each type has its own shape. Foot-only holds are a duller shade than hand holds. A small arrow marks a hold that only works in one direction: it points the way the hold can push on the hand.</figcaption>
+    <figcaption><b>The eight hold types.</b> Each type has its own shape: a jug is a big round hold with a pocket, a pinch is narrow at the waist, and the two foot-only holds are a ledge and a small chip. A small arrow marks a hold that only works in one direction: it points the way the hold can push on the hand.</figcaption>
   </figure>
 
   <figure class="fig" id="fig-marks">
@@ -555,7 +557,7 @@ var Draw = (function () {
     var padB = o.padBottom == null ? pad : o.padBottom, padL = o.padLeft == null ? pad : o.padLeft;
     var padT = o.padTop == null ? pad : o.padTop;
     var W = (o.x1 - o.x0) * k + padL + pad, H = (o.y1 - o.y0) * k + padT + padB;
-    var svg = el(null, "svg", { viewBox: "0 0 " + r3(W) + " " + r3(H), width: r3(W), height: r3(H), role: "img" });
+    var svg = el(null, "svg", { viewBox: "0 0 " + r3(W) + " " + r3(H), width: r3(W), height: r3(H), role: "img" }, "drawing");
     if (o.title) el(svg, "title").textContent = o.title;
     var sc = {
       svg: svg, k: k, W: W, H: H,
@@ -593,29 +595,53 @@ var Draw = (function () {
 
   /* hold shapes, in metres so they scale with the wall */
   var SIZE = {
-    jug: 0.06, crimp: [0.13, 0.026], sloper: 0.075, pinch: [0.036, 0.066],
-    sidepull: [0.026, 0.12], undercling: 0.065, foot_big: 0.034, foot_chip: 0.019
+    jug: 0.06, crimp: [0.13, 0.026], sloper: 0.075, pinch: [0.05, 0.13],
+    sidepull: [0.026, 0.12], undercling: 0.065, foot_big: [0.11, 0.05, 0.04], foot_chip: [0.05, 0.035]
   };
   var FOOT_ONLY = { foot_big: 1, foot_chip: 1 };
   var DIRECTIONAL = { sidepull: 1, undercling: 1 };
 
+  function poly(g, pts, cls) {
+    return el(g, "path", { d: "M" + pts.map(function (p) { return r3(p[0]) + " " + r3(p[1]); }).join("L") + "Z" }, cls);
+  }
+
   function holdShape(g, type, cx, cy, k) {
     var s = SIZE[type], cls = "h-shape" + (FOOT_ONLY[type] ? " foot" : "");
     switch (type) {
-      case "jug": case "foot_big": case "foot_chip":
-        return el(g, "circle", { cx: cx, cy: cy, r: r3(s * k) }, cls);
+      case "jug": { // big round hold with a dark pocket: the lip you grab
+        var r = s * k;
+        var c = el(g, "circle", { cx: cx, cy: cy, r: r3(r) }, cls);
+        el(g, "path", { d: "M" + r3(cx - r * 0.62) + " " + r3(cy - r * 0.18) +
+          "Q" + r3(cx) + " " + r3(cy + r * 0.55) + " " + r3(cx + r * 0.62) + " " + r3(cy - r * 0.18) +
+          "Q" + r3(cx) + " " + r3(cy + r * 0.12) + " " + r3(cx - r * 0.62) + " " + r3(cy - r * 0.18) + "Z" }, "h-pocket");
+        return c;
+      }
       case "crimp": case "sidepull":
         return el(g, "rect", { x: r3(cx - s[0] * k / 2), y: r3(cy - s[1] * k / 2), width: r3(s[0] * k), height: r3(s[1] * k), rx: r3(Math.min(s[0], s[1]) * k / 2) }, cls);
-      case "sloper": {
-        var r = s * k; // dome, flat side down
-        return el(g, "path", { d: "M" + r3(cx - r) + " " + r3(cy + r * 0.35) + "A" + r3(r) + " " + r3(r) + " 0 0 1 " + r3(cx + r) + " " + r3(cy + r * 0.35) + "Z" }, cls);
+      case "sloper": { // dome, flat side down
+        var rs = s * k;
+        return el(g, "path", { d: "M" + r3(cx - rs) + " " + r3(cy + rs * 0.35) + "A" + r3(rs) + " " + r3(rs) + " 0 0 1 " + r3(cx + rs) + " " + r3(cy + rs * 0.35) + "Z" }, cls);
       }
-      case "pinch":
-        return el(g, "ellipse", { cx: cx, cy: cy, rx: r3(s[0] * k), ry: r3(s[1] * k) }, cls);
-      case "undercling": {
-        var u = s * k, t = u * 0.42; // a cup opening downward: a thick arch
+      case "pinch": { // tall, pinched in at the waist on both sides
+        var w = s[0] * k, h = s[1] * k, rr = w / 2, top = cy - h / 2, bot = cy + h / 2, q = 0.1 * w;
+        return el(g, "path", { d: "M" + r3(cx - rr) + " " + r3(top + rr) +
+          "A" + r3(rr) + " " + r3(rr) + " 0 0 1 " + r3(cx + rr) + " " + r3(top + rr) +
+          "Q" + r3(cx + q) + " " + r3(cy) + " " + r3(cx + rr) + " " + r3(bot - rr) +
+          "A" + r3(rr) + " " + r3(rr) + " 0 0 1 " + r3(cx - rr) + " " + r3(bot - rr) +
+          "Q" + r3(cx - q) + " " + r3(cy) + " " + r3(cx - rr) + " " + r3(top + rr) + "Z" }, cls);
+      }
+      case "undercling": { // a cup opening downward: a thick arch
+        var u = s * k, t = u * 0.42;
         return el(g, "path", { d: "M" + r3(cx - u) + " " + r3(cy + u * 0.5) + "A" + r3(u) + " " + r3(u) + " 0 0 1 " + r3(cx + u) + " " + r3(cy + u * 0.5) +
           "L" + r3(cx + u - t) + " " + r3(cy + u * 0.5) + "A" + r3(u - t) + " " + r3(u - t) + " 0 0 0 " + r3(cx - u + t) + " " + r3(cy + u * 0.5) + "Z" }, cls);
+      }
+      case "foot_big": { // a ledge: flat top, narrowing downward
+        var wt = s[0] * k / 2, wb = s[1] * k / 2, hb = s[2] * k;
+        return poly(g, [[cx - wt, cy - hb / 2], [cx + wt, cy - hb / 2], [cx + wb, cy + hb / 2], [cx - wb, cy + hb / 2]], cls);
+      }
+      case "foot_chip": { // a small chip: a downward-pointing triangle
+        var wc = s[0] * k / 2, hc = s[1] * k;
+        return poly(g, [[cx - wc, cy - hc / 2], [cx + wc, cy - hc / 2], [cx, cy + hc / 2]], cls);
       }
     }
     return el(g, "circle", { cx: cx, cy: cy, r: 4 }, cls);
