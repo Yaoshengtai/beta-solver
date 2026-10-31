@@ -248,6 +248,21 @@ svg .fg-limb { fill: none; }
 .tbl td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl td.mono, .tbl td code { font-family: var(--font-mono); font-size: 0.85rem; }
 pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 520px; font: 0.76rem/1.5 var(--font-mono); color: var(--ink); }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 24px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--cl); border-radius: 8px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.card h4 { margin: 0; font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.card .blurb { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
+.card dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 0.9rem; }
+.card dt { color: var(--muted); }
+.card dd { margin: 0; font-variant-numeric: tabular-nums; }
+.bars { display: grid; grid-template-columns: 52px minmax(0, 1fr) 70px; gap: 5px 8px; align-items: center; font-size: 0.85rem; }
+.bars .lab { color: var(--muted); }
+.bars .track { height: 10px; background: var(--panel); border-radius: 5px; overflow: hidden; }
+.bars .fill { height: 100%; background: var(--cl); border-radius: 5px; }
+.bars .val { font-variant-numeric: tabular-nums; text-align: right; }
+.bars .val.zero { color: var(--limit); font-weight: 600; }
+.card .warn { margin: 0; font-size: 0.85rem; color: var(--limit); }
+@media (max-width: 640px) { .cards { grid-template-columns: minmax(0, 1fr); } }
 .cl-A { --cl: var(--c-A); } .cl-B { --cl: var(--c-B); } .cl-C { --cl: var(--c-C); } .cl-D { --cl: var(--c-D); }
 .cl-stroke { stroke: var(--cl); } .cl-fill { fill: var(--cl); }
 .fg-torso.cl-fill { fill-opacity: 0.22; stroke: var(--cl); }
@@ -413,7 +428,16 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
   </figure>
 
   <h3 id="data-climbers">The climbers</h3>
-  <div class="planned"><span class="chip">Planned · unit 1.2</span><p>Profile cards for Ava, Ben, Cal and Ava (injured).</p></div>
+  <p>Four climbers try every route. Each profile is a handful of numbers: height and arm span, how much force one hand can take on each kind of hold, how high a foot can go, and how much the climber dislikes crossing hands.</p>
+  <div class="cards" data-draw="climber-cards"></div>
+  <ul>
+    <li><b>Strength</b> is measured in body weights: <span data-text="strength-example"></span> A foot works the same way. Forces and limits both scale with weight, so in this model a climber's weight never matters. That is a deliberate simplification.</li>
+    <li>A sidepull is held like a pinch and an undercling like a crimp (see the table above), so a climber who cannot use crimps cannot use underclings either. A hold with a limit of zero is left out before the state check is even run.</li>
+    <li><b>Flexibility</b> \(\text{flex}\) is how far a foot can go above the hip, as a fraction of height \(H\). A negative value means the foot has to stay below the hip.</li>
+    <li><b>Crossing penalty</b> \(w_{\text{cross}}\) is a small extra cost on any move that crosses the hands. It is a matter of style, not physics.</li>
+  </ul>
+  <p>Some examples compare a climber with a copy that differs in exactly one attribute:</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="variant-table"></table></div>
 
   <h3 id="data-figures">Reading the figures</h3>
   <p>On the example pages a climber moves across the wall. This is how a climber, the forces and the balance are drawn.</p>
@@ -1149,6 +1173,95 @@ var Draw = (function () {
   }
 
   if (DATA.model) renderHoldTable(DATA.model.hold_types);
+
+  /* ---------- #data: climber cards and variants (unit 1.2) ---------- */
+  var GRIP_NAMES = { jug: "jug", crimp: "crimp", sloper: "sloper", pinch: "pinch", foot: "foot" };
+  function num(v, d) { return v.toFixed(d); }
+  function signed(v, d) { return (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(d); }
+  function flexText(c) {
+    var cm = Math.round(Math.abs(c.flex) * c.H * 100);
+    if (c.flex === 0) return "0, up to hip height";
+    return signed(c.flex, 2) + " H, " + cm + " cm " + (c.flex > 0 ? "above" : "below") + " the hip";
+  }
+  function unusable(c) {
+    return DATA.model.hold_types.filter(function (t) { return c.F[t.grip] === 0; }).map(function (t) { return t.name; });
+  }
+
+  function renderClimberCards(climbers) {
+    var wrap = document.querySelector('[data-draw="climber-cards"]');
+    if (!wrap) return;
+    var maxF = 0;
+    climbers.forEach(function (c) { Object.keys(c.F).forEach(function (k) { maxF = Math.max(maxF, c.F[k]); }); });
+    climbers.forEach(function (c) {
+      var card = document.createElement("div");
+      card.className = "card cl-" + c.key;
+      var h = document.createElement("h4");
+      var sw = document.createElement("span"); sw.className = "swatch"; h.appendChild(sw);
+      h.appendChild(document.createTextNode(c.name));
+      card.appendChild(h);
+      var p = document.createElement("p"); p.className = "blurb"; p.textContent = c.blurb; card.appendChild(p);
+
+      var dl = document.createElement("dl");
+      function row(k, v) { var dt = document.createElement("dt"); dt.textContent = k; var dd = document.createElement("dd"); dd.textContent = v; dl.appendChild(dt); dl.appendChild(dd); }
+      row("Height", num(c.H, 2) + " m");
+      row("Arm span", num(c.span, 2) + " m");
+      row("Flexibility", flexText(c));
+      row("Crossing penalty", num(c.w_cross, 2));
+      card.appendChild(dl);
+
+      var bars = document.createElement("div"); bars.className = "bars";
+      bars.setAttribute("role", "img");
+      bars.setAttribute("aria-label", "Strength of " + c.name + " in body weights");
+      Object.keys(GRIP_NAMES).forEach(function (k) {
+        var lab = document.createElement("span"); lab.className = "lab"; lab.textContent = GRIP_NAMES[k];
+        var tr = document.createElement("span"); tr.className = "track";
+        var fl = document.createElement("span"); fl.className = "fill"; fl.style.width = (100 * c.F[k] / maxF) + "%"; fl.style.display = "block";
+        tr.appendChild(fl);
+        var val = document.createElement("span"); val.className = "val" + (c.F[k] === 0 ? " zero" : "");
+        val.textContent = c.F[k] === 0 ? "none" : num(c.F[k], 2) + "\u00d7";
+        bars.appendChild(lab); bars.appendChild(tr); bars.appendChild(val);
+      });
+      card.appendChild(bars);
+      var no = unusable(c);
+      if (no.length) {
+        var w = document.createElement("p"); w.className = "warn";
+        w.textContent = "Cannot use: " + no.join(", ") + ".";
+        card.appendChild(w);
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  function renderVariants(variants, climbers) {
+    var tbl = document.querySelector('[data-draw="variant-table"]');
+    if (!tbl) return;
+    var base = {};
+    climbers.forEach(function (c) { base[c.key] = c; });
+    var labels = { H: "height", span: "arm span", flex: "flexibility", w_cross: "crossing penalty" };
+    tbl.innerHTML = "<thead><tr><th>Variant</th><th>Changed</th><th>From</th><th>To</th><th>Why</th></tr></thead>";
+    var tb = document.createElement("tbody");
+    variants.forEach(function (v) {
+      var b = base[v.base];
+      Object.keys(labels).forEach(function (k) {
+        if (v[k] === b[k]) return;
+        var tr = document.createElement("tr");
+        var fmt = k === "flex" ? function (x) { return signed(x, 2); } : function (x) { return num(x, 2); };
+        [v.name, labels[k], fmt(b[k]), fmt(v[k]), v.blurb].forEach(function (t, i) {
+          var td = document.createElement("td"); td.textContent = t; if (i === 2 || i === 3) td.className = "num"; tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
+    });
+    tbl.appendChild(tb);
+  }
+
+  if (DATA.model && DATA.model.climbers) {
+    renderClimberCards(DATA.model.climbers);
+    renderVariants(DATA.model.variants, DATA.model.climbers);
+    var c0 = DATA.model.climbers[0], ex = document.querySelector('[data-text="strength-example"]');
+    if (ex) ex.textContent = c0.name + "'s jug strength of " + num(c0.F.jug, 1) + " means one hand can hold " +
+      num(c0.F.jug, 1) + " times the climber's own weight on a jug.";
+  }
   if (DATA.figures && DATA.figures.route_example) renderRouteExample(DATA.figures.route_example);
 
   route();
