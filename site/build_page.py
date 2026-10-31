@@ -24,7 +24,7 @@ REPO_URL = "https://github.com/Yaoshengtai/beta-solver"
 
 sys.path.insert(0, str(ROOT / "src"))
 import betasolver  # noqa: E402
-from betasolver import body, model  # noqa: E402
+from betasolver import body, model, stance  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "site"))
 import legend  # noqa: E402
@@ -53,10 +53,21 @@ def collect_data() -> dict:
                 "upper_arm": body.UPPER_ARM, "thigh": body.THIGH, "d_wall": model.D_WALL,
             },
         },
+        "stance": {
+            "unknowns": stance.UNKNOWNS,
+            "constraints": stance.CONSTRAINTS,
+            "reasons": stance.REASONS,
+            "sizes": {
+                "four": stance.layout(("LH", "RH", "LF", "RF")).size,
+                "one_foot": stance.layout(("LH", "RH", "LF")).size,
+                "no_feet": stance.layout(("LH", "RH")).size,
+            },
+        },
         "figures": {
             "legend": legend.legend(),
             "route_example": legend.route_example(),
             "bodies": legend.body_figures(),
+            "state_example": legend.state_example(),
         },
     }
 
