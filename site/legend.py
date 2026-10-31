@@ -10,18 +10,14 @@ from __future__ import annotations
 
 import math
 
-WALL = {"w": 3.0, "h": 4.2}
+from betasolver.model import HOLD_TYPES, WALL_H, WALL_W, Hold, Route
 
-# type, which limbs may use it, default direction (deg, 90 = up)
-HOLD_TYPES = [
-    {"type": "jug", "use": "both", "dir": 90},
-    {"type": "crimp", "use": "both", "dir": 90},
-    {"type": "sloper", "use": "both", "dir": 90},
-    {"type": "pinch", "use": "both", "dir": 90},
-    {"type": "sidepull", "use": "both", "dir": 0},
-    {"type": "undercling", "use": "both", "dir": 270},
-    {"type": "foot_big", "use": "foot", "dir": 90},
-    {"type": "foot_chip", "use": "foot", "dir": 90},
+WALL = {"w": WALL_W, "h": WALL_H}
+
+# type, which limbs may use it, default direction (deg, 90 = up); a sidepull is drawn facing right
+HOLD_TYPES_SHORT = [
+    {"type": t.name, "use": "foot" if t.feet_only else "both", "dir": 0 if t.dir is None else t.dir}
+    for t in HOLD_TYPES.values()
 ]
 
 # Body proportions from step 2, as multiples of the height H.
@@ -128,7 +124,7 @@ def legend() -> dict:
     ]
     return _round({
         "wall": WALL,
-        "hold_types": HOLD_TYPES,
+        "hold_types": HOLD_TYPES_SHORT,
         "markings": markings,
         "climber": {"key": "A", "H": H, "span": span, "d_wall": D_WALL * H,
                     "head": [HEAD[0] * H, HEAD[1] * H]},
@@ -139,3 +135,27 @@ def legend() -> dict:
         "force_scale": 0.3,
         "util_bands": [0.5, 0.8],
     })
+
+
+def route_example() -> dict:
+    """A small route that only illustrates the route format."""
+    holds = [
+        Hold("H1", 1.20, 1.60, "jug"),
+        Hold("H2", 1.75, 1.55, "crimp"),
+        Hold("H3", 1.05, 2.35, "pinch"),
+        Hold("H4", 1.95, 2.55, "sidepull", dir=180),
+        Hold("H5", 1.40, 3.05, "sloper"),
+        Hold("H6", 1.60, 3.65, "jug"),
+        Hold("F1", 1.25, 0.45, "foot_big"),
+        Hold("F2", 1.85, 0.70, "foot_chip"),
+        Hold("F3", 1.50, 1.10, "foot_big"),
+    ]
+    r = Route(
+        id="format-demo",
+        title="Format example",
+        lesson="A small route that only shows how routes are written down.",
+        holds=holds,
+        start_hands=("H1", "H2"),
+        finish="H6",
+    )
+    return _round(r.to_dict())

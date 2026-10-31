@@ -234,6 +234,20 @@ svg .fg-limb { fill: none; }
 .side-wall { stroke: var(--wall-edge); stroke-width: 4; }
 .side-body { stroke-width: 1.6; fill: none; opacity: 0.7; }
 .side-text { fill: var(--muted); font: 10px var(--font-body); }
+.sector { fill: var(--accent); fill-opacity: 0.2; stroke: var(--accent); stroke-width: 1.2; }
+.sector-axis { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.hold-cell small { font-size: 0.78rem; color: var(--ink); line-height: 1.35; }
+.hold-cell .note { font-size: 0.78rem; color: var(--muted); line-height: 1.35; margin-top: 4px; }
+.fig-stack { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+.fig-stack > .fig-main { display: flex; justify-content: center; }
+.tbl-wrap { overflow-x: auto; margin: 16px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.tbl { border-collapse: collapse; width: 100%; font-size: 0.9rem; line-height: 1.4; }
+.tbl th, .tbl td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl th { font-size: 0.82rem; color: var(--muted); font-weight: 600; background: var(--panel); }
+.tbl td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl td.mono, .tbl td code { font-family: var(--font-mono); font-size: 0.85rem; }
+pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 520px; font: 0.76rem/1.5 var(--font-mono); color: var(--ink); }
 .cl-A { --cl: var(--c-A); } .cl-B { --cl: var(--c-B); } .cl-C { --cl: var(--c-C); } .cl-D { --cl: var(--c-D); }
 .cl-stroke { stroke: var(--cl); } .cl-fill { fill: var(--cl); }
 .fg-torso.cl-fill { fill-opacity: 0.22; stroke: var(--cl); }
@@ -359,18 +373,44 @@ svg .fg-limb { fill: none; }
   </figure>
 
   <h3 id="data-holds">Hold types</h3>
+  <p>A hold is a point on the wall with a type. The type decides three things: the directions in which the hold can push on a hand or foot, which of the climber's strength limits applies, and, for hands, how well the hold lets you pull in toward the wall and resist twisting.</p>
   <figure class="fig" id="fig-holds">
     <div class="hold-grid" data-draw="hold-types"></div>
-    <figcaption><b>The eight hold types.</b> Each type has its own shape: a jug is a big round hold with a pocket, a pinch is narrow at the waist, and the two foot-only holds are a ledge and a small chip. A small arrow marks a hold that only works in one direction: it points the way the hold can push on the hand.</figcaption>
+    <figcaption><b>The eight hold types.</b> Each type has its own shape: a jug is a big round hold with a pocket, a pinch is narrow at the waist, and the two foot-only holds are a ledge and a small chip. The shaded sector is every direction in which the hold can push on the limb: it is centred on the dashed line, the hold's direction \(\theta\), and reaches \(\alpha\) to either side. A small arrow marks a hold that works in one direction only.</figcaption>
   </figure>
-  <div class="planned"><span class="chip">Planned · unit 1.1</span><p>The eight hold types, each with the range of directions it can support you in and its strength parameters.</p></div>
+  <p>The full parameters of each type:</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="hold-table"></table></div>
+  <ul>
+    <li><b>Direction</b> \(\theta\) and <b>half-width</b> \(\alpha\) give the sector above. The force a hold puts on a limb must point inside it; the state check turns this into the direction constraint (<a href="#check-direction">Direction</a>).</li>
+    <li><b>Strength limit</b> says which of the climber's limits applies: the most force one hand can take on that kind of hold, or one foot. A sidepull is held like a pinch and an undercling like a crimp.</li>
+    <li><b>Pull-in</b> \(\beta\) and <b>grip torque</b> \(r\) only matter for hands. A hand can pull you toward the wall by at most \(\beta\) times the force along \(\theta\), and resist twisting by at most \(r\) times its strength (<a href="#check-tipping">no tipping</a>, <a href="#check-barndoor">no barn-door</a>). These two values are first guesses and may be tuned later.</li>
+    <li>A foot on a hand hold is treated as if it stood on a <code data-text="foot-on-handhold"></code>: that direction range and the foot's strength.</li>
+  </ul>
 
   <h3 id="data-routes">Route format</h3>
+  <p>A route is a list of holds plus three facts: which two holds the hands start on, which hold is the top, and whether feet may use the hand holds. The climber has to finish with both hands matched on the top hold.</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">id, title</td><td>Name of the route.</td></tr>
+      <tr><td class="mono">lesson</td><td>The one idea the route is meant to show.</td></tr>
+      <tr><td class="mono">holds</td><td>Every hold on the route. Each hold has an <code>id</code>, a position <code>x</code>, <code>y</code> in metres, a <code>type</code>, a direction <code>dir</code> (taken from the type unless given; a sidepull must give it, 0 for facing right or 180 for facing left) and <code>use</code>: <code>hand</code>, <code>foot</code> or <code>both</code>.</td></tr>
+      <tr><td class="mono">start_hands</td><td>The two hand holds the climber starts on.</td></tr>
+      <tr><td class="mono">finish</td><td>The top hold. The route is done when both hands are on it.</td></tr>
+      <tr><td class="mono">allow_feet_on_handholds</td><td>Whether feet may step on hand holds. True unless a route says otherwise; a campus route sets it to false.</td></tr>
+    </tbody>
+  </table></div>
+  <figure class="fig" id="fig-route">
+    <div class="fig-stack">
+      <div class="fig-main" data-draw="route-example"></div>
+      <pre class="code" data-draw="route-json"></pre>
+    </div>
+    <figcaption><b>A route and how it is written.</b> <span data-text="route-lesson"></span> Hold positions are checked when a route is loaded: every hold must be on the wall, ids must be unique, and the start and top holds must be hand holds.</figcaption>
+  </figure>
   <figure class="fig" id="fig-marks">
     <div data-draw="markings"></div>
     <figcaption><b>Hold markings.</b> Start holds carry an <b>S</b>, the finish hold carries <b>TOP</b>. Holds the current beta uses have a heavy outline; holds it never touches are faded.</figcaption>
   </figure>
-  <div class="planned"><span class="chip">Planned · unit 1.1</span><p>How a route is written: holds, start hands, finish hold.</p></div>
 
   <h3 id="data-climbers">The climbers</h3>
   <div class="planned"><span class="chip">Planned · unit 1.2</span><p>Profile cards for Ava, Ben, Cal and Ava (injured).</p></div>
@@ -776,11 +816,20 @@ var Draw = (function () {
     });
   }
 
+  /* sector of directions a hold can push in: centre dir, half-width alpha (degrees), radius in metres */
+  function sector(sc, x, y, dir, alpha, radius) {
+    var g = sc.layers.trail, cx = sc.X(x), cy = sc.Y(y), R = radius * sc.k;
+    function pt(deg) { var a = deg * Math.PI / 180; return r3(cx + R * Math.cos(a)) + " " + r3(cy - R * Math.sin(a)); }
+    var big = 2 * alpha > 180 ? 1 : 0;
+    el(g, "path", { d: "M" + cx + " " + cy + "L" + pt(dir - alpha) + "A" + r3(R) + " " + r3(R) + " 0 " + big + " 0 " + pt(dir + alpha) + "Z" }, "sector");
+    el(g, "line", { x1: cx, y1: cy, x2: pt(dir).split(" ")[0], y2: pt(dir).split(" ")[1] }, "sector-axis");
+  }
+
   /* a tiny standalone SVG for legend keys */
   function chip(w, h) { return el(null, "svg", { viewBox: "0 0 " + w + " " + h, width: w, height: h, "aria-hidden": "true" }); }
 
   return {
-    el: el, scene: scene, wall: wall, hold: hold, figure: figure, forces: forces, com: com,
+    el: el, scene: scene, wall: wall, hold: hold, sector: sector, figure: figure, forces: forces, com: com,
     sideView: sideView, arrowPx: arrowPx, chip: chip, utilClass: utilClass,
     FOOT_ONLY: FOOT_ONLY, LIMBS: LIMBS
   };
@@ -928,6 +977,13 @@ var Draw = (function () {
   if (theme !== "auto") applyTheme();
 
   /* ---------- appendix: legend figures (unit 0.2) ---------- */
+  var TYPES = {};
+  ((DATA.model && DATA.model.hold_types) || []).forEach(function (t) { TYPES[t.name] = t; });
+  function dirWord(d) {
+    if (d === null || d === undefined) return "sideways";
+    return { 90: "up", 270: "down", 0: "right", 180: "left" }[d] || d + "\u00b0";
+  }
+
   function renderLegend(L) {
     function slot(name) { return document.querySelector('[data-draw="' + name + '"]'); }
     function pct(v) { return Math.round(v * 100) + "%"; }
@@ -946,6 +1002,8 @@ var Draw = (function () {
       cell.className = "hold-cell";
       var sc = Draw.scene(cell, { x0: -0.15, y0: -0.15, x1: 0.15, y1: 0.15, k: 280, pad: 0, title: t.type });
       Draw.el(sc.layers.wall, "rect", { x: 0, y: 0, width: sc.W, height: sc.H, rx: 8 }, "w-wall");
+      var spec = TYPES[t.type];
+      if (spec) Draw.sector(sc, 0, 0, t.dir, spec.alpha, 0.135);
       Draw.hold(sc, { x: 0, y: 0, type: t.type, dir: t.dir });
       var b = document.createElement("b");
       b.textContent = t.type;
@@ -953,6 +1011,15 @@ var Draw = (function () {
       u.textContent = t.use === "foot" ? "feet only" : "hands and feet";
       cell.appendChild(b);
       cell.appendChild(u);
+      if (spec) {
+        var dsc = document.createElement("small");
+        dsc.textContent = spec.alpha + "\u00b0 either side of " + dirWord(spec.dir);
+        cell.appendChild(dsc);
+        var note = document.createElement("span");
+        note.className = "note";
+        note.textContent = spec.note;
+        cell.appendChild(note);
+      }
       grid.appendChild(cell);
     });
 
@@ -1024,6 +1091,65 @@ var Draw = (function () {
     item(ul, sv, "Side view: a hand pulled in toward the wall, or a foot pushed out from it.");
   }
   if (DATA.figures && DATA.figures.legend) renderLegend(DATA.figures.legend);
+
+  /* ---------- #data: hold type table and route example (unit 1.1) ---------- */
+  function renderHoldTable(types) {
+    var tbl = document.querySelector('[data-draw="hold-table"]');
+    if (!tbl) return;
+    var head = ["Type", "Used by", "Direction \\(\\theta\\)", "Half-width \\(\\alpha\\)", "Strength limit", "Pull-in \\(\\beta\\)", "Grip torque \\(r\\)"];
+    var thead = document.createElement("thead"), tr = document.createElement("tr");
+    head.forEach(function (h) { var th = document.createElement("th"); th.textContent = h; tr.appendChild(th); });
+    thead.appendChild(tr); tbl.appendChild(thead);
+    var tb = document.createElement("tbody");
+    function td(row, text, cls) { var c = document.createElement("td"); c.textContent = text; if (cls) c.className = cls; row.appendChild(c); return c; }
+    function dash(v, fmt) { return v === null || v === undefined ? "\u2014" : fmt(v); }
+    types.forEach(function (t) {
+      var row = document.createElement("tr");
+      td(row, t.name, "mono");
+      td(row, t.feet_only ? "feet" : "hands, feet");
+      td(row, t.dir === null ? "0\u00b0 or 180\u00b0 (per hold)" : t.dir + "\u00b0 (" + dirWord(t.dir) + ")", "num");
+      td(row, t.alpha + "\u00b0", "num");
+      td(row, "\\(F_{\\text{" + t.grip + "}}\\)");
+      td(row, dash(t.beta, function (v) { return v.toFixed(1); }), "num");
+      td(row, dash(t.r, function (v) { return v.toFixed(2) + " m"; }), "num");
+      tb.appendChild(row);
+    });
+    tbl.appendChild(tb);
+    var f = document.querySelector('[data-text="foot-on-handhold"]');
+    if (f) f.textContent = DATA.model.foot_on_handhold;
+  }
+
+  function routeJson(r) {
+    function v(x) { return JSON.stringify(x); }
+    var keys = ["id", "x", "y", "type", "dir", "use"];
+    var lines = ["{",
+      '  "id": ' + v(r.id) + ",",
+      '  "title": ' + v(r.title) + ",",
+      '  "lesson": ' + v(r.lesson) + ",",
+      '  "holds": ['];
+    r.holds.forEach(function (h, i) {
+      lines.push("    {" + keys.map(function (k) { return v(k) + ": " + v(h[k]); }).join(", ") + "}" + (i < r.holds.length - 1 ? "," : ""));
+    });
+    lines.push("  ],",
+      '  "start_hands": ' + v(r.start_hands) + ",",
+      '  "finish": ' + v(r.finish) + ",",
+      '  "allow_feet_on_handholds": ' + v(r.allow_feet_on_handholds),
+      "}");
+    return lines.join("\n");
+  }
+
+  function renderRouteExample(r) {
+    var slot = document.querySelector('[data-draw="route-example"]');
+    if (!slot) return;
+    var sc = Draw.scene(slot, { x0: 0, y0: 0, x1: r.wall.w, y1: r.wall.h, k: 110, pad: 8, title: "Example route on the full wall" });
+    Draw.wall(sc, r.wall, { grid: 0.5 });
+    r.holds.forEach(function (h) { Draw.hold(sc, h, { label: true }); });
+    document.querySelector('[data-draw="route-json"]').textContent = routeJson(r);
+    document.querySelector('[data-text="route-lesson"]').textContent = r.lesson;
+  }
+
+  if (DATA.model) renderHoldTable(DATA.model.hold_types);
+  if (DATA.figures && DATA.figures.route_example) renderRouteExample(DATA.figures.route_example);
 
   route();
 })();
