@@ -60,3 +60,12 @@ def test_preview_has_no_document_wrapper(html):
     for tag in ("<!doctype", "<html", "<head>", "<body>", 'name="viewport"', "charset="):
         assert tag not in frag.lower()
     assert frag.lstrip().startswith("<title>")
+
+
+def test_legend_embedded_and_slots_present(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    leg = json.loads(raw)["figures"]["legend"]
+    assert len(leg["hold_types"]) == 8
+    for slot in ("wall", "hold-types", "markings", "climber", "climber-key"):
+        assert f'data-draw="{slot}"' in html
+    assert "var Draw = (function ()" in html

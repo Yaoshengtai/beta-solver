@@ -25,6 +25,9 @@ REPO_URL = "https://github.com/Yaoshengtai/beta-solver"
 sys.path.insert(0, str(ROOT / "src"))
 import betasolver  # noqa: E402
 
+sys.path.insert(0, str(ROOT / "site"))
+import legend  # noqa: E402
+
 # CJK ideographs, CJK punctuation and full-width forms. The site is English only.
 CJK = re.compile(r"[　-〿㐀-䶿一-鿿豈-﫿＀-￯]")
 
@@ -35,6 +38,9 @@ def collect_data() -> dict:
             "version": betasolver.__version__,
             "built": dt.date.today().isoformat(),
             "repo": REPO_URL,
+        },
+        "figures": {
+            "legend": legend.legend(),
         },
     }
 
