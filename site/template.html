@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beta Solver</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: fixed contents rail on the left, one chapter at a time in a ~760px reading column; rail becomes a drawer under 900px. */
+:root {
+  --bg: #f6f7f9;
+  --panel: #eceff3;
+  --surface: #ffffff;
+  --ink: #15191e;
+  --muted: #59626e;
+  --line: #d6dbe1;
+  --accent: #1c6b8a;
+  --accent-soft: #dcebf1;
+  --easy: #2e8b57;
+  --hard: #b57c08;
+  --limit: #c23b30;
+
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-3: 2.2rem;
+
+  --rail: 288px;
+  --column: 760px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121519; --panel: #181c21; --surface: #1d2228; --ink: #e6e9ed; --muted: #9aa4b0;
+    --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
+    --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121519; --panel: #181c21; --surface: #1d2228; --ink: #e6e9ed; --muted: #9aa4b0;
+  --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
+  --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-padding-top: 72px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--step-0)/1.65 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding-block: 28px 40px;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--ink); }
+.brand-name { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; letter-spacing: 0.01em; }
+.brand-sub { font-size: var(--step--1); color: var(--muted); }
+
+.toc { display: flex; flex-direction: column; gap: 20px; font-size: 0.95rem; }
+.toc-group { display: flex; flex-direction: column; gap: 6px; }
+.toc-label {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--muted); font-weight: 600; margin: 0;
+}
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.toc a {
+  display: block; padding: 4px 10px; border-radius: 6px;
+  color: var(--ink); text-decoration: none; line-height: 1.35;
+}
+.toc a:hover { background: var(--accent-soft); }
+.toc a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.toc .sub { margin: 2px 0 6px 10px; padding-left: 8px; border-left: 1px solid var(--line); }
+.toc .sub a { font-size: 0.86rem; color: var(--muted); padding: 3px 8px; }
+.toc .sub a:hover { color: var(--ink); }
+.toc .sub a.here { color: var(--accent); }
+
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; font-size: var(--step--1); color: var(--muted); }
+
+.btn {
+  font: inherit; font-size: 0.85rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 5px 10px; cursor: pointer; align-self: flex-start;
+}
+.btn:hover { border-color: var(--accent); }
+
+/* mobile top bar */
+.topbar { display: none; }
+.scrim { display: none; }
+
+/* ---------- reading column ---------- */
+.content {
+  min-width: 0;
+  padding-block: 56px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.column { max-width: var(--column); margin: 0 auto; }
+
+.chapter > header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 28px; }
+.eyebrow {
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); font-weight: 600; margin: 0;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; }
+.chapter h2 { font-size: var(--step-3); margin: 0; font-weight: 600; }
+.chapter h3 { font-size: var(--step-2); margin: 44px 0 10px; font-weight: 600; }
+.lede { font-size: var(--step-1); color: var(--muted); margin: 0; line-height: 1.5; }
+.chapter p, .chapter li { max-width: 68ch; }
+.chapter p { margin: 0 0 1em; }
+
+.math-block { overflow-x: auto; overflow-y: hidden; margin: 20px 0 24px; padding: 4px 0; }
+
+.planned {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.planned p { margin: 0; }
+.chip {
+  display: inline-block; align-self: flex-start;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+
+.pipeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0 28px; padding: 0; list-style: none; }
+.pipeline li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.pipeline b { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; }
+.pipeline span { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); }
+.pager a { display: flex; flex-direction: column; gap: 2px; text-decoration: none; max-width: 48%; }
+.pager a.next { margin-left: auto; text-align: right; }
+.pager small { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.pager span { font-family: var(--font-display); font-size: var(--step-1); }
+
+.site-foot { max-width: var(--column); margin: 40px auto 0; font-size: var(--step--1); color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+
+@media (max-width: 899px) {
+  html { scroll-padding-top: 76px; }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+    z-index: 30; background: var(--panel);
+  }
+  .shell { display: block; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .topbar .brand-name { font-size: 1.1rem; }
+  .rail {
+    position: fixed; z-index: 40; top: 0; left: 0; bottom: 0;
+    width: min(86vw, 320px); height: auto;
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-102%); transition: transform 0.2s ease;
+    box-shadow: 0 0 40px rgb(0 0 0 / 0.25);
+  }
+  .shell.open .rail { transform: none; }
+  .shell.open .scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgb(0 0 0 / 0.35); }
+  .content { padding-block: 28px 40px; }
+  .chapter h2 { font-size: 1.85rem; }
+  .pipeline { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
+</style>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+    svg: { fontCache: "global" }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<div class="shell" id="shell">
+  <div class="topbar">
+    <a class="brand" href="#intro"><span class="brand-name">Beta Solver</span></a>
+    <button class="btn" id="menu-btn" type="button" aria-controls="rail" aria-expanded="false">Contents</button>
+  </div>
+
+  <aside class="rail" id="rail" aria-label="Contents">
+    <a class="brand" href="#intro">
+      <span class="brand-name">Beta Solver</span>
+      <span class="brand-sub">Finding a climbing beta with optimization</span>
+    </a>
+    <nav class="toc" id="toc"></nav>
+    <div class="rail-foot">
+      <button class="btn" id="theme-btn" type="button">Theme: Auto</button>
+      <a id="repo-link-rail" href="#">Source on GitHub</a>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="content" id="content">
+    <div class="column">
+
+<!-- ================= MODEL ================= -->
+<section class="chapter" id="intro" data-group="The model" data-short="Can a beta be computed?">
+  <header>
+    <p class="eyebrow">Introduction</p>
+    <h2>Can a beta be computed?</h2>
+    <p class="lede">A beta is the sequence of moves that gets a climber up a route: which hold each hand and foot goes to, and in what order. Climbers work it out by trying. This site works it out by optimization.</p>
+  </header>
+
+  <p>Two climbers on the same route often end up with different betas. A tall climber skips a hold that a short climber needs; someone with weak fingers avoids the crimps; someone flexible steps onto a high foot that someone else cannot reach. The aim here is to build a model simple enough to explain in a few chapters, but faithful enough that these differences come out of the math on their own.</p>
+
+  <h3 id="intro-questions">Three questions</h3>
+  <ul>
+    <li><strong>How is it modeled?</strong> One chapter per modeling step, from holds and bodies up to the search.</li>
+    <li><strong>What do the results look like?</strong> One page per example: a figure climbs the route step by step, with the force on every contact, the effort of every move and the crux marked.</li>
+    <li><strong>Why does the beta differ between climbers?</strong> Switch climbers, compare two side by side, and see how the crux changes with height.</li>
+  </ul>
+
+  <h3 id="intro-approach">The approach in one picture</h3>
+  <ol class="pipeline">
+    <li><b>States</b><span>Which hold each hand and foot is on. These are the nodes of a graph.</span></li>
+    <li><b>State check</b><span>A small linear program: can the climber hold still here, and how hard is the most loaded limb working?</span></li>
+    <li><b>Search</b><span>A shortest-path search over moves between states, scored by those efforts.</span></li>
+  </ol>
+  <p>The best beta is the one whose hardest move, the crux, is as easy as possible. Among all betas with that crux, it is the one with the lowest total cost. Writing \(w(e)\) for the cost of a move \(e\) and \(\mathcal{P}\) for all move sequences from the start to the top:</p>
+  <div class="math-block">\[
+    \text{beta}^\star \;=\; \operatorname*{lex\,min}_{P \in \mathcal{P}} \Big(\, \max_{e \in P} w(e),\;\; \sum_{e \in P} w(e) \Big)
+  \]</div>
+  <p>Each move cost is built from the effort \(t\) of the state checks it passes through. A state with \(t \le 1\) can be held; \(t > 1\) means some limb would need more force than it has.</p>
+
+  <h3 id="intro-reading">How to read this site</h3>
+  <p>The model chapters each follow the same pattern: the idea in climbing terms, the math, an interactive figure, how it is implemented, and the tests that check it. If you only want results, skip to the examples; each one links back to the constraint that decides it. All numbers on these pages come from the Python solver and its tests, not from hand-written text.</p>
+</section>
+
+<section class="chapter" id="data" data-group="The model" data-short="Holds, routes and climbers" hidden>
+  <header>
+    <p class="eyebrow">Step 1</p>
+    <h2>Holds, routes and climbers</h2>
+    <p class="lede">The inputs: what a hold is, how a route is written down, and the four climbers who try every route.</p>
+  </header>
+  <h3 id="data-holds">Hold types</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.1</span><p>The eight hold types, each with the range of directions it can support you in and its strength parameters.</p></div>
+  <h3 id="data-routes">Route format</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.1</span><p>How a route is written: holds, start hands, finish hold.</p></div>
+  <h3 id="data-climbers">The climbers</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.2</span><p>Profile cards for Ava, Ben, Cal and Ava (injured).</p></div>
+</section>
+
+<section class="chapter" id="body" data-group="The model" data-short="The body model" hidden>
+  <header>
+    <p class="eyebrow">Step 2</p>
+    <h2>The body model</h2>
+    <p class="lede">A torso that slides but does not rotate, with four limbs of fixed maximum length.</p>
+  </header>
+  <h3 id="body-anchors">Shoulders, hips and limb lengths</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.3</span><p>Where the limbs attach, how long they are, and the four climbers drawn to scale side by side.</p></div>
+  <h3 id="body-simplifications">What the body model leaves out</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.3</span><p>The simplifications and why each one is acceptable here.</p></div>
+</section>
+
+<section class="chapter" id="check" data-group="The model" data-short="Checking a state" hidden>
+  <header>
+    <p class="eyebrow">Step 3</p>
+    <h2>Checking a state</h2>
+    <p class="lede">With every limb on a fixed hold, can the climber hold still? If so, how hard is the most loaded limb working?</p>
+  </header>
+  <h3 id="check-unknowns">Knowns and unknowns</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.0</span><p>The problem statement, the unknowns, and the six constraints at a glance.</p></div>
+  <h3 id="check-reach">Reach</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.1</span><p>Every hold must be within reach of its shoulder or hip. Interactive: drag the body and watch holds fall out of reach.</p></div>
+  <h3 id="check-direction">Direction</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.2</span><p>Each hold can only push on you within a range of directions.</p></div>
+  <h3 id="check-strength">Strength and effort</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.3</span><p>No limb may exceed its strength; the effort \(t\) is the share of strength used by the most loaded limb.</p></div>
+  <h3 id="check-inplane">In-plane balance</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.4</span><p>No falling, no sliding, no swinging.</p></div>
+  <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.5</span><p>The hands must pull the body in toward the wall; the pull-in force grows as the feet come up.</p></div>
+  <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.6</span><p>With one hand on, the body swings open unless the feet are placed on both sides.</p></div>
+  <h3 id="check-flex">Flexibility</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.7</span><p>A foot cannot go too far above the hip.</p></div>
+  <h3 id="check-problem">The full problem and why it fails</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.8</span><p>All six constraints as one convex program, solved exactly, with an example of each failure reason.</p></div>
+  <h3 id="check-lp">From cones to a linear program</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.9</span><p>Replacing circles and cones by polygons, and how close the linear program stays to the exact answer.</p></div>
+</section>
+
+<section class="chapter" id="move" data-group="The model" data-short="One move" hidden>
+  <header>
+    <p class="eyebrow">Step 4</p>
+    <h2>One move</h2>
+    <p class="lede">A move changes one limb's hold while the body slides continuously. Two state checks are enough to decide it.</p>
+  </header>
+  <h3 id="move-phases">Five phases of a move</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.1</span><p>Unload, let go, travel, touch, load. Animated, with the release check and the catch check.</p></div>
+  <h3 id="move-convex">Why the feasible region is convex</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.2</span><p>Averaging two ways of holding a state gives another valid way.</p></div>
+  <h3 id="move-twochecks">Why two checks are enough</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.3</span><p>The release and catch positions live in the same convex region, so a straight slide connects them.</p></div>
+  <h3 id="move-cost">Move cost and move types</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.4</span><p>Swap, cut, place and match, and the small style penalties added to each move.</p></div>
+</section>
+
+<section class="chapter" id="search" data-group="The model" data-short="Finding the best beta" hidden>
+  <header>
+    <p class="eyebrow">Step 5</p>
+    <h2>Finding the best beta</h2>
+    <p class="lede">A two-stage Dijkstra search: first make the crux as easy as possible, then make the rest as cheap as possible.</p>
+  </header>
+  <h3 id="search-graph">The state graph</h3>
+  <div class="planned"><span class="chip">Planned · unit 4.1</span><p>How many states there are, and how geometric pruning keeps the search small.</p></div>
+  <h3 id="search-dijkstra">Two-stage Dijkstra</h3>
+  <div class="planned"><span class="chip">Planned · unit 4.2</span><p>A bottleneck search for the crux, then an ordinary shortest path under that crux.</p></div>
+  <h3 id="search-player">The beta player</h3>
+  <div class="planned"><span class="chip">Planned · unit 4.3</span><p>Smoothing the poses and playing a beta step by step.</p></div>
+</section>
+
+<!-- ================= EXAMPLES ================= -->
+<section class="chapter" id="ex1" data-group="Examples" data-short="1. Ladder" hidden>
+  <header><p class="eyebrow">Example 1</p><h2>Ladder</h2>
+  <p class="lede">Two columns of evenly spaced jugs with evenly spaced feet. Compares Ava, Ben and Cal.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.1</span></div>
+</section>
+<section class="chapter" id="ex2" data-group="Examples" data-short="2. Reach crux" hidden>
+  <header><p class="eyebrow">Example 2</p><h2>Reach crux</h2>
+  <p class="lede">A long gap between two jugs, with a high foot off to one side. Compares Ava and Ben.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.2</span></div>
+</section>
+<section class="chapter" id="ex3" data-group="Examples" data-short="3. Intermediate hold" hidden>
+  <header><p class="eyebrow">Example 3</p><h2>Intermediate hold</h2>
+  <p class="lede">Two jugs far apart with a crimp off to the side between them. Compares Ava and Ben.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.3</span></div>
+</section>
+<section class="chapter" id="ex4" data-group="Examples" data-short="4. High foot" hidden>
+  <header><p class="eyebrow">Example 4</p><h2>High foot</h2>
+  <p class="lede">A big foothold near hip height, or two small chips lower down. Compares Ava with a less flexible Ava.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.4</span></div>
+</section>
+<section class="chapter" id="ex5" data-group="Examples" data-short="5. Directional holds" hidden>
+  <header><p class="eyebrow">Example 5</p><h2>Directional holds</h2>
+  <p class="lede">A sidepull and an undercling that only work when something pushes back. Ava climbs it.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.5</span></div>
+</section>
+<section class="chapter" id="ex6" data-group="Examples" data-short="6. Foot swap" hidden>
+  <header><p class="eyebrow">Example 6</p><h2>Foot swap</h2>
+  <p class="lede">One good foothold in the middle, and the next one only reachable after switching feet. Ava climbs it.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.6</span></div>
+</section>
+<section class="chapter" id="ex7" data-group="Examples" data-short="7. Cross or match" hidden>
+  <header><p class="eyebrow">Example 7</p><h2>Cross-through or match</h2>
+  <p class="lede">A zigzag where crossing hands saves a move. Ava climbs it with and without a dislike of crossing.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.7</span></div>
+</section>
+<section class="chapter" id="ex8" data-group="Examples" data-short="8. Finger injury" hidden>
+  <header><p class="eyebrow">Example 8</p><h2>Finger injury and hold types</h2>
+  <p class="lede">The route splits into a crimp line and a sloper-and-pinch line. Compares Ava, Ava (injured) and Ben.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.8</span></div>
+</section>
+<section class="chapter" id="ex9" data-group="Examples" data-short="9. Why feet matter" hidden>
+  <header><p class="eyebrow">Example 9</p><h2>Why feet matter</h2>
+  <p class="lede">A crimp line climbed normally and as a campus route with no feet. Compares Cal on both, and Ava campusing.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.9</span></div>
+</section>
+<section class="chapter" id="ex10" data-group="Examples" data-short="10. Height threshold" hidden>
+  <header><p class="eyebrow">Example 10</p><h2>Height threshold</h2>
+  <p class="lede">Two jugs far apart with nothing in between. The same route solved across a range of heights.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 6.1</span></div>
+</section>
+
+<!-- ================= END MATTER ================= -->
+<section class="chapter" id="limits" data-group="Notes" data-short="What the model cannot see" hidden>
+  <header><p class="eyebrow">Limits</p><h2>What the model cannot see</h2>
+  <p class="lede">Flagging, heel and toe hooks, hips against the wall, momentum and dynos.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 7.1</span></div>
+</section>
+<section class="chapter" id="appendix" data-group="Notes" data-short="Implementation and tests" hidden>
+  <header><p class="eyebrow">Appendix</p><h2>Implementation and tests</h2>
+  <p class="lede">Data format, test results, how to reproduce everything, and the legend for the figures.</p></header>
+  <h3 id="appendix-legend">Legend</h3>
+  <div class="planned"><span class="chip">Planned · unit 0.2</span><p>Wall, the eight hold shapes, the climber figure and force arrows.</p></div>
+  <h3 id="appendix-format">Data format</h3>
+  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <h3 id="appendix-tests">Test results</h3>
+  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <h3 id="appendix-reproduce">Reproducing the results</h3>
+  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+</section>
+
+      <nav class="pager" id="pager" aria-label="Chapter navigation"></nav>
+    </div>
+    <footer class="site-foot" id="site-foot">
+      <a id="repo-link-foot" href="#">Source on GitHub</a>
+      <span id="build-info"></span>
+    </footer>
+  </main>
+</div>
+
+<script type="application/json" id="site-data">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("site-data").textContent);
+  var root = document.documentElement;
+  var shell = document.getElementById("shell");
+  var chapters = Array.prototype.slice.call(document.querySelectorAll("section.chapter"));
+  var byId = {};
+  chapters.forEach(function (c) { byId[c.id] = c; });
+
+  /* ---------- footer and repo links ---------- */
+  ["repo-link-rail", "repo-link-foot"].forEach(function (id) {
+    document.getElementById(id).href = DATA.meta.repo;
+  });
+  document.getElementById("build-info").textContent =
+    "Built " + DATA.meta.built + " · betasolver " + DATA.meta.version;
+
+  /* ---------- contents ---------- */
+  var toc = document.getElementById("toc");
+  var groups = [];
+  chapters.forEach(function (c) {
+    var g = c.dataset.group;
+    if (!groups.length || groups[groups.length - 1].name !== g) groups.push({ name: g, items: [] });
+    groups[groups.length - 1].items.push(c);
+  });
+  var tocLinks = {};
+  var tocSubs = {};
+  groups.forEach(function (g) {
+    var wrap = document.createElement("div");
+    wrap.className = "toc-group";
+    var label = document.createElement("p");
+    label.className = "toc-label";
+    label.textContent = g.name;
+    var ol = document.createElement("ol");
+    g.items.forEach(function (c) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = "#" + c.id;
+      a.textContent = c.dataset.short;
+      li.appendChild(a);
+      tocLinks[c.id] = a;
+      var heads = c.querySelectorAll("h3[id]");
+      if (heads.length) {
+        var sub = document.createElement("ol");
+        sub.className = "sub";
+        sub.hidden = true;
+        Array.prototype.forEach.call(heads, function (h) {
+          var sli = document.createElement("li");
+          var sa = document.createElement("a");
+          sa.href = "#" + h.id;
+          sa.textContent = h.textContent;
+          sa.dataset.target = h.id;
+          sli.appendChild(sa);
+          sub.appendChild(sli);
+        });
+        li.appendChild(sub);
+        tocSubs[c.id] = sub;
+      }
+      ol.appendChild(li);
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(ol);
+    toc.appendChild(wrap);
+  });
+
+  /* ---------- pager ---------- */
+  var pager = document.getElementById("pager");
+  function renderPager(i) {
+    pager.textContent = "";
+    function link(c, cls, word) {
+      var a = document.createElement("a");
+      a.className = cls;
+      a.href = "#" + c.id;
+      var s = document.createElement("small");
+      s.textContent = word;
+      var t = document.createElement("span");
+      t.textContent = c.querySelector("h2").textContent;
+      a.appendChild(s);
+      a.appendChild(t);
+      pager.appendChild(a);
+    }
+    if (i > 0) link(chapters[i - 1], "prev", "Previous");
+    if (i < chapters.length - 1) link(chapters[i + 1], "next", "Next");
+  }
+
+  /* ---------- routing: #chapter or #chapter-section ---------- */
+  var current = null;
+  function route() {
+    var token = decodeURIComponent((location.hash || "").slice(1));
+    var target = token ? document.getElementById(token) : null;
+    var chapter = target ? target.closest("section.chapter") : null;
+    if (!chapter) { chapter = chapters[0]; target = null; }
+    if (chapter !== current) {
+      chapters.forEach(function (c) { c.hidden = c !== chapter; });
+      Object.keys(tocLinks).forEach(function (id) {
+        if (id === chapter.id) tocLinks[id].setAttribute("aria-current", "page");
+        else tocLinks[id].removeAttribute("aria-current");
+        if (tocSubs[id]) tocSubs[id].hidden = id !== chapter.id;
+      });
+      renderPager(chapters.indexOf(chapter));
+      current = chapter;
+    }
+    var sub = tocSubs[chapter.id];
+    if (sub) Array.prototype.forEach.call(sub.querySelectorAll("a"), function (a) {
+      a.classList.toggle("here", !!target && a.dataset.target === target.id);
+    });
+    if (target && target !== chapter) target.scrollIntoView();
+    else window.scrollTo(0, 0);
+    closeMenu();
+  }
+  window.addEventListener("hashchange", route);
+
+  /* ---------- mobile drawer ---------- */
+  var menuBtn = document.getElementById("menu-btn");
+  function closeMenu() { shell.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); }
+  menuBtn.addEventListener("click", function () {
+    var open = shell.classList.toggle("open");
+    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.getElementById("scrim").addEventListener("click", closeMenu);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
+
+  /* ---------- theme: auto / light / dark ---------- */
+  var themeBtn = document.getElementById("theme-btn");
+  var order = ["auto", "light", "dark"];
+  var names = { auto: "Auto", light: "Light", dark: "Dark" };
+  var theme = "auto";
+  try { theme = localStorage.getItem("beta-theme") || "auto"; } catch (e) {}
+  if (order.indexOf(theme) < 0) theme = "auto";
+  function applyTheme() {
+    if (theme === "auto") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+    themeBtn.textContent = "Theme: " + names[theme];
+  }
+  themeBtn.addEventListener("click", function () {
+    theme = order[(order.indexOf(theme) + 1) % order.length];
+    try { localStorage.setItem("beta-theme", theme); } catch (e) {}
+    applyTheme();
+  });
+  if (theme !== "auto") applyTheme();
+
+  route();
+})();
+</script>
+</body>
+</html>
