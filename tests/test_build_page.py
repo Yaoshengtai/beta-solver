@@ -86,3 +86,12 @@ def test_climbers_embedded(html):
     assert [c["name"] for c in data["model"]["climbers"]] == ["Ava", "Ben", "Cal", "Ava (injured)"]
     assert all(v["base"] == "A" for v in data["model"]["variants"])
     assert 'data-draw="climber-cards"' in html
+
+
+def test_body_data_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    data = json.loads(raw)
+    assert data["model"]["body"]["leg"] == 0.5
+    assert len(data["figures"]["bodies"]) == 4
+    for slot in ("anchor-table", "anchors", "length-table", "to-scale"):
+        assert f'data-draw="{slot}"' in html
