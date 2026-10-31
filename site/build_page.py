@@ -24,6 +24,7 @@ REPO_URL = "https://github.com/Yaoshengtai/beta-solver"
 
 sys.path.insert(0, str(ROOT / "src"))
 import betasolver  # noqa: E402
+from betasolver import model  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "site"))
 import legend  # noqa: E402
@@ -39,8 +40,14 @@ def collect_data() -> dict:
             "built": dt.date.today().isoformat(),
             "repo": REPO_URL,
         },
+        "model": {
+            "wall": {"w": model.WALL_W, "h": model.WALL_H},
+            "hold_types": model.hold_types_table(),
+            "foot_on_handhold": model.FOOT_ON_HANDHOLD,
+        },
         "figures": {
             "legend": legend.legend(),
+            "route_example": legend.route_example(),
         },
     }
 
