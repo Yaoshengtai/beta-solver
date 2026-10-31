@@ -130,3 +130,29 @@ def body_figures() -> dict:
             "foot_limit": b.foot_limit(torso),
         })
     return _round(out)
+
+
+def state_example() -> dict:
+    """One state on the format example, and several body positions that all fit it.
+
+    Each torso position is checked against the reach circles and the foot
+    limit, so every pose drawn really is a body position the state allows.
+    """
+    from betasolver.model import Route
+    from betasolver.stance import State
+
+    r = route_example()
+    holds = {h["id"]: h for h in r["holds"]}
+    state = State("H1", "H2", "F1", "F2")
+    body = make_body(AVA)
+    ends = {l: (holds[h]["x"], holds[h]["y"]) for l, h in state.as_dict().items()}
+    candidates = [(1.36, 0.84), (1.52, 0.96), (1.70, 0.76)]
+    poses = []
+    for torso in candidates:
+        ok = all(body.reaches(l, torso, p) for l, p in ends.items())
+        ok = ok and all(ends[f][1] <= body.foot_limit(torso) for f in ("LF", "RF"))
+        if not ok:
+            raise ValueError(f"example torso {torso} does not fit the state")
+        poses.append({"torso": list(torso), "joints": body.joints(torso, ends)})
+    return _round({"route": r["id"], "state": state.as_dict(), "holds": r["holds"],
+                   "climber": {"key": AVA.key, "H": AVA.H, "head": list(body.head)}, "poses": poses})

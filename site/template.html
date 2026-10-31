@@ -276,6 +276,9 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .seg button { font: inherit; font-size: 0.88rem; border: 0; background: var(--surface); color: var(--ink); padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--line); display: inline-flex; align-items: center; gap: 6px; }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.sub-h { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; margin: 28px 0 8px; }
+.pose-row { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pose-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 .cl-A { --cl: var(--c-A); } .cl-B { --cl: var(--c-B); } .cl-C { --cl: var(--c-C); } .cl-D { --cl: var(--c-D); }
 .cl-stroke { stroke: var(--cl); } .cl-fill { fill: var(--cl); }
 .fg-torso.cl-fill { fill-opacity: 0.22; stroke: var(--cl); }
@@ -509,7 +512,35 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
     <p class="lede">With every limb on a fixed hold, can the climber hold still? If so, how hard is the most loaded limb working?</p>
   </header>
   <h3 id="check-unknowns">Knowns and unknowns</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.0</span><p>The problem statement, the unknowns, and the six constraints at a glance.</p></div>
+  <p>A <b>state</b> \(\sigma = (\text{LH}, \text{RH}, \text{LF}, \text{RF})\) says which hold each hand and foot is on. Both hands are always on a hold; a foot may hang free. The search in step 5 moves from state to state, and every state it considers is checked here.</p>
+  <p>Knowing the four holds is not the same as knowing the position. On the same holds the body can sit low or high, lean left or right, and load each limb differently. The check has to find a way of holding the state, if there is one, and the least tiring way at that.</p>
+
+  <figure class="fig" id="fig-state">
+    <div class="fig-main" data-draw="state-example"></div>
+    <figcaption><b>One state, several body positions.</b> <span data-text="state-caption"></span> Each pose is within reach of all four holds and keeps both feet under the highest-foot line. Which of them, or which other position, is best is what the check decides.</figcaption>
+  </figure>
+
+  <p><b>Known:</b> the position and type of every hold, and the climber's profile and body (the two chapters before this one). <b>Unknown</b>, and found by the model:</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="unknowns-table"></table></div>
+  <p data-text="unknown-count"></p>
+
+  <p>Writing \(A\) for the limbs that are on a hold, the unknowns must satisfy six constraints. Each gets its own section below:</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="constraints-table"></table></div>
+
+  <p>Among all the ways that satisfy the six constraints, the check takes the one with the smallest effort:</p>
+  <div class="math-block">\[
+    t^\star(\sigma) \;=\; \min_{x,\, f,\, N,\, M,\, \tau,\, t} \; t \quad \text{subject to the six constraints}
+  \]</div>
+  <p>The state can be held when \(t^\star \le 1\): no limb needs more than its full strength. The best way to hold it uses \(t^\star\) of the strength of the hardest-working limb.</p>
+
+  <h4 class="sub-h">A limb that holds on but carries nothing</h4>
+  <p>During a move one limb lets go while the others hold the body (step 4). The check therefore has one option, written \(\text{no\_force} = k\): limb \(k\) must still be able to reach its hold, but it takes no force. The forces, and the balance equations, then only involve the limbs in</p>
+  <div class="math-block">\[ A_F \;=\; A \setminus \{k\}. \]</div>
+
+  <h4 class="sub-h">What a check returns</h4>
+  <p>The effort \(t^\star\), the body position, the force on every limb, and the limb that limits the effort. When a state cannot be held it says why, as one of:</p>
+  <ul data-draw="reasons-list"></ul>
+  <p>One case needs no solving at all: a hold whose strength limit is zero for this climber, like a crimp for Ava (injured), rules out every state that uses it.</p>
   <h3 id="check-reach">Reach</h3>
   <div class="planned"><span class="chip">Planned · unit 2.1</span><p>Every hold must be within reach of its shoulder or hip. Interactive: drag the body and watch holds fall out of reach.</p></div>
   <h3 id="check-direction">Direction</h3>
@@ -1430,6 +1461,86 @@ var Draw = (function () {
       bodies.map(function (b) { return Math.round(b.d_wall * 100) + " cm for " + b.name; }).filter(function (t, i) { return bodies[i].climber !== "D"; }).join(", ") + ".";
   }
   if (DATA.model && DATA.model.body && DATA.figures.bodies) renderBody(DATA.model.body, DATA.figures.bodies);
+
+  /* ---------- #check: framework (unit 2.0) ---------- */
+  function renderCheckIntro(S, ex) {
+    var ut = document.querySelector('[data-draw="unknowns-table"]');
+    if (!ut) return;
+    var per = { body: "one for the body", pushing: "each limb that pushes", "pushing hand": "each hand that pushes", "pushing foot": "each foot that pushes" };
+    ut.innerHTML = "<thead><tr><th>Unknown</th><th>Meaning</th><th>In climbing terms</th><th>How many</th></tr></thead>";
+    var tb = document.createElement("tbody");
+    S.unknowns.forEach(function (u) {
+      var tr = document.createElement("tr");
+      [ "\\(" + u.tex + "\\)", u.meaning, u.climbing, per[u.per] + (u.size > 1 ? ", " + u.size + " numbers each" : "") ].forEach(function (t, i) {
+        var td = document.createElement("td"); td.textContent = t; if (i === 0) td.className = "num"; tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    ut.appendChild(tb);
+    document.querySelector('[data-text="unknown-count"]').textContent =
+      "With all four limbs on holds that is " + S.sizes.four + " numbers to find; with one foot hanging, " +
+      S.sizes.one_foot + "; with both feet off, " + S.sizes.no_feet + ".";
+
+    var ct = document.querySelector('[data-draw="constraints-table"]');
+    var marks = ["\u2460", "\u2461", "\u2462", "\u2463", "\u2464", "\u2465"];
+    ct.innerHTML = "<thead><tr><th>Constraint</th><th>In climbing terms</th><th>Restricts</th></tr></thead>";
+    var tb2 = document.createElement("tbody");
+    S.constraints.forEach(function (c) {
+      var tr = document.createElement("tr");
+      var td = document.createElement("td");
+      var a = document.createElement("a"); a.href = "#" + c.section; a.textContent = marks[c.n - 1] + " " + c.name;
+      td.appendChild(a); tr.appendChild(td);
+      [c.climbing, c.limits].forEach(function (t) { var d = document.createElement("td"); d.textContent = t; tr.appendChild(d); });
+      tb2.appendChild(tr);
+    });
+    ct.appendChild(tb2);
+
+    var rl = document.querySelector('[data-draw="reasons-list"]');
+    var order = ["reach", "strength", "balance", "unusable"];
+    var expl = {
+      reach: "no body position reaches all the holds while keeping the feet low enough;",
+      strength: "the state can be balanced, but only with some limb above its strength (\\(t^\\star > 1\\)); the check names the limb;",
+      balance: "the holds are reachable, but no set of forces balances the body, for example a sidepull with nothing pushing back;",
+      unusable: "the climber cannot use one of the holds at all."
+    };
+    order.forEach(function (k) {
+      var li = document.createElement("li");
+      var b = document.createElement("b"); b.textContent = S.reasons[k].charAt(0).toUpperCase() + S.reasons[k].slice(1) + ": ";
+      li.appendChild(b); li.appendChild(document.createTextNode(expl[k]));
+      rl.appendChild(li);
+    });
+
+    // one state, several poses
+    if (!ex) return;
+    var byId = {};
+    ex.holds.forEach(function (h) { byId[h.id] = h; });
+    var used = {};
+    Object.keys(ex.state).forEach(function (l) { if (ex.state[l]) used[ex.state[l]] = l; });
+    var slot = document.querySelector('[data-draw="state-example"]');
+    slot.classList.add("pose-row");
+    ex.poses.forEach(function (p, i) {
+      var cell = document.createElement("div");
+      cell.className = "pose-cell";
+      var sc = Draw.scene(cell, { x0: 0.8, y0: 0.25, x1: 2.15, y1: 2.0, k: 125, pad: 4, title: "Body position " + (i + 1) });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5 });
+      ex.holds.forEach(function (h) {
+        if (h.y > 2.0) return;
+        Draw.hold(sc, h, { used: !!used[h.id] });
+        if (used[h.id]) Draw.el(sc.layers.over, "text", { x: sc.X(h.x) + (h.x < 1.5 ? -9 : 9), y: sc.Y(h.y) + 16, "text-anchor": h.x < 1.5 ? "end" : "start" }, "h-label").textContent = used[h.id];
+      });
+      Draw.figure(sc, p, { key: ex.climber.key, head: ex.climber.head }, {});
+      Draw.com(sc, p.torso);
+      var cap = document.createElement("span");
+      cap.textContent = "Position " + (i + 1);
+      cell.appendChild(cap);
+      slot.appendChild(cell);
+    });
+    var st = ex.state;
+    document.querySelector('[data-text="state-caption"]').textContent =
+      "The state is LH = " + st.LH + ", RH = " + st.RH + ", LF = " + st.LF + ", RF = " + st.RF + " on the route from the previous chapter, drawn for " +
+      DATA.model.climbers.filter(function (c) { return c.key === ex.climber.key; })[0].name + ".";
+  }
+  if (DATA.stance) renderCheckIntro(DATA.stance, DATA.figures.state_example);
 
   if (DATA.model && DATA.model.climbers) {
     renderClimberCards(DATA.model.climbers);
