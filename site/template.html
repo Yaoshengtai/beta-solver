@@ -192,6 +192,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 
 .fig figcaption { font-size: 0.92rem; color: var(--muted); line-height: 1.5; margin-top: 12px; max-width: 68ch; }
 .fig figcaption b { color: var(--ink); font-weight: 600; }
 .fig svg.drawing { display: block; max-width: 100%; height: auto; }
+.fig > .fig-main { display: flex; justify-content: center; }
 .fig-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .fig-row > .fig-main { flex: 1 1 300px; min-width: 0; display: flex; justify-content: center; }
 .fig-row > .fig-key { flex: 1 1 220px; min-width: 0; }
@@ -263,6 +264,18 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .bars .val.zero { color: var(--limit); font-weight: 600; }
 .card .warn { margin: 0; font-size: 0.85rem; color: var(--limit); }
 @media (max-width: 640px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.reach { fill: none; stroke: var(--cl); stroke-width: 1.4; stroke-dasharray: 5 4; opacity: 0.75; }
+.anchor-dot { fill: var(--surface); stroke: var(--ink); stroke-width: 1.6; }
+.anno { fill: var(--muted); font: 11px var(--font-body); }
+.anno-strong { fill: var(--ink); font: 600 11px var(--font-body); }
+.anno-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.limit-line { stroke: var(--limit); stroke-width: 1.4; stroke-dasharray: 6 4; }
+.limit-text { fill: var(--limit); font: 600 11px var(--font-body); }
+.ground { stroke: var(--wall-edge); stroke-width: 3; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+.seg button { font: inherit; font-size: 0.88rem; border: 0; background: var(--surface); color: var(--ink); padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--line); display: inline-flex; align-items: center; gap: 6px; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .cl-A { --cl: var(--c-A); } .cl-B { --cl: var(--c-B); } .cl-C { --cl: var(--c-C); } .cl-D { --cl: var(--c-D); }
 .cl-stroke { stroke: var(--cl); } .cl-fill { fill: var(--cl); }
 .fg-torso.cl-fill { fill-opacity: 0.22; stroke: var(--cl); }
@@ -457,9 +470,36 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
     <p class="lede">A torso that slides but does not rotate, with four limbs of fixed maximum length.</p>
   </header>
   <h3 id="body-anchors">Shoulders, hips and limb lengths</h3>
-  <div class="planned"><span class="chip">Planned · unit 1.3</span><p>Where the limbs attach, how long they are, and the four climbers drawn to scale side by side.</p></div>
+  <p>The state check needs to know one thing about the body: from a given torso position, which holds can each hand and foot reach? So the body is reduced to a torso with four attachment points, two shoulders and two hips, and a greatest length for each limb. The torso position \(x = (x_c, y_c)\) is also the centre of mass. It can slide anywhere on the wall but never turns.</p>
+  <p>The attachment points sit at fixed offsets from the centre of mass, scaled by the height \(H\) and taken from a standard table of body proportions. Left is negative \(x\):</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="anchor-table"></table></div>
+  <p>An arm reaches from the shoulder to the middle of the palm, which is where a hand grips. Half the arm span, minus half the shoulder width and the distance from palm to fingertip, gives the arm length. A leg is half the height:</p>
+  <div class="math-block" data-math="limb-lengths"></div>
+  <p>A foot can also only go so high. With flexibility \(\text{flex}\) from the climber profile, a foot must stay below the hip height plus \(\text{flex}\cdot H\):</p>
+  <div class="math-block" data-math="foot-limit"></div>
+  <p>Both rules only involve the torso position linearly or through a distance, which is what keeps the state check convex.</p>
+
+  <figure class="fig" id="fig-anchors">
+    <div class="seg" role="group" aria-label="Climber" data-draw="anchor-switch"></div>
+    <div class="fig-main" data-draw="anchors"></div>
+    <figcaption><b>Attachment points and reach.</b> Each dashed circle has its centre at a shoulder or hip and a radius equal to that limb's length. A hand or foot can be anywhere inside its circle, and nowhere outside it. The red line is the highest a foot can go. The table gives each climber's lengths; the highest foot is measured from the hip. Switch climbers to compare; all three are drawn at the same scale.</figcaption>
+  </figure>
+
+  <div class="tbl-wrap"><table class="tbl" data-draw="length-table"></table></div>
+
+  <figure class="fig" id="fig-scale">
+    <div class="fig-main" data-draw="to-scale"></div>
+    <figcaption><b>The climbers to scale.</b> Each stands with straight legs and both arms up at full length, so the hands mark the highest point the climber can grip from the ground. <span data-text="same-body"></span></figcaption>
+  </figure>
+
   <h3 id="body-simplifications">What the body model leaves out</h3>
-  <div class="planned"><span class="chip">Planned · unit 1.3</span><p>The simplifications and why each one is acceptable here.</p></div>
+  <ul>
+    <li><b>The torso never turns.</b> Real climbers twist their hips into the wall to gain reach. Here the shoulders and hips keep the same offsets in every position.</li>
+    <li><b>A limb can fold completely.</b> There is a greatest length but no shortest one, so a hand can be right next to its shoulder. This rarely matters, because the state check prefers spread-out positions anyway.</li>
+    <li><b>The body is a fixed distance from the wall:</b> <span data-text="d-wall"></span> This distance matters for the out-of-wall balance (<a href="#check-tipping">no tipping</a>). Pressing the hips into the wall is not modelled.</li>
+    <li><b>Elbows and knees are only for drawing.</b> They are placed after the fact so the figure looks like a person: elbows bend down and out, knees bend out like a frog. They never enter the optimisation.</li>
+    <li><b>Only static moves.</b> There is no momentum, so a move the body cannot hold still at every point is not allowed. Dynos are out of scope (<a href="#limits">limits</a>).</li>
+  </ul>
 </section>
 
 <section class="chapter" id="check" data-group="The model" data-short="Checking a state" hidden>
@@ -1254,6 +1294,142 @@ var Draw = (function () {
     });
     tbl.appendChild(tb);
   }
+
+  /* ---------- #body: body model (unit 1.3) ---------- */
+  function fx(v) { return (v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(3).replace(/0+$/, "").replace(/\.$/, ""); }
+  function renderBody(B, bodies) {
+    if (!document.getElementById("fig-anchors")) return;
+    // anchor table
+    var at = document.querySelector('[data-draw="anchor-table"]');
+    var rows = [
+      ["Left shoulder", -B.shoulder[0], B.shoulder[1]], ["Right shoulder", B.shoulder[0], B.shoulder[1]],
+      ["Left hip", -B.hip[0], B.hip[1]], ["Right hip", B.hip[0], B.hip[1]],
+      ["Head centre (drawing only)", 0, B.head[0]]
+    ];
+    at.innerHTML = "<thead><tr><th>Point</th><th>Offset from the centre of mass</th></tr></thead>";
+    var tb = document.createElement("tbody");
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      var a = document.createElement("td"); a.textContent = r[0];
+      var b = document.createElement("td"); b.className = "num"; b.textContent = "(" + fx(r[1]) + "H, " + fx(r[2]) + "H)";
+      tr.appendChild(a); tr.appendChild(b); tb.appendChild(tr);
+    });
+    at.appendChild(tb);
+
+    // formulas, built from the constants so no number is typed twice
+    document.querySelector('[data-math="limb-lengths"]').textContent =
+      "\\[ L_{\\text{arm}} = \\frac{\\text{span} - " + B.shoulder_width_in_span + "\\,H}{2} - " + B.grip_inset +
+      "\\,H, \\qquad L_{\\text{leg}} = " + B.leg.toFixed(2) + "\\,H \\]";
+    document.querySelector('[data-math="foot-limit"]').textContent =
+      "\\[ y_{\\text{foot}} \\;\\le\\; \\underbrace{y_c - " + Math.abs(B.hip[1]) + "\\,H}_{\\text{hip height}} \\;+\\; \\text{flex}\\cdot H \\]";
+
+    var shown = bodies.filter(function (b) { return b.climber !== "D"; });
+    // a common frame, big enough for the largest climber
+    var maxH = Math.max.apply(null, shown.map(function (b) { return b.H; }));
+    var top = 0, bot = 0, half = 0;
+    shown.forEach(function (b) {
+      top = Math.max(top, b.offsets.RH[1] + b.L.RH, b.head[0] + b.head[1]);
+      bot = Math.min(bot, b.offsets.RF[1] - b.L.RF);
+      half = Math.max(half, b.offsets.RH[0] + b.L.RH, b.offsets.RF[0] + b.L.RF);
+    });
+
+    function drawAnchors(b) {
+      var slot = document.querySelector('[data-draw="anchors"]');
+      slot.textContent = "";
+      var sc = Draw.scene(slot, { x0: -half - 0.05, y0: bot - 0.05, x1: half + 0.05, y1: top + 0.05, k: 150, pad: 6, title: "Attachment points and reach circles of " + b.name });
+      var g = Draw.el(sc.layers.wall, "g", null, "cl-" + b.climber);
+      var O = b.offsets;
+      ["LH", "RH", "LF", "RF"].forEach(function (l) {
+        Draw.el(g, "circle", { cx: sc.X(O[l][0]), cy: sc.Y(O[l][1]), r: (b.L[l] * sc.k).toFixed(1) }, "reach");
+      });
+      // torso and head
+      var gb = Draw.el(sc.layers.body, "g", null, "cl-" + b.climber);
+      Draw.el(gb, "path", { d: "M" + [O.LH, O.RH, O.RF, O.LF].map(function (p) { return sc.X(p[0]) + " " + sc.Y(p[1]); }).join("L") + "Z" }, "fg-torso cl-fill");
+      Draw.el(gb, "circle", { cx: sc.X(0), cy: sc.Y(b.head[0]), r: (b.head[1] * sc.k).toFixed(1) }, "fg-head cl-stroke");
+      Draw.el(gb, "line", { x1: sc.X(0), y1: sc.Y(O.RH[1]), x2: sc.X(0), y2: sc.Y(b.head[0] - b.head[1]), "stroke-width": 3 }, "fg-limb cl-stroke");
+      // one arm and one leg as radius lines
+      function radius(l, deg, text) {
+        var a = deg * Math.PI / 180, o = O[l], e = [o[0] + b.L[l] * Math.cos(a), o[1] + b.L[l] * Math.sin(a)];
+        Draw.el(gb, "line", { x1: sc.X(o[0]), y1: sc.Y(o[1]), x2: sc.X(e[0]), y2: sc.Y(e[1]), "stroke-width": 3 }, "fg-limb cl-stroke");
+        Draw.el(gb, "circle", { cx: sc.X(e[0]), cy: sc.Y(e[1]), r: 4 }, "fg-joint cl-fill");
+        Draw.el(sc.layers.over, "text", { x: sc.X(e[0]) + 7, y: sc.Y(e[1]) + (deg > 0 ? 0 : 10) }, "anno-strong").textContent = text;
+      }
+      radius("RH", 40, "arm " + b.L.RH.toFixed(2) + " m");
+      radius("RF", -55, "leg " + b.L.RF.toFixed(2) + " m");
+      Draw.com(sc, [0, 0]);
+      ["LH", "RH", "LF", "RF"].forEach(function (l) {
+        Draw.el(sc.layers.over, "circle", { cx: sc.X(O[l][0]), cy: sc.Y(O[l][1]), r: 4 }, "anchor-dot");
+      });
+      function lab(x, y, t, anchor) { Draw.el(sc.layers.over, "text", { x: sc.X(x), y: sc.Y(y), "text-anchor": anchor || "start" }, "anno").textContent = t; }
+      lab(O.LH[0] - 0.04, O.LH[1] + 0.03, "shoulders", "end");
+      lab(O.LF[0] - 0.04, O.LF[1] - 0.06, "hips", "end");
+      lab(-0.05, 0.03, "centre of mass", "end");
+      // foot limit
+      var fl = b.foot_limit - b.stand.torso[1];
+      Draw.el(sc.layers.over, "line", { x1: sc.X(-half), y1: sc.Y(fl), x2: sc.X(half), y2: sc.Y(fl) }, "limit-line");
+      Draw.el(sc.layers.over, "text", { x: sc.X(-half), y: sc.Y(fl) - 5 }, "limit-text").textContent = "highest foot";
+    }
+    var sw = document.querySelector('[data-draw="anchor-switch"]');
+    var btns = [];
+    shown.forEach(function (b, i) {
+      var bt = document.createElement("button");
+      bt.type = "button"; bt.className = "cl-" + b.climber;
+      var s = document.createElement("span"); s.className = "swatch"; bt.appendChild(s);
+      bt.appendChild(document.createTextNode(b.name));
+      bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      bt.addEventListener("click", function () {
+        btns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
+        drawAnchors(b);
+      });
+      btns.push(bt); sw.appendChild(bt);
+    });
+    drawAnchors(shown[0]);
+
+    // limb length table
+    var lt = document.querySelector('[data-draw="length-table"]');
+    lt.innerHTML = "<thead><tr><th>Climber</th><th>Height</th><th>Span</th><th>Arm (upper + fore)</th><th>Leg (thigh + shin)</th><th>Wall distance</th><th>Highest foot</th></tr></thead>";
+    var tb2 = document.createElement("tbody");
+    bodies.forEach(function (b) {
+      var tr = document.createElement("tr");
+      var hf = b.flex * b.H;
+      [b.name, b.H.toFixed(2) + " m", b.span.toFixed(2) + " m",
+       b.L.LH.toFixed(3) + " m (" + b.seg.LH[0].toFixed(2) + " + " + b.seg.LH[1].toFixed(2) + ")",
+       b.L.LF.toFixed(3) + " m (" + b.seg.LF[0].toFixed(2) + " + " + b.seg.LF[1].toFixed(2) + ")",
+       b.d_wall.toFixed(3) + " m",
+       (hf > 0 ? "+" : hf < 0 ? "\u2212" : "") + Math.abs(hf * 100).toFixed(0) + " cm"
+      ].forEach(function (t, i) {
+        var td = document.createElement("td"); td.textContent = t; if (i) td.className = "num"; tr.appendChild(td);
+      });
+      tb2.appendChild(tr);
+    });
+    lt.appendChild(tb2);
+
+    // to scale
+    var gap = 0.95, n = shown.length;
+    var maxReach = Math.max.apply(null, shown.map(function (b) { return b.reach; }));
+    var sc2 = Draw.scene(document.querySelector('[data-draw="to-scale"]'), { x0: -0.2, y0: -0.05, x1: gap * (n - 1) + 1.05, y1: maxReach + 0.18, k: 150, pad: 6, padLeft: 6, title: "The climbers side by side, to scale" });
+    Draw.el(sc2.layers.wall, "line", { x1: sc2.X(-0.2), y1: sc2.Y(0), x2: sc2.X(gap * (n - 1) + 1.05), y2: sc2.Y(0) }, "ground");
+    shown.forEach(function (b, i) {
+      var x0 = 0.35 + gap * i, st = b.stand, J = {};
+      Object.keys(st.joints).forEach(function (l) {
+        var j = st.joints[l], m = {};
+        Object.keys(j).forEach(function (k) { m[k] = [j[k][0] + x0, j[k][1]]; });
+        J[l] = m;
+      });
+      Draw.figure(sc2, { torso: [x0, st.torso[1]], joints: J }, { key: b.climber, head: b.head }, {});
+      var g = Draw.el(sc2.layers.over, "g", null, "cl-" + b.climber);
+      Draw.el(g, "line", { x1: sc2.X(x0 - 0.3), y1: sc2.Y(b.reach), x2: sc2.X(x0 + 0.3), y2: sc2.Y(b.reach) }, "anno-line");
+      Draw.el(g, "text", { x: sc2.X(x0 + 0.32), y: sc2.Y(b.reach) + 4 }, "anno").textContent = "reach " + b.reach.toFixed(2) + " m";
+      Draw.el(g, "text", { x: sc2.X(x0 + 0.32), y: sc2.Y(b.H * 0.55) }, "anno-strong").textContent = b.name;
+      Draw.el(g, "text", { x: sc2.X(x0 + 0.32), y: sc2.Y(b.H * 0.55) + 14 }, "anno").textContent = b.H.toFixed(2) + " m tall";
+    });
+    var same = bodies.filter(function (b) { return b.climber === "D"; })[0];
+    if (same) document.querySelector('[data-text="same-body"]').textContent = same.name + " has the same body as Ava and is not drawn separately.";
+    document.querySelector('[data-text="d-wall"]').textContent =
+      "the centre of mass stays " + B.d_wall.toFixed(2) + " H from the wall, " +
+      bodies.map(function (b) { return Math.round(b.d_wall * 100) + " cm for " + b.name; }).filter(function (t, i) { return bodies[i].climber !== "D"; }).join(", ") + ".";
+  }
+  if (DATA.model && DATA.model.body && DATA.figures.bodies) renderBody(DATA.model.body, DATA.figures.bodies);
 
   if (DATA.model && DATA.model.climbers) {
     renderClimberCards(DATA.model.climbers);

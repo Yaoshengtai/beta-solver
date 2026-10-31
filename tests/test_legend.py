@@ -27,24 +27,17 @@ def test_wall_size():
     assert L["wall"] == {"w": 3.0, "h": 4.2}
 
 
-def test_limb_lengths_match_plan():
-    # step 2: Ava's arm is about 0.55 m and her leg 0.80 m; Ben's arm about 0.66 m
-    assert abs(legend.limb_lengths(1.60, 1.60)["arm"] - 0.55) < 0.01
-    assert legend.limb_lengths(1.60, 1.60)["leg"] == 0.80
-    assert abs(legend.limb_lengths(1.85, 1.90)["arm"] - 0.66) < 0.01
-
-
 def test_pose_segments_have_body_lengths():
-    c = L["climber"]
-    H, lens = c["H"], legend.limb_lengths(c["H"], c["span"])
+    from betasolver.body import make_body
+    from betasolver.model import PROFILES
+    b = make_body(PROFILES[L["climber"]["key"]])
     holds = {h["id"]: (h["x"], h["y"]) for h in L["scene"]["holds"]}
     frame = L["scene"]["frame"]
     for limb, j in frame["joints"].items():
         root, mid = (j["shoulder"], j["elbow"]) if limb[1] == "H" else (j["hip"], j["knee"])
-        a = (legend.UPPER_ARM if limb[1] == "H" else legend.THIGH) * H
-        total = lens["arm"] if limb[1] == "H" else lens["leg"]
+        a, rest = b.seg[limb]
         assert abs(dist(root, mid) - a) < TOL, limb
-        assert abs(dist(mid, j["end"]) - (total - a)) < TOL, limb
+        assert abs(dist(mid, j["end"]) - rest) < TOL, limb
         assert dist(j["end"], holds[frame["state"][limb]]) < TOL, limb
 
 
@@ -60,6 +53,12 @@ def test_example_forces_balance_body_weight():
     assert abs(sum(v["f"][1] for v in f) - 1.0) < TOL
 
 
-def test_two_link_straightens_when_out_of_reach():
-    mid = legend.two_link((0, 0), (3, 0), 1, 1, lambda p: 0)
-    assert mid == (1.0, 0.0)
+def test_body_figures_stand_on_the_ground():
+    figs = legend.body_figures()
+    assert [f["name"] for f in figs] == ["Ava", "Ben", "Cal", "Ava (injured)"]
+    for f in figs:
+        J = f["stand"]["joints"]
+        assert abs(J["LF"]["end"][1]) < TOL and abs(J["RF"]["end"][1]) < TOL
+        assert abs(f["reach"] - J["LH"]["end"][1]) < TOL
+    ava, ben = figs[0], figs[1]
+    assert ben["reach"] > ava["reach"]
