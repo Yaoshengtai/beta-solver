@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beta Solver</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: fixed contents rail on the left, one chapter at a time in a ~760px reading column; rail becomes a drawer under 900px. */
+:root {
+  --bg: #f6f7f9;
+  --panel: #eceff3;
+  --surface: #ffffff;
+  --ink: #15191e;
+  --muted: #59626e;
+  --line: #d6dbe1;
+  --accent: #1c6b8a;
+  --accent-soft: #dcebf1;
+  --easy: #2e8b57;
+  --hard: #b57c08;
+  --limit: #c23b30;
+
+  /* figures */
+  --wall: #e9e4dc;
+  --wall-edge: #c9c1b4;
+  --wall-grid: #d9d2c6;
+  --hold: #7a6f62;
+  --hold-foot: #a39887;
+  --hold-edge: #3b342c;
+  --force: #15191e;
+  --c-A: #2563b0;
+  --c-B: #c8611a;
+  --c-C: #7a4cb0;
+  --c-D: #b8336a;
+
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-3: 2.2rem;
+
+  --rail: 288px;
+  --column: 760px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121519; --panel: #181c21; --surface: #1d2228; --ink: #e6e9ed; --muted: #9aa4b0;
+    --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
+    --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
+    --wall: #2a2723; --wall-edge: #45403a; --wall-grid: #36322d;
+    --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --force: #e6e9ed;
+    --c-A: #6ea8ec; --c-B: #f0904e; --c-C: #b590e6; --c-D: #ec7aa9;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121519; --panel: #181c21; --surface: #1d2228; --ink: #e6e9ed; --muted: #9aa4b0;
+  --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
+  --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
+  --wall: #2a2723; --wall-edge: #45403a; --wall-grid: #36322d;
+  --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --force: #e6e9ed;
+  --c-A: #6ea8ec; --c-B: #f0904e; --c-C: #b590e6; --c-D: #ec7aa9;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-padding-top: 72px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--step-0)/1.65 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding-block: 28px 40px;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--ink); }
+.brand-name { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; letter-spacing: 0.01em; }
+.brand-sub { font-size: var(--step--1); color: var(--muted); }
+
+.toc { display: flex; flex-direction: column; gap: 20px; font-size: 0.95rem; }
+.toc-group { display: flex; flex-direction: column; gap: 6px; }
+.toc-label {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--muted); font-weight: 600; margin: 0;
+}
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.toc a {
+  display: block; padding: 4px 10px; border-radius: 6px;
+  color: var(--ink); text-decoration: none; line-height: 1.35;
+}
+.toc a:hover { background: var(--accent-soft); }
+.toc a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.toc .sub { margin: 2px 0 6px 10px; padding-left: 8px; border-left: 1px solid var(--line); }
+.toc .sub a { font-size: 0.86rem; color: var(--muted); padding: 3px 8px; }
+.toc .sub a:hover { color: var(--ink); }
+.toc .sub a.here { color: var(--accent); }
+
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; font-size: var(--step--1); color: var(--muted); }
+
+.btn {
+  font: inherit; font-size: 0.85rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 5px 10px; cursor: pointer; align-self: flex-start;
+}
+.btn:hover { border-color: var(--accent); }
+
+/* mobile top bar */
+.topbar { display: none; }
+.scrim { display: none; }
+
+/* ---------- reading column ---------- */
+.content {
+  min-width: 0;
+  padding-block: 56px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.column { max-width: var(--column); margin: 0 auto; }
+
+.chapter > header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 28px; }
+.eyebrow {
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); font-weight: 600; margin: 0;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; }
+.chapter h2 { font-size: var(--step-3); margin: 0; font-weight: 600; }
+.chapter h3 { font-size: var(--step-2); margin: 44px 0 10px; font-weight: 600; }
+.lede { font-size: var(--step-1); color: var(--muted); margin: 0; line-height: 1.5; }
+.chapter p, .chapter li { max-width: 68ch; }
+.chapter p { margin: 0 0 1em; }
+
+.math-block { overflow-x: auto; overflow-y: hidden; margin: 20px 0 24px; padding: 4px 0; }
+
+.planned {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.planned p { margin: 0; }
+.chip {
+  display: inline-block; align-self: flex-start;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+
+.pipeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0 28px; padding: 0; list-style: none; }
+.pipeline li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.pipeline b { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; }
+.pipeline span { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); }
+.pager a { display: flex; flex-direction: column; gap: 2px; text-decoration: none; max-width: 48%; }
+.pager a.next { margin-left: auto; text-align: right; }
+.pager small { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.pager span { font-family: var(--font-display); font-size: var(--step-1); }
+
+.site-foot { max-width: var(--column); margin: 40px auto 0; font-size: var(--step--1); color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+
+
+/* ---------- figures ---------- */
+.fig { margin: 20px 0 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.fig figcaption { font-size: 0.92rem; color: var(--muted); line-height: 1.5; margin-top: 12px; max-width: 68ch; }
+.fig figcaption b { color: var(--ink); font-weight: 600; }
+.fig svg { display: block; max-width: 100%; height: auto; }
+.fig-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.fig-row > .fig-main { flex: 1 1 300px; min-width: 0; display: flex; justify-content: center; }
+.fig-row > .fig-key { flex: 1 1 220px; min-width: 0; }
+.hold-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.hold-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 8px 4px; border-radius: 6px; background: var(--bg); }
+.hold-cell svg { width: 84px; height: 84px; }
+.hold-cell b { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; }
+.hold-cell span { font-size: 0.78rem; color: var(--muted); }
+.key { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 0.92rem; line-height: 1.4; }
+.key li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; }
+.key svg { width: 40px; height: 24px; }
+.key-h { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); font-weight: 600; margin: 20px 0 6px; }
+.key-h:first-child { margin-top: 0; }
+
+/* SVG marks: every colour is a CSS variable so both themes work */
+.w-wall { fill: var(--wall); stroke: var(--wall-edge); stroke-width: 1.5; }
+.w-grid { stroke: var(--wall-grid); stroke-width: 1; fill: none; }
+.w-axis { fill: var(--muted); font: 11px var(--font-body); }
+.h-shape { fill: var(--hold); stroke: var(--hold-edge); stroke-width: 1; }
+.h-shape.foot { fill: var(--hold-foot); }
+.h-dir { stroke: var(--hold-edge); fill: var(--hold-edge); stroke-width: 1.6; }
+.hold.used .h-shape { stroke-width: 2.6; }
+.hold.unused { opacity: 0.35; }
+.h-label { fill: var(--ink); font: 600 11px var(--font-body); }
+.h-role { fill: var(--accent); font: 700 11px var(--font-body); letter-spacing: 0.04em; }
+.fg-limb { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.fg-joint { stroke: none; }
+.fg-head { fill: var(--surface); stroke-width: 2.4; }
+.fg-torso { stroke-width: 2.4; stroke-linejoin: round; }
+.u-easy { stroke: var(--easy); fill: var(--easy); }
+.u-mid { stroke: var(--hard); fill: var(--hard); }
+.u-hard { stroke: var(--limit); fill: var(--limit); }
+svg .fg-limb { fill: none; }
+.force { stroke: var(--force); fill: var(--force); stroke-width: 1.8; }
+.com { stroke: var(--ink); stroke-width: 2; fill: none; }
+.trail { stroke: var(--ink); stroke-width: 1.4; fill: none; stroke-dasharray: 3 3; opacity: 0.45; }
+.trail-dot { fill: var(--ink); opacity: 0.45; }
+.side-box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.side-wall { stroke: var(--wall-edge); stroke-width: 4; }
+.side-body { stroke-width: 1.6; fill: none; opacity: 0.7; }
+.side-text { fill: var(--muted); font: 10px var(--font-body); }
+.cl-A { --cl: var(--c-A); } .cl-B { --cl: var(--c-B); } .cl-C { --cl: var(--c-C); } .cl-D { --cl: var(--c-D); }
+.cl-stroke { stroke: var(--cl); } .cl-fill { fill: var(--cl); }
+.fg-torso.cl-fill { fill-opacity: 0.22; stroke: var(--cl); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--cl); vertical-align: -1px; margin-right: 6px; }
+
+@media (max-width: 899px) {
+  html { scroll-padding-top: 76px; }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+    z-index: 30; background: var(--panel);
+  }
+  .shell { display: block; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .topbar .brand-name { font-size: 1.1rem; }
+  .rail {
+    position: fixed; z-index: 40; top: 0; left: 0; bottom: 0;
+    width: min(86vw, 320px); height: auto;
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-102%); transition: transform 0.2s ease;
+    box-shadow: 0 0 40px rgb(0 0 0 / 0.25);
+  }
+  .shell.open .rail { transform: none; }
+  .shell.open .scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgb(0 0 0 / 0.35); }
+  .content { padding-block: 28px 40px; }
+  .chapter h2 { font-size: 1.85rem; }
+  .pipeline { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .hold-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fig { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
+</style>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+    svg: { fontCache: "global" }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<div class="shell" id="shell">
+  <div class="topbar">
+    <a class="brand" href="#intro"><span class="brand-name">Beta Solver</span></a>
+    <button class="btn" id="menu-btn" type="button" aria-controls="rail" aria-expanded="false">Contents</button>
+  </div>
+
+  <aside class="rail" id="rail" aria-label="Contents">
+    <a class="brand" href="#intro">
+      <span class="brand-name">Beta Solver</span>
+      <span class="brand-sub">Finding a climbing beta with optimization</span>
+    </a>
+    <nav class="toc" id="toc"></nav>
+    <div class="rail-foot">
+      <button class="btn" id="theme-btn" type="button">Theme: Auto</button>
+      <a id="repo-link-rail" href="#">Source on GitHub</a>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="content" id="content">
+    <div class="column">
+
+<!-- ================= MODEL ================= -->
+<section class="chapter" id="intro" data-group="The model" data-short="Can a beta be computed?">
+  <header>
+    <p class="eyebrow">Introduction</p>
+    <h2>Can a beta be computed?</h2>
+    <p class="lede">A beta is the sequence of moves that gets a climber up a route: which hold each hand and foot goes to, and in what order. Climbers work it out by trying. This site works it out by optimization.</p>
+  </header>
+
+  <p>Two climbers on the same route often end up with different betas. A tall climber skips a hold that a short climber needs; someone with weak fingers avoids the crimps; someone flexible steps onto a high foot that someone else cannot reach. The aim here is to build a model simple enough to explain in a few chapters, but faithful enough that these differences come out of the math on their own.</p>
+
+  <h3 id="intro-questions">Three questions</h3>
+  <ul>
+    <li><strong>How is it modeled?</strong> One chapter per modeling step, from holds and bodies up to the search.</li>
+    <li><strong>What do the results look like?</strong> One page per example: a figure climbs the route step by step, with the force on every contact, the effort of every move and the crux marked.</li>
+    <li><strong>Why does the beta differ between climbers?</strong> Switch climbers, compare two side by side, and see how the crux changes with height.</li>
+  </ul>
+
+  <h3 id="intro-approach">The approach in one picture</h3>
+  <ol class="pipeline">
+    <li><b>States</b><span>Which hold each hand and foot is on. These are the nodes of a graph.</span></li>
+    <li><b>State check</b><span>A small linear program: can the climber hold still here, and how hard is the most loaded limb working?</span></li>
+    <li><b>Search</b><span>A shortest-path search over moves between states, scored by those efforts.</span></li>
+  </ol>
+  <p>The best beta is the one whose hardest move, the crux, is as easy as possible. Among all betas with that crux, it is the one with the lowest total cost. Writing \(w(e)\) for the cost of a move \(e\) and \(\mathcal{P}\) for all move sequences from the start to the top:</p>
+  <div class="math-block">\[
+    \text{beta}^\star \;=\; \operatorname*{lex\,min}_{P \in \mathcal{P}} \Big(\, \max_{e \in P} w(e),\;\; \sum_{e \in P} w(e) \Big)
+  \]</div>
+  <p>Each move cost is built from the effort \(t\) of the state checks it passes through. A state with \(t \le 1\) can be held; \(t > 1\) means some limb would need more force than it has.</p>
+
+  <h3 id="intro-reading">How to read this site</h3>
+  <p>The model chapters each follow the same pattern: the idea in climbing terms, the math, an interactive figure, how it is implemented, and the tests that check it. If you only want results, skip to the examples; each one links back to the constraint that decides it. All numbers on these pages come from the Python solver and its tests, not from hand-written text.</p>
+</section>
+
+<section class="chapter" id="data" data-group="The model" data-short="Holds, routes and climbers" hidden>
+  <header>
+    <p class="eyebrow">Step 1</p>
+    <h2>Holds, routes and climbers</h2>
+    <p class="lede">The inputs: what a hold is, how a route is written down, and the four climbers who try every route.</p>
+  </header>
+  <h3 id="data-holds">Hold types</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.1</span><p>The eight hold types, each with the range of directions it can support you in and its strength parameters.</p></div>
+  <h3 id="data-routes">Route format</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.1</span><p>How a route is written: holds, start hands, finish hold.</p></div>
+  <h3 id="data-climbers">The climbers</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.2</span><p>Profile cards for Ava, Ben, Cal and Ava (injured).</p></div>
+</section>
+
+<section class="chapter" id="body" data-group="The model" data-short="The body model" hidden>
+  <header>
+    <p class="eyebrow">Step 2</p>
+    <h2>The body model</h2>
+    <p class="lede">A torso that slides but does not rotate, with four limbs of fixed maximum length.</p>
+  </header>
+  <h3 id="body-anchors">Shoulders, hips and limb lengths</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.3</span><p>Where the limbs attach, how long they are, and the four climbers drawn to scale side by side.</p></div>
+  <h3 id="body-simplifications">What the body model leaves out</h3>
+  <div class="planned"><span class="chip">Planned · unit 1.3</span><p>The simplifications and why each one is acceptable here.</p></div>
+</section>
+
+<section class="chapter" id="check" data-group="The model" data-short="Checking a state" hidden>
+  <header>
+    <p class="eyebrow">Step 3</p>
+    <h2>Checking a state</h2>
+    <p class="lede">With every limb on a fixed hold, can the climber hold still? If so, how hard is the most loaded limb working?</p>
+  </header>
+  <h3 id="check-unknowns">Knowns and unknowns</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.0</span><p>The problem statement, the unknowns, and the six constraints at a glance.</p></div>
+  <h3 id="check-reach">Reach</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.1</span><p>Every hold must be within reach of its shoulder or hip. Interactive: drag the body and watch holds fall out of reach.</p></div>
+  <h3 id="check-direction">Direction</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.2</span><p>Each hold can only push on you within a range of directions.</p></div>
+  <h3 id="check-strength">Strength and effort</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.3</span><p>No limb may exceed its strength; the effort \(t\) is the share of strength used by the most loaded limb.</p></div>
+  <h3 id="check-inplane">In-plane balance</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.4</span><p>No falling, no sliding, no swinging.</p></div>
+  <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.5</span><p>The hands must pull the body in toward the wall; the pull-in force grows as the feet come up.</p></div>
+  <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.6</span><p>With one hand on, the body swings open unless the feet are placed on both sides.</p></div>
+  <h3 id="check-flex">Flexibility</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.7</span><p>A foot cannot go too far above the hip.</p></div>
+  <h3 id="check-problem">The full problem and why it fails</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.8</span><p>All six constraints as one convex program, solved exactly, with an example of each failure reason.</p></div>
+  <h3 id="check-lp">From cones to a linear program</h3>
+  <div class="planned"><span class="chip">Planned · unit 2.9</span><p>Replacing circles and cones by polygons, and how close the linear program stays to the exact answer.</p></div>
+</section>
+
+<section class="chapter" id="move" data-group="The model" data-short="One move" hidden>
+  <header>
+    <p class="eyebrow">Step 4</p>
+    <h2>One move</h2>
+    <p class="lede">A move changes one limb's hold while the body slides continuously. Two state checks are enough to decide it.</p>
+  </header>
+  <h3 id="move-phases">Five phases of a move</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.1</span><p>Unload, let go, travel, touch, load. Animated, with the release check and the catch check.</p></div>
+  <h3 id="move-convex">Why the feasible region is convex</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.2</span><p>Averaging two ways of holding a state gives another valid way.</p></div>
+  <h3 id="move-twochecks">Why two checks are enough</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.3</span><p>The release and catch positions live in the same convex region, so a straight slide connects them.</p></div>
+  <h3 id="move-cost">Move cost and move types</h3>
+  <div class="planned"><span class="chip">Planned · unit 3.4</span><p>Swap, cut, place and match, and the small style penalties added to each move.</p></div>
+</section>
+
+<section class="chapter" id="search" data-group="The model" data-short="Finding the best beta" hidden>
+  <header>
+    <p class="eyebrow">Step 5</p>
+    <h2>Finding the best beta</h2>
+    <p class="lede">A two-stage Dijkstra search: first make the crux as easy as possible, then make the rest as cheap as possible.</p>
+  </header>
+  <h3 id="search-graph">The state graph</h3>
+  <div class="planned"><span class="chip">Planned · unit 4.1</span><p>How many states there are, and how geometric pruning keeps the search small.</p></div>
+  <h3 id="search-dijkstra">Two-stage Dijkstra</h3>
+  <div class="planned"><span class="chip">Planned · unit 4.2</span><p>A bottleneck search for the crux, then an ordinary shortest path under that crux.</p></div>
+  <h3 id="search-player">The beta player</h3>
+  <div class="planned"><span class="chip">Planned · unit 4.3</span><p>Smoothing the poses and playing a beta step by step.</p></div>
+</section>
+
+<!-- ================= EXAMPLES ================= -->
+<section class="chapter" id="ex1" data-group="Examples" data-short="1. Ladder" hidden>
+  <header><p class="eyebrow">Example 1</p><h2>Ladder</h2>
+  <p class="lede">Two columns of evenly spaced jugs with evenly spaced feet. Compares Ava, Ben and Cal.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.1</span></div>
+</section>
+<section class="chapter" id="ex2" data-group="Examples" data-short="2. Reach crux" hidden>
+  <header><p class="eyebrow">Example 2</p><h2>Reach crux</h2>
+  <p class="lede">A long gap between two jugs, with a high foot off to one side. Compares Ava and Ben.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.2</span></div>
+</section>
+<section class="chapter" id="ex3" data-group="Examples" data-short="3. Intermediate hold" hidden>
+  <header><p class="eyebrow">Example 3</p><h2>Intermediate hold</h2>
+  <p class="lede">Two jugs far apart with a crimp off to the side between them. Compares Ava and Ben.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.3</span></div>
+</section>
+<section class="chapter" id="ex4" data-group="Examples" data-short="4. High foot" hidden>
+  <header><p class="eyebrow">Example 4</p><h2>High foot</h2>
+  <p class="lede">A big foothold near hip height, or two small chips lower down. Compares Ava with a less flexible Ava.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.4</span></div>
+</section>
+<section class="chapter" id="ex5" data-group="Examples" data-short="5. Directional holds" hidden>
+  <header><p class="eyebrow">Example 5</p><h2>Directional holds</h2>
+  <p class="lede">A sidepull and an undercling that only work when something pushes back. Ava climbs it.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.5</span></div>
+</section>
+<section class="chapter" id="ex6" data-group="Examples" data-short="6. Foot swap" hidden>
+  <header><p class="eyebrow">Example 6</p><h2>Foot swap</h2>
+  <p class="lede">One good foothold in the middle, and the next one only reachable after switching feet. Ava climbs it.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.6</span></div>
+</section>
+<section class="chapter" id="ex7" data-group="Examples" data-short="7. Cross or match" hidden>
+  <header><p class="eyebrow">Example 7</p><h2>Cross-through or match</h2>
+  <p class="lede">A zigzag where crossing hands saves a move. Ava climbs it with and without a dislike of crossing.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.7</span></div>
+</section>
+<section class="chapter" id="ex8" data-group="Examples" data-short="8. Finger injury" hidden>
+  <header><p class="eyebrow">Example 8</p><h2>Finger injury and hold types</h2>
+  <p class="lede">The route splits into a crimp line and a sloper-and-pinch line. Compares Ava, Ava (injured) and Ben.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.8</span></div>
+</section>
+<section class="chapter" id="ex9" data-group="Examples" data-short="9. Why feet matter" hidden>
+  <header><p class="eyebrow">Example 9</p><h2>Why feet matter</h2>
+  <p class="lede">A crimp line climbed normally and as a campus route with no feet. Compares Cal on both, and Ava campusing.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 5.9</span></div>
+</section>
+<section class="chapter" id="ex10" data-group="Examples" data-short="10. Height threshold" hidden>
+  <header><p class="eyebrow">Example 10</p><h2>Height threshold</h2>
+  <p class="lede">Two jugs far apart with nothing in between. The same route solved across a range of heights.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 6.1</span></div>
+</section>
+
+<!-- ================= END MATTER ================= -->
+<section class="chapter" id="limits" data-group="Notes" data-short="What the model cannot see" hidden>
+  <header><p class="eyebrow">Limits</p><h2>What the model cannot see</h2>
+  <p class="lede">Flagging, heel and toe hooks, hips against the wall, momentum and dynos.</p></header>
+  <div class="planned"><span class="chip">Planned · unit 7.1</span></div>
+</section>
+<section class="chapter" id="appendix" data-group="Notes" data-short="Implementation and tests" hidden>
+  <header><p class="eyebrow">Appendix</p><h2>Implementation and tests</h2>
+  <p class="lede">Data format, test results, how to reproduce everything, and the legend for the figures.</p></header>
+  <h3 id="appendix-legend">Legend</h3>
+  <p>Every figure on this site is drawn by the same few functions, so a mark means the same thing everywhere. This section is the key.</p>
+
+  <figure class="fig" id="fig-wall">
+    <div class="fig-row">
+      <div class="fig-main" data-draw="wall"></div>
+      <div class="fig-key">
+        <p class="key-h">The wall</p>
+        <p class="key-note">A flat vertical wall seen from the front. Lengths are in metres, with the origin at the bottom-left corner, \(x\) to the right and \(y\) up. Grid lines are every half metre.</p>
+      </div>
+    </div>
+    <figcaption><b>Wall.</b> <span data-text="wall-size"></span></figcaption>
+  </figure>
+
+  <figure class="fig" id="fig-holds">
+    <div class="hold-grid" data-draw="hold-types"></div>
+    <figcaption><b>The eight hold types.</b> Each type has its own shape. Foot-only holds are a duller shade than hand holds. A small arrow marks a hold that only works in one direction: it points the way the hold can push on the hand.</figcaption>
+  </figure>
+
+  <figure class="fig" id="fig-marks">
+    <div data-draw="markings"></div>
+    <figcaption><b>Hold markings.</b> Start holds carry an <b>S</b>, the finish hold carries <b>TOP</b>. Holds the current beta uses have a heavy outline; holds it never touches are faded.</figcaption>
+  </figure>
+
+  <figure class="fig" id="fig-climber">
+    <div class="fig-row">
+      <div class="fig-main" data-draw="climber"></div>
+      <div class="fig-key" data-draw="climber-key"></div>
+    </div>
+    <figcaption><b>The climber.</b> Torso and head in the climber's colour, each limb coloured by how much of its strength it is using. Arrows are the forces the holds put on the body in the plane of the wall. The inset at the bottom right is a side view: hands are pulled in toward the wall, feet are pushed out. The pose uses the body proportions of step 2; the forces and efforts in this figure are example values.</figcaption>
+  </figure>
+  <h3 id="appendix-format">Data format</h3>
+  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <h3 id="appendix-tests">Test results</h3>
+  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <h3 id="appendix-reproduce">Reproducing the results</h3>
+  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+</section>
+
+      <nav class="pager" id="pager" aria-label="Chapter navigation"></nav>
+    </div>
+    <footer class="site-foot" id="site-foot">
+      <a id="repo-link-foot" href="#">Source on GitHub</a>
+      <span id="build-info"></span>
+    </footer>
+  </main>
+</div>
+
+<script type="application/json" id="site-data">__DATA__</script>
+<script>
+/* ---------- drawing module: wall, holds, climber, forces ----------
+   World coordinates are metres, origin bottom-left, y up. A scene maps them
+   to SVG pixels; every colour is a CSS class so light and dark themes work. */
+var Draw = (function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var LIMBS = ["LH", "RH", "LF", "RF"];
+
+  function el(parent, tag, attrs, cls) {
+    var e = document.createElementNS(NS, tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (cls) e.setAttribute("class", cls);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function r3(v) { return Math.round(v * 100) / 100; }
+
+  /* scene({x0, y0, x1, y1, k, pad, title}) -> {svg, X, Y, k, layers} ; k = px per metre */
+  function scene(container, o) {
+    var k = o.k || 200, pad = o.pad == null ? 12 : o.pad;
+    var padB = o.padBottom == null ? pad : o.padBottom, padL = o.padLeft == null ? pad : o.padLeft;
+    var padT = o.padTop == null ? pad : o.padTop;
+    var W = (o.x1 - o.x0) * k + padL + pad, H = (o.y1 - o.y0) * k + padT + padB;
+    var svg = el(null, "svg", { viewBox: "0 0 " + r3(W) + " " + r3(H), width: r3(W), height: r3(H), role: "img" });
+    if (o.title) el(svg, "title").textContent = o.title;
+    var sc = {
+      svg: svg, k: k, W: W, H: H,
+      X: function (x) { return r3(padL + (x - o.x0) * k); },
+      Y: function (y) { return r3(padT + (o.y1 - y) * k); },
+      box: o
+    };
+    sc.layers = {};
+    ["wall", "trail", "holds", "body", "forces", "over"].forEach(function (n) { sc.layers[n] = el(svg, "g"); });
+    if (container) container.appendChild(svg);
+    return sc;
+  }
+
+  /* wall: the part of the wall inside the scene, with an optional grid and axis labels */
+  function wall(sc, w, opts) {
+    opts = opts || {};
+    var b = sc.box, g = sc.layers.wall;
+    var x0 = Math.max(0, b.x0), x1 = Math.min(w.w, b.x1), y0 = Math.max(0, b.y0), y1 = Math.min(w.h, b.y1);
+    el(g, "rect", { x: sc.X(x0), y: sc.Y(y1), width: r3((x1 - x0) * sc.k), height: r3((y1 - y0) * sc.k), rx: 2 }, "w-wall");
+    var step = opts.grid;
+    if (step) {
+      var d = "";
+      for (var x = Math.ceil(x0 / step) * step; x < x1 - 1e-9; x += step) if (x > x0 + 1e-9) d += "M" + sc.X(x) + " " + sc.Y(y0) + "V" + sc.Y(y1);
+      for (var y = Math.ceil(y0 / step) * step; y < y1 - 1e-9; y += step) if (y > y0 + 1e-9) d += "M" + sc.X(x0) + " " + sc.Y(y) + "H" + sc.X(x1);
+      el(g, "path", { d: d }, "w-grid");
+    }
+    if (opts.axes) {
+      var ax = function (txt, x, y, anchor) { el(g, "text", { x: x, y: y, "text-anchor": anchor }, "w-axis").textContent = txt; };
+      for (var xi = 0; xi <= w.w + 1e-9; xi += 1) ax(String(xi), sc.X(xi), sc.Y(0) + 15, "middle");
+      for (var yi = 0; yi <= w.h + 1e-9; yi += 1) ax(String(yi), sc.X(0) - 6, sc.Y(yi) + 4, "end");
+      ax("x (m)", sc.X(w.w), sc.Y(0) + 30, "end");
+      ax("y (m)", sc.X(0) - 6, sc.Y(w.h) - 8, "end");
+    }
+  }
+
+  /* hold shapes, in metres so they scale with the wall */
+  var SIZE = {
+    jug: 0.06, crimp: [0.13, 0.026], sloper: 0.075, pinch: [0.036, 0.066],
+    sidepull: [0.026, 0.12], undercling: 0.065, foot_big: 0.034, foot_chip: 0.019
+  };
+  var FOOT_ONLY = { foot_big: 1, foot_chip: 1 };
+  var DIRECTIONAL = { sidepull: 1, undercling: 1 };
+
+  function holdShape(g, type, cx, cy, k) {
+    var s = SIZE[type], cls = "h-shape" + (FOOT_ONLY[type] ? " foot" : "");
+    switch (type) {
+      case "jug": case "foot_big": case "foot_chip":
+        return el(g, "circle", { cx: cx, cy: cy, r: r3(s * k) }, cls);
+      case "crimp": case "sidepull":
+        return el(g, "rect", { x: r3(cx - s[0] * k / 2), y: r3(cy - s[1] * k / 2), width: r3(s[0] * k), height: r3(s[1] * k), rx: r3(Math.min(s[0], s[1]) * k / 2) }, cls);
+      case "sloper": {
+        var r = s * k; // dome, flat side down
+        return el(g, "path", { d: "M" + r3(cx - r) + " " + r3(cy + r * 0.35) + "A" + r3(r) + " " + r3(r) + " 0 0 1 " + r3(cx + r) + " " + r3(cy + r * 0.35) + "Z" }, cls);
+      }
+      case "pinch":
+        return el(g, "ellipse", { cx: cx, cy: cy, rx: r3(s[0] * k), ry: r3(s[1] * k) }, cls);
+      case "undercling": {
+        var u = s * k, t = u * 0.42; // a cup opening downward: a thick arch
+        return el(g, "path", { d: "M" + r3(cx - u) + " " + r3(cy + u * 0.5) + "A" + r3(u) + " " + r3(u) + " 0 0 1 " + r3(cx + u) + " " + r3(cy + u * 0.5) +
+          "L" + r3(cx + u - t) + " " + r3(cy + u * 0.5) + "A" + r3(u - t) + " " + r3(u - t) + " 0 0 0 " + r3(cx - u + t) + " " + r3(cy + u * 0.5) + "Z" }, cls);
+      }
+    }
+    return el(g, "circle", { cx: cx, cy: cy, r: 4 }, cls);
+  }
+
+  function arrowHead(g, x1, y1, x2, y2, size, cls) {
+    var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    var bx = x2 - ux * size, by = y2 - uy * size, w = size * 0.55;
+    el(g, "path", { d: "M" + r3(x2) + " " + r3(y2) + "L" + r3(bx - uy * w) + " " + r3(by + ux * w) + "L" + r3(bx + uy * w) + " " + r3(by - ux * w) + "Z" }, cls);
+  }
+  /* an arrow in pixels; the shaft stops at the head's base so it stays sharp */
+  function arrowPx(g, x1, y1, x2, y2, cls, head) {
+    head = head || 8;
+    var L = Math.hypot(x2 - x1, y2 - y1);
+    if (L < 1e-6) return;
+    var f = Math.max(0, (L - head * 0.8) / L);
+    el(g, "line", { x1: r3(x1), y1: r3(y1), x2: r3(x1 + (x2 - x1) * f), y2: r3(y1 + (y2 - y1) * f) }, cls);
+    arrowHead(g, x1, y1, x2, y2, Math.min(head, L), cls);
+  }
+
+  /* hold(sc, h, {used, label}) ; h = {id, x, y, type, dir, role} */
+  function hold(sc, h, opts) {
+    opts = opts || {};
+    var cls = "hold" + (opts.used === true ? " used" : opts.used === false ? " unused" : "");
+    var g = el(sc.layers.holds, "g", { "data-hold": h.id || "" }, cls);
+    var cx = sc.X(h.x), cy = sc.Y(h.y), k = sc.k;
+    holdShape(g, h.type, cx, cy, k);
+    if (DIRECTIONAL[h.type]) {
+      var a = (h.dir == null ? 90 : h.dir) * Math.PI / 180, r0 = 0.03 * k, r1 = 0.11 * k;
+      arrowPx(g, cx + Math.cos(a) * r0, cy - Math.sin(a) * r0, cx + Math.cos(a) * r1, cy - Math.sin(a) * r1, "h-dir", Math.max(5, 0.035 * k));
+    }
+    var off = 0.09 * k;
+    if (h.role === "start") el(g, "text", { x: r3(cx + off), y: r3(cy - off * 0.6) }, "h-role").textContent = "S";
+    if (h.role === "finish") el(g, "text", { x: r3(cx + off), y: r3(cy - off * 0.6) }, "h-role").textContent = "TOP";
+    if (opts.label) el(g, "text", { x: r3(cx - off), y: r3(cy - off * 0.6), "text-anchor": "end" }, "h-label").textContent = h.id;
+    return g;
+  }
+
+  function utilClass(u, bands) {
+    if (u == null) return null;
+    return u < bands[0] ? "u-easy" : u <= bands[1] ? "u-mid" : "u-hard";
+  }
+
+  /* figure(sc, frame, climber, {util: bool, bands}) ; frame = {torso, joints, util} */
+  function figure(sc, frame, climber, opts) {
+    opts = opts || {};
+    var bands = opts.bands || [0.5, 0.8];
+    var g = el(sc.layers.body, "g", null, "cl-" + climber.key);
+    var k = sc.k, J = frame.joints, wLimb = Math.max(2.5, 0.028 * k);
+    function P(p) { return [sc.X(p[0]), sc.Y(p[1])]; }
+    var tor = [J.LH && J.LH.shoulder, J.RH && J.RH.shoulder, J.RF && J.RF.hip, J.LF && J.LF.hip];
+    if (tor.every(Boolean)) {
+      el(g, "path", { d: "M" + tor.map(function (p) { return P(p).join(" "); }).join("L") + "Z" }, "fg-torso cl-fill");
+    }
+    LIMBS.forEach(function (limb) {
+      var j = J[limb];
+      if (!j) return;
+      var root = j.shoulder || j.hip, mid = j.elbow || j.knee;
+      var uc = opts.util && frame.util ? utilClass(frame.util[limb], bands) : null;
+      var cls = uc || "cl-stroke";
+      var pts = [P(root), P(mid), P(j.end)];
+      el(g, "path", { d: "M" + pts.map(function (p) { return p.join(" "); }).join("L"), "stroke-width": r3(wLimb) }, "fg-limb " + cls);
+      var fill = uc || "cl-fill";
+      el(g, "circle", { cx: pts[1][0], cy: pts[1][1], r: r3(wLimb * 0.62) }, "fg-joint " + fill);
+      el(g, "circle", { cx: pts[2][0], cy: pts[2][1], r: r3(wLimb * 0.85) }, "fg-joint " + fill);
+    });
+    if (climber.head && J.LH && J.RH) {
+      var sx = (J.LH.shoulder[0] + J.RH.shoulder[0]) / 2, sy = (J.LH.shoulder[1] + J.RH.shoulder[1]) / 2;
+      var hc = [frame.torso[0], frame.torso[1] + climber.head[0]];
+      var hr = climber.head[1];
+      el(g, "line", { x1: sc.X(sx), y1: sc.Y(sy), x2: sc.X(hc[0]), y2: sc.Y(hc[1] - hr), "stroke-width": r3(wLimb * 0.9) }, "fg-limb cl-stroke");
+      el(g, "circle", { cx: sc.X(hc[0]), cy: sc.Y(hc[1]), r: r3(hr * k) }, "fg-head cl-stroke");
+    }
+    return g;
+  }
+
+  /* forces(sc, frame, scale): in-wall force on each contact, `scale` metres per body weight */
+  function forces(sc, frame, scale) {
+    var g = sc.layers.forces;
+    LIMBS.forEach(function (limb) {
+      var F = frame.forces && frame.forces[limb], j = frame.joints[limb];
+      if (!F || !j) return;
+      var x = sc.X(j.end[0]), y = sc.Y(j.end[1]);
+      arrowPx(g, x, y, x + F.f[0] * scale * sc.k, y - F.f[1] * scale * sc.k, "force", 8);
+    });
+  }
+
+  /* centre of mass: a cross, plus a faint trail through earlier positions */
+  function com(sc, p, trail) {
+    var s = 7, x = sc.X(p[0]), y = sc.Y(p[1]);
+    if (trail && trail.length > 1) {
+      el(sc.layers.trail, "polyline", { points: trail.map(function (q) { return sc.X(q[0]) + "," + sc.Y(q[1]); }).join(" ") }, "trail");
+      trail.slice(0, -1).forEach(function (q) { el(sc.layers.trail, "circle", { cx: sc.X(q[0]), cy: sc.Y(q[1]), r: 2.2 }, "trail-dot"); });
+    }
+    el(sc.layers.over, "path", { d: "M" + (x - s) + " " + y + "H" + (x + s) + "M" + x + " " + (y - s) + "V" + (y + s) }, "com");
+  }
+
+  /* sideView(sc, frame, climber, scale): inset in the bottom-right corner.
+     Horizontal axis is distance from the wall, vertical is height. */
+  function sideView(sc, frame, climber, scale, opts) {
+    opts = opts || {};
+    var J = frame.joints, F = frame.forces || {};
+    var ys = [frame.torso[1]];
+    LIMBS.forEach(function (l) { if (J[l]) ys.push(J[l].end[1]); });
+    var ylo = Math.min.apply(null, ys) - 0.12, yhi = Math.max.apply(null, ys) + 0.12;
+    var bw = opts.w || 136, bh = opts.h || 190, m = 8;
+    var bx = sc.W - bw - 6, by = sc.H - bh - 6;
+    var g = el(sc.layers.over, "g", null, "cl-" + climber.key);
+    el(g, "rect", { x: bx, y: by, width: bw, height: bh, rx: 6 }, "side-box");
+    var k = Math.min((bh - 2 * m - 14) / (yhi - ylo), 140);
+    var wx = bx + 22;
+    function Y(y) { return r3(by + m + 14 + (yhi - y) * k); }
+    function Z(z) { return r3(wx + z * k); }
+    el(g, "text", { x: bx + bw / 2, y: by + m + 6, "text-anchor": "middle" }, "side-text").textContent = "side view";
+    el(g, "text", { x: wx - 5, y: by + bh - m, "text-anchor": "end" }, "side-text").textContent = "wall";
+    el(g, "line", { x1: wx, y1: by + m + 12, x2: wx, y2: by + bh - m }, "side-wall");
+    var d = climber.d_wall, cz = Z(d), cy = Y(frame.torso[1]);
+    LIMBS.forEach(function (l) {
+      if (!J[l]) return;
+      el(g, "line", { x1: cz, y1: cy, x2: wx, y2: Y(J[l].end[1]) }, "side-body cl-stroke");
+    });
+    el(g, "path", { d: "M" + (cz - 5) + " " + cy + "H" + (cz + 5) + "M" + cz + " " + (cy - 5) + "V" + (cy + 5) }, "com");
+    LIMBS.forEach(function (l) {
+      var f = F[l], j = J[l];
+      if (!f || !j) return;
+      var y = Y(j.end[1]);
+      var a = scale * sc.k; // same length per body weight as the arrows on the wall
+      if (l[1] === "H" && f.n) arrowPx(g, wx + 2 + f.n * a, y, wx + 2, y, "force", 6);
+      if (l[1] === "F" && f.m) arrowPx(g, wx + 2, y, wx + 2 + f.m * a, y, "force", 6);
+    });
+  }
+
+  /* a tiny standalone SVG for legend keys */
+  function chip(w, h) { return el(null, "svg", { viewBox: "0 0 " + w + " " + h, width: w, height: h, "aria-hidden": "true" }); }
+
+  return {
+    el: el, scene: scene, wall: wall, hold: hold, figure: figure, forces: forces, com: com,
+    sideView: sideView, arrowPx: arrowPx, chip: chip, utilClass: utilClass,
+    FOOT_ONLY: FOOT_ONLY, LIMBS: LIMBS
+  };
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("site-data").textContent);
+  var root = document.documentElement;
+  var shell = document.getElementById("shell");
+  var chapters = Array.prototype.slice.call(document.querySelectorAll("section.chapter"));
+  var byId = {};
+  chapters.forEach(function (c) { byId[c.id] = c; });
+
+  /* ---------- footer and repo links ---------- */
+  ["repo-link-rail", "repo-link-foot"].forEach(function (id) {
+    document.getElementById(id).href = DATA.meta.repo;
+  });
+  document.getElementById("build-info").textContent =
+    "Built " + DATA.meta.built + " · betasolver " + DATA.meta.version;
+
+  /* ---------- contents ---------- */
+  var toc = document.getElementById("toc");
+  var groups = [];
+  chapters.forEach(function (c) {
+    var g = c.dataset.group;
+    if (!groups.length || groups[groups.length - 1].name !== g) groups.push({ name: g, items: [] });
+    groups[groups.length - 1].items.push(c);
+  });
+  var tocLinks = {};
+  var tocSubs = {};
+  groups.forEach(function (g) {
+    var wrap = document.createElement("div");
+    wrap.className = "toc-group";
+    var label = document.createElement("p");
+    label.className = "toc-label";
+    label.textContent = g.name;
+    var ol = document.createElement("ol");
+    g.items.forEach(function (c) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = "#" + c.id;
+      a.textContent = c.dataset.short;
+      li.appendChild(a);
+      tocLinks[c.id] = a;
+      var heads = c.querySelectorAll("h3[id]");
+      if (heads.length) {
+        var sub = document.createElement("ol");
+        sub.className = "sub";
+        sub.hidden = true;
+        Array.prototype.forEach.call(heads, function (h) {
+          var sli = document.createElement("li");
+          var sa = document.createElement("a");
+          sa.href = "#" + h.id;
+          sa.textContent = h.textContent;
+          sa.dataset.target = h.id;
+          sli.appendChild(sa);
+          sub.appendChild(sli);
+        });
+        li.appendChild(sub);
+        tocSubs[c.id] = sub;
+      }
+      ol.appendChild(li);
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(ol);
+    toc.appendChild(wrap);
+  });
+
+  /* ---------- pager ---------- */
+  var pager = document.getElementById("pager");
+  function renderPager(i) {
+    pager.textContent = "";
+    function link(c, cls, word) {
+      var a = document.createElement("a");
+      a.className = cls;
+      a.href = "#" + c.id;
+      var s = document.createElement("small");
+      s.textContent = word;
+      var t = document.createElement("span");
+      t.textContent = c.querySelector("h2").textContent;
+      a.appendChild(s);
+      a.appendChild(t);
+      pager.appendChild(a);
+    }
+    if (i > 0) link(chapters[i - 1], "prev", "Previous");
+    if (i < chapters.length - 1) link(chapters[i + 1], "next", "Next");
+  }
+
+  /* ---------- routing: #chapter or #chapter-section ---------- */
+  var current = null;
+  function route() {
+    var token = decodeURIComponent((location.hash || "").slice(1));
+    var target = token ? document.getElementById(token) : null;
+    var chapter = target ? target.closest("section.chapter") : null;
+    if (!chapter) { chapter = chapters[0]; target = null; }
+    if (chapter !== current) {
+      chapters.forEach(function (c) { c.hidden = c !== chapter; });
+      Object.keys(tocLinks).forEach(function (id) {
+        if (id === chapter.id) tocLinks[id].setAttribute("aria-current", "page");
+        else tocLinks[id].removeAttribute("aria-current");
+        if (tocSubs[id]) tocSubs[id].hidden = id !== chapter.id;
+      });
+      renderPager(chapters.indexOf(chapter));
+      current = chapter;
+    }
+    var sub = tocSubs[chapter.id];
+    if (sub) Array.prototype.forEach.call(sub.querySelectorAll("a"), function (a) {
+      a.classList.toggle("here", !!target && a.dataset.target === target.id);
+    });
+    if (target && target !== chapter) target.scrollIntoView();
+    else window.scrollTo(0, 0);
+    closeMenu();
+  }
+  window.addEventListener("hashchange", route);
+
+  /* ---------- mobile drawer ---------- */
+  var menuBtn = document.getElementById("menu-btn");
+  function closeMenu() { shell.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); }
+  menuBtn.addEventListener("click", function () {
+    var open = shell.classList.toggle("open");
+    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.getElementById("scrim").addEventListener("click", closeMenu);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
+
+  /* ---------- theme: auto / light / dark ---------- */
+  var themeBtn = document.getElementById("theme-btn");
+  var order = ["auto", "light", "dark"];
+  var names = { auto: "Auto", light: "Light", dark: "Dark" };
+  var theme = "auto";
+  try { theme = localStorage.getItem("beta-theme") || "auto"; } catch (e) {}
+  if (order.indexOf(theme) < 0) theme = "auto";
+  function applyTheme() {
+    if (theme === "auto") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+    themeBtn.textContent = "Theme: " + names[theme];
+  }
+  themeBtn.addEventListener("click", function () {
+    theme = order[(order.indexOf(theme) + 1) % order.length];
+    try { localStorage.setItem("beta-theme", theme); } catch (e) {}
+    applyTheme();
+  });
+  if (theme !== "auto") applyTheme();
+
+  /* ---------- appendix: legend figures (unit 0.2) ---------- */
+  function renderLegend(L) {
+    function slot(name) { return document.querySelector('[data-draw="' + name + '"]'); }
+    function pct(v) { return Math.round(v * 100) + "%"; }
+
+    document.querySelector('[data-text="wall-size"]').textContent =
+      "Every route uses the same " + L.wall.w.toFixed(1) + " m by " + L.wall.h.toFixed(1) + " m wall.";
+
+    // the whole wall
+    var sw = Draw.scene(slot("wall"), { x0: 0, y0: 0, x1: L.wall.w, y1: L.wall.h, k: 62, pad: 10, padTop: 26, padLeft: 40, padBottom: 40, title: "The wall with a half-metre grid" });
+    Draw.wall(sw, L.wall, { grid: 0.5, axes: true });
+
+    // the eight hold types
+    var grid = slot("hold-types");
+    L.hold_types.forEach(function (t) {
+      var cell = document.createElement("div");
+      cell.className = "hold-cell";
+      var sc = Draw.scene(cell, { x0: -0.15, y0: -0.15, x1: 0.15, y1: 0.15, k: 280, pad: 0, title: t.type });
+      Draw.el(sc.layers.wall, "rect", { x: 0, y: 0, width: sc.W, height: sc.H, rx: 8 }, "w-wall");
+      Draw.hold(sc, { x: 0, y: 0, type: t.type, dir: t.dir });
+      var b = document.createElement("b");
+      b.textContent = t.type;
+      var u = document.createElement("span");
+      u.textContent = t.use === "foot" ? "feet only" : "hands and feet";
+      cell.appendChild(b);
+      cell.appendChild(u);
+      grid.appendChild(cell);
+    });
+
+    // markings: start, finish, used, unused
+    var mk = slot("markings");
+    var sm = Draw.scene(mk, { x0: 0, y0: 0, x1: 2.0, y1: 0.5, k: 170, pad: 0, padBottom: 26, title: "Hold markings" });
+    Draw.el(sm.layers.wall, "rect", { x: 0, y: 0, width: sm.W, height: sm.Y(0), rx: 8 }, "w-wall");
+    var names = { start: "start", finish: "finish", normal: "used" };
+    L.markings.forEach(function (h) {
+      Draw.hold(sm, h, { used: h.used });
+      var txt = h.used ? names[h.role] : "not used";
+      Draw.el(sm.layers.over, "text", { x: sm.X(h.x), y: sm.Y(0) + 18, "text-anchor": "middle" }, "w-axis").textContent = txt;
+    });
+
+    // the climber on a piece of wall
+    var S = L.scene, F = S.frame, C = L.climber;
+    var sc = Draw.scene(slot("climber"), { x0: S.x0, y0: S.y0, x1: S.x1, y1: S.y1, k: 190, pad: 8, title: "A climber on four holds, with forces" });
+    Draw.wall(sc, L.wall, { grid: 0.5 });
+    var used = {};
+    Object.keys(F.state).forEach(function (l) { used[F.state[l]] = true; });
+    S.holds.forEach(function (h) { Draw.hold(sc, h, { used: !!used[h.id], label: true }); });
+    Draw.figure(sc, F, C, { util: true, bands: L.util_bands });
+    Draw.forces(sc, F, L.force_scale);
+    Draw.com(sc, F.torso, S.trail);
+    Draw.sideView(sc, F, C, L.force_scale);
+
+    // key for the climber figure
+    var key = slot("climber-key");
+    function head(t) { var p = document.createElement("p"); p.className = "key-h"; p.textContent = t; key.appendChild(p); }
+    function list() { var ul = document.createElement("ul"); ul.className = "key"; key.appendChild(ul); return ul; }
+    function item(ul, svg, text) {
+      var li = document.createElement("li");
+      li.appendChild(svg || document.createElement("span"));
+      var s = document.createElement("span"); s.textContent = text; li.appendChild(s);
+      ul.appendChild(li);
+    }
+    function lineChip(cls, dash) {
+      var s = Draw.chip(40, 24);
+      Draw.el(s, "line", { x1: 4, y1: 12, x2: 36, y2: 12, "stroke-width": 5, "stroke-dasharray": dash || "none" }, "fg-limb " + cls);
+      return s;
+    }
+
+    head("Climbers");
+    var ul = list();
+    L.climbers.forEach(function (c) {
+      var s = Draw.chip(40, 24);
+      var g = Draw.el(s, "g", null, "cl-" + c.key);
+      Draw.el(g, "circle", { cx: 20, cy: 12, r: 7 }, "fg-head cl-stroke");
+      item(ul, s, c.name);
+    });
+
+    head("Limb effort (share of that limb's strength)");
+    ul = list();
+    var b = L.util_bands;
+    item(ul, lineChip("u-easy"), "below " + pct(b[0]));
+    item(ul, lineChip("u-mid"), pct(b[0]) + " to " + pct(b[1]));
+    item(ul, lineChip("u-hard"), "above " + pct(b[1]));
+
+    head("Forces and balance");
+    ul = list();
+    var fa = Draw.chip(40, 24); Draw.arrowPx(fa, 4, 12, 36, 12, "force", 8);
+    item(ul, fa, "Force from a hold. An arrow " + L.force_scale.toFixed(1) + " m long on the wall is one body weight.");
+    var cm = Draw.chip(40, 24); Draw.el(cm, "path", { d: "M13 12H27M20 5V19" }, "com");
+    item(ul, cm, "Centre of mass, which is also the torso position.");
+    var tr = Draw.chip(40, 24); Draw.el(tr, "polyline", { points: "4,18 20,12 36,6" }, "trail");
+    Draw.el(tr, "circle", { cx: 4, cy: 18, r: 2.2 }, "trail-dot"); Draw.el(tr, "circle", { cx: 20, cy: 12, r: 2.2 }, "trail-dot");
+    item(ul, tr, "Where the centre of mass has been during the current move.");
+    var sv = Draw.chip(40, 24); Draw.el(sv, "line", { x1: 6, y1: 2, x2: 6, y2: 22 }, "side-wall"); Draw.arrowPx(sv, 34, 12, 9, 12, "force", 7);
+    item(ul, sv, "Side view: a hand pulled in toward the wall, or a foot pushed out from it.");
+  }
+  if (DATA.figures && DATA.figures.legend) renderLegend(DATA.figures.legend);
+
+  route();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+import importlib.util
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location("build_page", ROOT / "site" / "build_page.py")
+build_page = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(build_page)
+
+CHAPTERS = ["intro", "data", "body", "check", "move", "search",
+            *[f"ex{i}" for i in range(1, 11)], "limits", "appendix"]
+
+
+@pytest.fixture(scope="module")
+def html(tmp_path_factory):
+    out = tmp_path_factory.mktemp("site") / "index.html"
+    return build_page.build(out)
+
+
+def test_every_chapter_present_in_order(html):
+    found = re.findall(r'<section class="chapter" id="([^"]+)"', html)
+    assert found == CHAPTERS
+
+
+def test_anchors_are_plain_tokens_and_unique(html):
+    # The claude.ai preview only passes hashes made of [A-Za-z0-9._~-].
+    ids = re.findall(r'\sid="([^"]+)"', html)
+    assert len(ids) == len(set(ids))
+    for i in ids:
+        assert re.fullmatch(r"[A-Za-z0-9._~-]+", i), i
+
+
+def test_embedded_data_parses(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    data = json.loads(raw)
+    assert data["meta"]["repo"].startswith("https://github.com/")
+
+
+def test_json_cannot_close_script():
+    assert "</" not in build_page.embed_json({"x": "</script>"})
+
+
+def test_no_chinese_in_page(html):
+    assert build_page.find_cjk(html) == []
+
+
+def test_cjk_detector_catches_chinese():
+    assert build_page.find_cjk("ok\n体检\n") == [(2, "体检")]
+
+
+def test_mathjax_pinned(html):
+    assert "cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" in html
+
+
+def test_preview_has_no_document_wrapper(html):
+    frag = build_page.to_preview(html)
+    for tag in ("<!doctype", "<html", "<head>", "<body>", 'name="viewport"', "charset="):
+        assert tag not in frag.lower()
+    assert frag.lstrip().startswith("<title>")
+
+
+def test_legend_embedded_and_slots_present(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    leg = json.loads(raw)["figures"]["legend"]
+    assert len(leg["hold_types"]) == 8
+    for slot in ("wall", "hold-types", "markings", "climber", "climber-key"):
+        assert f'data-draw="{slot}"' in html
+    assert "var Draw = (function ()" in html
