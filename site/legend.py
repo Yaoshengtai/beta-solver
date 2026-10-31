@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 
-from betasolver.model import HOLD_TYPES, WALL_H, WALL_W, Hold, Route
+from betasolver.model import HOLD_TYPES, PROFILES, WALL_H, WALL_W, Hold, Route
 
 WALL = {"w": WALL_W, "h": WALL_H}
 
@@ -130,8 +130,7 @@ def legend() -> dict:
                     "head": [HEAD[0] * H, HEAD[1] * H]},
         "scene": {"x0": 0.75, "y0": 0.45, "x1": 2.85, "y1": 3.05,
                   "holds": holds, "frame": frame, "trail": trail},
-        "climbers": [{"key": "A", "name": "Ava"}, {"key": "B", "name": "Ben"},
-                     {"key": "C", "name": "Cal"}, {"key": "D", "name": "Ava (injured)"}],
+        "climbers": [{"key": c.key, "name": c.name} for c in PROFILES.values()],
         "force_scale": 0.3,
         "util_bands": [0.5, 0.8],
     })

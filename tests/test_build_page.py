@@ -78,3 +78,11 @@ def test_hold_types_and_route_example_embedded(html):
     ex = data["figures"]["route_example"]
     assert ex["finish"] in {h["id"] for h in ex["holds"]}
     assert 'data-draw="hold-table"' in html and 'data-draw="route-example"' in html
+
+
+def test_climbers_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    data = json.loads(raw)
+    assert [c["name"] for c in data["model"]["climbers"]] == ["Ava", "Ben", "Cal", "Ava (injured)"]
+    assert all(v["base"] == "A" for v in data["model"]["variants"])
+    assert 'data-draw="climber-cards"' in html

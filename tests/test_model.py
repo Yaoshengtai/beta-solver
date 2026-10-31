@@ -103,3 +103,64 @@ def test_route_roles_and_dict():
 def test_bad_routes_rejected(kw):
     with pytest.raises(ValueError):
         _route(**kw)
+
+
+# ---------------------------------------------------------------- climbers
+from betasolver.model import AVA, BEN, CAL, PROFILES, VARIANTS, Climber  # noqa: E402
+
+# Step 1: key -> (name, H, span, jug, crimp, sloper, pinch, foot, flex)
+PLAN_CLIMBERS = {
+    "A": ("Ava", 1.60, 1.60, 1.2, 0.9, 0.35, 0.6, 1.5, 0.08),
+    "B": ("Ben", 1.85, 1.90, 1.2, 0.6, 0.55, 0.6, 1.5, -0.10),
+    "C": ("Cal", 1.70, 1.70, 0.8, 0.35, 0.25, 0.35, 1.5, 0.00),
+    "D": ("Ava (injured)", 1.60, 1.60, 1.2, 0.0, 0.35, 0.6, 1.5, 0.08),
+}
+
+
+def test_profiles_match_plan():
+    assert list(PROFILES) == list(PLAN_CLIMBERS)
+    for key, (name, H, span, jug, crimp, sloper, pinch, foot, flex) in PLAN_CLIMBERS.items():
+        c = PROFILES[key]
+        assert (c.name, c.H, c.span, c.flex) == (name, H, span, flex), key
+        assert c.F == {"jug": jug, "crimp": crimp, "sloper": sloper, "pinch": pinch, "foot": foot}, key
+        assert c.w_cross == 0.15
+
+
+def test_injured_ava_differs_from_ava_only_in_crimp():
+    d = PROFILES["D"]
+    assert {k for k in AVA.F if AVA.F[k] != d.F[k]} == {"crimp"}
+    assert (d.H, d.span, d.flex, d.w_cross) == (AVA.H, AVA.span, AVA.flex, AVA.w_cross)
+
+
+def test_strength_follows_hold_type():
+    assert AVA.strength("sidepull") == AVA.F["pinch"]
+    assert AVA.strength("undercling") == AVA.F["crimp"]
+    assert AVA.strength("foot_chip") == AVA.F["foot"]
+    d = PROFILES["D"]
+    assert not d.can_use("crimp") and not d.can_use("undercling") and d.can_use("pinch")
+
+
+def test_variants_change_one_attribute():
+    expected = {"A_stiff": ("flex", -0.10), "A_cross0": ("w_cross", 0.0), "A_cross4": ("w_cross", 0.4)}
+    assert set(VARIANTS) == set(expected)
+    for key, (attr, value) in expected.items():
+        v = VARIANTS[key]
+        changed = [a for a in ("H", "span", "F", "flex", "w_cross") if getattr(v, a) != getattr(AVA, a)]
+        assert changed == [attr] and getattr(v, attr) == value, key
+    assert VARIANTS["A_stiff"].flex == BEN.flex  # "Ava with Ben's hip flexibility"
+
+
+def test_variant_does_not_touch_the_original():
+    AVA.variant("X", "x", F={"jug": 0.1})
+    assert AVA.F["jug"] == 1.2
+
+
+def test_wall_distance_scales_with_height():
+    assert abs(AVA.d_wall - 0.24) < 1e-9 and abs(CAL.to_dict()["d_wall"] - 0.255) < 1e-9
+
+
+def test_bad_profiles_rejected():
+    with pytest.raises(ValueError):
+        Climber("X", "x", 1.7, 1.7, {"jug": 1.0}, 0.0)
+    with pytest.raises(ValueError):
+        AVA.variant("X", "x", F={"jug": -0.1})

@@ -7,7 +7,7 @@ degrees, with 90 meaning straight up.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 WALL_W = 3.0
 WALL_H = 4.2
@@ -177,3 +177,90 @@ class Route:
 def hold_types_table() -> list[dict]:
     """The hold type table as plain data, in the order of step 1."""
     return [asdict(t) for t in HOLD_TYPES.values()]
+
+
+# ---------------------------------------------------------------- climbers
+
+GRIPS = ("jug", "crimp", "sloper", "pinch", "foot")
+
+# Distance of the centre of mass from the wall, as a multiple of height (step 3.5).
+D_WALL = 0.15
+
+
+@dataclass(frozen=True)
+class Climber:
+    """A climber profile (step 1).
+
+    H, span   height and arm span in metres
+    F         most force one hand (or one foot) can take on each kind of hold,
+              in body weights
+    flex      how far a foot can go above the hip, as a multiple of H
+    w_cross   style penalty for crossing the hands
+    """
+
+    key: str
+    name: str
+    H: float
+    span: float
+    F: dict
+    flex: float
+    w_cross: float = 0.15
+    blurb: str = ""
+
+    def __post_init__(self):
+        if set(self.F) != set(GRIPS):
+            raise ValueError(f"{self.key}: strengths must be given for {GRIPS}")
+        if any(v < 0 for v in self.F.values()):
+            raise ValueError(f"{self.key}: strengths cannot be negative")
+        if not (1.0 < self.H < 2.5 and 1.0 < self.span < 2.6):
+            raise ValueError(f"{self.key}: height and span look wrong")
+
+    def strength(self, hold_type: str) -> float:
+        """The limit that applies on a hold type, e.g. a sidepull uses the pinch limit."""
+        return self.F[HOLD_TYPES[hold_type].grip]
+
+    def can_use(self, hold_type: str) -> bool:
+        """A hold whose strength limit is zero cannot be used at all."""
+        return self.strength(hold_type) > 0
+
+    @property
+    def d_wall(self) -> float:
+        return D_WALL * self.H
+
+    def variant(self, key: str, name: str, blurb: str = "", **changes) -> "Climber":
+        """The same climber with one attribute changed, as used in the examples."""
+        if "F" in changes:
+            changes["F"] = {**self.F, **changes["F"]}
+        return replace(self, key=key, name=name, blurb=blurb or self.blurb, **changes)
+
+    def to_dict(self) -> dict:
+        return {**asdict(self), "d_wall": self.d_wall}
+
+
+def _F(jug, crimp, sloper, pinch, foot):
+    return {"jug": jug, "crimp": crimp, "sloper": sloper, "pinch": pinch, "foot": foot}
+
+
+AVA = Climber("A", "Ava", 1.60, 1.60, _F(1.2, 0.9, 0.35, 0.6, 1.5), +0.08,
+              blurb="Short, with strong fingers and flexible hips.")
+BEN = Climber("B", "Ben", 1.85, 1.90, _F(1.2, 0.6, 0.55, 0.6, 1.5), -0.10,
+              blurb="Tall with a long reach; weaker on crimps, better on slopers, stiff hips.")
+CAL = Climber("C", "Cal", 1.70, 1.70, _F(0.8, 0.35, 0.25, 0.35, 1.5), 0.00,
+              blurb="A beginner: average size, a weaker grip on everything.")
+AVA_INJURED = AVA.variant("D", "Ava (injured)", F={"crimp": 0.0},
+                          blurb="Ava with an injured finger: she cannot pull on crimps at all.")
+
+PROFILES: dict[str, Climber] = {c.key: c for c in (AVA, BEN, CAL, AVA_INJURED)}
+
+# Variants that change one attribute of a standard profile (step 7).
+VARIANTS: dict[str, Climber] = {
+    c.key: c
+    for c in (
+        AVA.variant("A_stiff", "Ava (less flexible)", flex=-0.10,
+                    blurb="Ava with Ben's hip flexibility. Used in example 4."),
+        AVA.variant("A_cross0", "Ava (crosses freely)", w_cross=0.0,
+                    blurb="Ava with no dislike of crossing hands. Used in example 7."),
+        AVA.variant("A_cross4", "Ava (avoids crossing)", w_cross=0.4,
+                    blurb="Ava with a strong dislike of crossing hands. Used in example 7."),
+    )
+}

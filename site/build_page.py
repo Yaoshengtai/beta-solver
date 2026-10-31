@@ -44,6 +44,8 @@ def collect_data() -> dict:
             "wall": {"w": model.WALL_W, "h": model.WALL_H},
             "hold_types": model.hold_types_table(),
             "foot_on_handhold": model.FOOT_ON_HANDHOLD,
+            "climbers": [c.to_dict() for c in model.PROFILES.values()],
+            "variants": [{**c.to_dict(), "base": c.key.split("_")[0]} for c in model.VARIANTS.values()],
         },
         "figures": {
             "legend": legend.legend(),
