@@ -21,10 +21,11 @@ from .export import export_run
 from .model import PROFILES, VARIANTS
 from .routes import EXAMPLES, checks
 from .search import solve
+from .sweep import FLEX, GRID, F, climber_at, sweep
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "site" / "results.json"
-SOURCES = ["routes.py", "model.py", "body.py", "stance.py", "moves.py", "search.py", "export.py"]
+SOURCES = ["routes.py", "model.py", "body.py", "stance.py", "moves.py", "search.py", "export.py", "sweep.py"]
 
 
 def fingerprint() -> str:
@@ -36,7 +37,20 @@ def fingerprint() -> str:
 
 
 def climber(key):
+    """A profile, a variant, or a sweep climber S_<height in mm>."""
+    if key.startswith("S_"):
+        return climber_at(int(key[2:]) / 1000)
     return PROFILES.get(key) or VARIANTS[key]
+
+
+def _r3(x):
+    if isinstance(x, float):
+        return round(x, 3)
+    if isinstance(x, dict):
+        return {k: _r3(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_r3(v) for v in x]
+    return x
 
 
 def run_example(ex) -> dict:
@@ -47,13 +61,21 @@ def run_example(ex) -> dict:
         runs[key] = export_run(ex.route, c, b)
         print(f"  {ex.id} {c.name}: {b.status} crux={b.crux and round(b.crux, 3)} steps={len(b.steps)} "
               f"({b.stats.get('seconds', 0):.1f} s)", flush=True)
-    res = checks(ex, runs)
-    return {
+    sw = None
+    if ex.sweep:
+        print(f"  {ex.id} height sweep", flush=True)
+        sw = sweep(ex.route, log=lambda m: print("  " + m, flush=True))
+        sw = _r3({**sw, "grid": list(GRID), "F": F, "flex": FLEX})
+    res = checks(ex, {**runs, "sweep": sw} if sw else runs)
+    out = {
         "id": ex.id, "title": ex.title, "lesson": ex.lesson, "text": list(ex.text),
         "route": ex.route.to_dict(), "climbers": list(ex.climbers), "expect": ex.expect,
         "runs": [runs[k] for k in ex.climbers], "checks": res,
         "seconds": round(time.perf_counter() - t0, 1),
     }
+    if sw:
+        out["sweep"] = sw
+    return out
 
 
 def main(argv=None) -> int:

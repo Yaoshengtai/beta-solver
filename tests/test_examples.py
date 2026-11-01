@@ -23,6 +23,8 @@ def test_results_exist_and_are_current():
 def test_acceptance_checks(ex):
     stored = {e["id"]: e for e in RESULTS["examples"]}[ex.id]
     runs = {r["key"]: r for r in stored["runs"]}
+    if ex.sweep:
+        runs["sweep"] = stored["sweep"]
     for c in checks(ex, runs):                     # recomputed from the stored runs, not just read back
         assert c["ok"], f"{ex.id}: {c['text']}"
     statuses = {k: runs[k]["status"] for k in ex.climbers}

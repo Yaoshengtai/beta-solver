@@ -28,6 +28,7 @@ class Example:
     expect: dict          # key -> "ok" or "fail"
     text: tuple = ()      # paragraphs, with {KEY.field} placeholders
     extra: tuple = field(default=())  # (description, function(runs) -> bool)
+    sweep: bool = False   # also run the height sweep (step 6); the runs are then its representative heights
 
 
 def checks(ex: Example, runs: dict) -> list:
@@ -75,6 +76,11 @@ def _states(run):
 def _feet_off(run):
     """Does the climber ever hang with both feet off?"""
     return any(s["LF"] is None and s["RF"] is None for s in _states(run))
+
+
+def _never_drops(xs, tol=0.005):
+    """Is the sequence non-decreasing, up to tol?"""
+    return all(b >= a - tol for a, b in zip(xs, xs[1:]))
 
 
 EXAMPLES: list = [
@@ -219,5 +225,41 @@ EXAMPLES: list = [
             ("Ben always keeps a foot on", lambda R: not _feet_off(R["B"])),
             ("Ben's crux is lower than Ava's", lambda R: R["B"]["crux"] < R["A"]["crux"]),
         ),
+    ),
+    Example(
+        "ex6", "The Stretch",
+        "How tall do you need to be? One route, one climber, and only the height changes.",
+        _route("ex6", "The Stretch", [
+            ("S1", 1.35, 1.25, "jug"), ("S2", 1.65, 1.25, "jug"), ("J1", 1.50, 1.85, "jug"),
+            ("J2", 1.50, 2.90, "jug"), ("T", 1.50, 3.30, "jug"),
+            ("F1", 1.35, 0.40, "foot_chip"), ("F2", 1.65, 0.40, "foot_chip")]),
+        ("S_1550", "S_1650", "S_1750", "S_1850"),
+        {"S_1550": "fail", "S_1650": "fail", "S_1750": "ok", "S_1850": "ok"},
+        (
+            "Low start jugs, one more jug J1 above them, and then nothing: the next jug, J2, is 1.05 m higher, and "
+            "the only footholds are two chips near the floor. Every climber on this page is the same person at a "
+            "different height: arm span equal to height, grip and hips halfway between Cal and Ava, and every length "
+            "of the body in proportion to the height (chapter 2).",
+            "The chart solves the route at 19 heights from 1.50 m to 1.95 m. Below {sweep.hstar} nobody gets up, and "
+            "always for the same reason: from J1, J2 is out of reach. From there up, everyone does. "
+            "At 1.65 m the climber is {S_1650.fail}.",
+            "Past the threshold, being taller does not make the route easier. The crux even creeps up, from "
+            "{S_1750.crux} at 1.75 m to {S_1850.crux} at 1.85 m: a taller body stands further from the wall, so "
+            "its hands must pull in harder. The tallest climbers save two moves, because they reach the top "
+            "without stepping onto J1 first. Height buys reach, and on this route reach is all that matters.",
+        ),
+        (
+            ("H* is between 1.60 and 1.85 m",
+             lambda R: R["sweep"]["H_star"] is not None and 1.60 <= R["sweep"]["H_star"] <= 1.85),
+            ("The grid switches once, from no beta to a beta",
+             lambda R: len(R["sweep"]["switches"]) == 1 and R["sweep"]["switches"][0]["direction"] == "up"),
+            ("Every height that fails is stopped by reach",
+             lambda R: all(r["fail"]["reason"] == "reach" for r in R["sweep"]["rows"] if not r["ok"])),
+            ("Past H*, the crux never drops with height",
+             lambda R: _never_drops([r["crux"] for r in R["sweep"]["rows"] if r["ok"]])),
+            ("The tallest climber needs fewer moves than the shortest that gets up",
+             lambda R: R["sweep"]["rows"][-1]["n_steps"] < next(r["n_steps"] for r in R["sweep"]["rows"] if r["ok"])),
+        ),
+        sweep=True,
     ),
 ]
