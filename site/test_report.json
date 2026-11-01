@@ -2,9 +2,9 @@
  "generated": "2026-11-01",
  "python": "3.13.18",
  "pytest": "9.2.0",
- "seconds": 77.7,
+ "seconds": 77.3,
  "counts": {
-  "passed": 201,
+  "passed": 202,
   "failed": 0,
   "skipped": 0
  },
@@ -16,7 +16,7 @@
     {
      "name": "limb lengths match plan",
      "outcome": "passed",
-     "seconds": 0.0
+     "seconds": 0.001
     },
     {
      "name": "arm formula",
@@ -72,7 +72,7 @@
     {
      "name": "every chapter present in order",
      "outcome": "passed",
-     "seconds": 51.444
+     "seconds": 51.273
     },
     {
      "name": "anchors are plain tokens and unique",
@@ -82,7 +82,7 @@
     {
      "name": "embedded data parses",
      "outcome": "passed",
-     "seconds": 0.026
+     "seconds": 0.024
     },
     {
      "name": "json cannot close script",
@@ -92,7 +92,7 @@
     {
      "name": "no chinese in page",
      "outcome": "passed",
-     "seconds": 0.008
+     "seconds": 0.005
     },
     {
      "name": "cjk detector catches chinese",
@@ -107,37 +107,37 @@
     {
      "name": "preview has no document wrapper",
      "outcome": "passed",
-     "seconds": 0.046
+     "seconds": 0.036
     },
     {
      "name": "legend embedded and slots present",
      "outcome": "passed",
-     "seconds": 0.029
+     "seconds": 0.032
     },
     {
      "name": "hold types and route example embedded",
      "outcome": "passed",
-     "seconds": 0.023
+     "seconds": 0.025
     },
     {
      "name": "climbers embedded",
      "outcome": "passed",
-     "seconds": 0.031
+     "seconds": 0.024
     },
     {
      "name": "body data embedded",
      "outcome": "passed",
-     "seconds": 0.031
+     "seconds": 0.027
     },
     {
      "name": "stance overview embedded",
      "outcome": "passed",
-     "seconds": 0.02
+     "seconds": 0.027
     },
     {
      "name": "reach figure embedded",
      "outcome": "passed",
-     "seconds": 0.023
+     "seconds": 0.029
     },
     {
      "name": "check sections",
@@ -147,27 +147,27 @@
     {
      "name": "strength figure embedded",
      "outcome": "passed",
-     "seconds": 0.023
+     "seconds": 0.035
     },
     {
      "name": "balance figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.029
     },
     {
      "name": "tipping figure embedded",
      "outcome": "passed",
-     "seconds": 0.026
+     "seconds": 0.029
     },
     {
      "name": "barndoor figure embedded",
      "outcome": "passed",
-     "seconds": 0.029
+     "seconds": 0.03
     },
     {
      "name": "flex figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.03
     },
     {
      "name": "full problem and cards",
@@ -177,47 +177,52 @@
     {
      "name": "solver section embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.03
     },
     {
      "name": "move figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.027
     },
     {
      "name": "convex figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.023
     },
     {
      "name": "twochecks figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.022
     },
     {
      "name": "checker figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.024
     },
     {
      "name": "graph figure embedded",
      "outcome": "passed",
-     "seconds": 0.021
+     "seconds": 0.023
     },
     {
      "name": "dijkstra figure embedded",
      "outcome": "passed",
-     "seconds": 0.024
+     "seconds": 0.023
     },
     {
      "name": "player embedded",
      "outcome": "passed",
-     "seconds": 0.02
+     "seconds": 0.023
     },
     {
      "name": "move sections",
      "outcome": "passed",
      "seconds": 0.001
+    },
+    {
+     "name": "appendix slots and test report",
+     "outcome": "passed",
+     "seconds": 0.025
     }
    ]
   },
@@ -228,12 +233,12 @@
     {
      "name": "results exist and are current",
      "outcome": "passed",
-     "seconds": 0.006
+     "seconds": 0.001
     },
     {
      "name": "acceptance checks [ex1]",
      "outcome": "passed",
-     "seconds": 0.0
+     "seconds": 0.001
     },
     {
      "name": "acceptance checks [ex2]",
@@ -253,7 +258,7 @@
     {
      "name": "acceptance checks [ex5]",
      "outcome": "passed",
-     "seconds": 0.001
+     "seconds": 0.0
     },
     {
      "name": "acceptance checks [ex6]",
@@ -288,7 +293,7 @@
     {
      "name": "runs are well formed [ex6]",
      "outcome": "passed",
-     "seconds": 0.0
+     "seconds": 0.001
     }
    ]
   },
@@ -299,22 +304,22 @@
     {
      "name": "smoothing keeps the beta",
      "outcome": "passed",
-     "seconds": 1.728
+     "seconds": 1.742
     },
     {
      "name": "smoothed frames are valid",
      "outcome": "passed",
-     "seconds": 0.044
+     "seconds": 0.045
     },
     {
      "name": "four frames per step",
      "outcome": "passed",
-     "seconds": 0.044
+     "seconds": 0.042
     },
     {
      "name": "blends between frames are valid",
      "outcome": "passed",
-     "seconds": 0.045
+     "seconds": 0.052
     },
     {
      "name": "cut frames are filled",
@@ -324,7 +329,7 @@
     {
      "name": "infeasible run exports its fail record",
      "outcome": "passed",
-     "seconds": 0.207
+     "seconds": 0.243
     }
    ]
   },
@@ -360,12 +365,12 @@
     {
      "name": "body figures stand on the ground",
      "outcome": "passed",
-     "seconds": 0.001
+     "seconds": 0.0
     },
     {
      "name": "strength figure matches the solver",
      "outcome": "passed",
-     "seconds": 0.078
+     "seconds": 0.1
     },
     {
      "name": "strength example forces are physical",
@@ -375,12 +380,12 @@
     {
      "name": "balance figure matches the solver",
      "outcome": "passed",
-     "seconds": 0.038
+     "seconds": 0.036
     },
     {
      "name": "solver beats the fixed strength example",
      "outcome": "passed",
-     "seconds": 0.037
+     "seconds": 0.036
     },
     {
      "name": "strength figure torso is balanced",
@@ -390,12 +395,12 @@
     {
      "name": "tipping figure follows d over h",
      "outcome": "passed",
-     "seconds": 0.056
+     "seconds": 0.057
     },
     {
      "name": "barndoor figure",
      "outcome": "passed",
-     "seconds": 0.049
+     "seconds": 0.047
     },
     {
      "name": "flex figure",
@@ -405,7 +410,7 @@
     {
      "name": "result cards cover every outcome",
      "outcome": "passed",
-     "seconds": 0.047
+     "seconds": 0.045
     },
     {
      "name": "move figure matches the checks",
@@ -577,12 +582,12 @@
     {
      "name": "three slides stay below the difficulty",
      "outcome": "passed",
-     "seconds": 0.054
+     "seconds": 0.053
     },
     {
      "name": "path check refuses swing and failed moves",
      "outcome": "passed",
-     "seconds": 0.012
+     "seconds": 0.014
     },
     {
      "name": "convexity on random moves",
@@ -602,7 +607,7 @@
     {
      "name": "s3 boundary is traced by the check",
      "outcome": "passed",
-     "seconds": 0.994
+     "seconds": 0.959
     },
     {
      "name": "release and catch positions share s3",
@@ -612,7 +617,7 @@
     {
      "name": "cannot let go means s3 misses d a",
      "outcome": "passed",
-     "seconds": 1.07
+     "seconds": 0.959
     },
     {
      "name": "crossed hands",
@@ -622,7 +627,7 @@
     {
      "name": "cost terms",
      "outcome": "passed",
-     "seconds": 0.017
+     "seconds": 0.016
     },
     {
      "name": "crossing penalty follows the climber",
@@ -632,7 +637,7 @@
     {
      "name": "failed move has no cost",
      "outcome": "passed",
-     "seconds": 0.01
+     "seconds": 0.006
     },
     {
      "name": "targets follow the rules",
@@ -642,12 +647,12 @@
     {
      "name": "checker caches and shares the release check",
      "outcome": "passed",
-     "seconds": 0.014
+     "seconds": 0.012
     },
     {
      "name": "pruned candidates are really impossible",
      "outcome": "passed",
-     "seconds": 0.138
+     "seconds": 0.121
     }
    ]
   },
@@ -674,17 +679,17 @@
     {
      "name": "start states hold with hands on the start",
      "outcome": "passed",
-     "seconds": 0.077
+     "seconds": 0.079
     },
     {
      "name": "goal needs both hands on top and a state that holds",
      "outcome": "passed",
-     "seconds": 0.001
+     "seconds": 0.002
     },
     {
      "name": "edges are moves that work with their cost",
      "outcome": "passed",
-     "seconds": 0.048
+     "seconds": 0.047
     },
     {
      "name": "swing move into a state that does not hold fails",
@@ -694,37 +699,37 @@
     {
      "name": "three move route gives the expected beta",
      "outcome": "passed",
-     "seconds": 0.614
+     "seconds": 0.553
     },
     {
      "name": "two stages match the exhaustive reference [climber0]",
      "outcome": "passed",
-     "seconds": 5.953
+     "seconds": 5.9
     },
     {
      "name": "two stages match the exhaustive reference [climber1]",
      "outcome": "passed",
-     "seconds": 4.823
+     "seconds": 4.815
     },
     {
      "name": "two stages match the exhaustive reference [climber2]",
      "outcome": "passed",
-     "seconds": 5.862
+     "seconds": 5.918
     },
     {
      "name": "beta is consistent",
      "outcome": "passed",
-     "seconds": 1.599
+     "seconds": 1.571
     },
     {
      "name": "infeasible route reports where it got stuck",
      "outcome": "passed",
-     "seconds": 0.484
+     "seconds": 0.492
     },
     {
      "name": "search limit",
      "outcome": "passed",
-     "seconds": 0.196
+     "seconds": 0.249
     }
    ]
   },
@@ -775,17 +780,17 @@
     {
      "name": "reach cones are the discs",
      "outcome": "passed",
-     "seconds": 0.011
+     "seconds": 0.01
     },
     {
      "name": "drawing polygon is inside the discs",
      "outcome": "passed",
-     "seconds": 0.008
+     "seconds": 0.005
     },
     {
      "name": "region matches exact reach",
      "outcome": "passed",
-     "seconds": 0.171
+     "seconds": 0.245
     },
     {
      "name": "hand at 105 percent is out of reach",
@@ -805,7 +810,7 @@
     {
      "name": "region is convex",
      "outcome": "passed",
-     "seconds": 0.024
+     "seconds": 0.026
     },
     {
      "name": "cone edges match half width [jug]",
@@ -895,7 +900,7 @@
     {
      "name": "solver t is the largest share",
      "outcome": "passed",
-     "seconds": 0.081
+     "seconds": 0.101
     },
     {
      "name": "solver rejects a force outside the cone",
@@ -910,7 +915,7 @@
     {
      "name": "one hand hang puts the body below the hand",
      "outcome": "passed",
-     "seconds": 0.003
+     "seconds": 0.006
     },
     {
      "name": "body to the side of one hand cannot balance",
@@ -950,7 +955,7 @@
     {
      "name": "pull in is d over h [climber2]",
      "outcome": "passed",
-     "seconds": 0.003
+     "seconds": 0.005
     },
     {
      "name": "no feet means no pull in",
@@ -980,7 +985,7 @@
     {
      "name": "tipping makes the hands work harder",
      "outcome": "passed",
-     "seconds": 0.002
+     "seconds": 0.003
     },
     {
      "name": "tipping rows shape",
@@ -990,7 +995,7 @@
     {
      "name": "barn door fails with both feet on one side",
      "outcome": "passed",
-     "seconds": 0.003
+     "seconds": 0.002
     },
     {
      "name": "grip torque allows a small offset",
@@ -1005,17 +1010,17 @@
     {
      "name": "barndoor rows shape",
      "outcome": "passed",
-     "seconds": 0.0
+     "seconds": 0.001
     },
     {
      "name": "flexible climber reaches the high foot stiff one does not",
      "outcome": "passed",
-     "seconds": 0.005
+     "seconds": 0.006
     },
     {
      "name": "solution keeps feet below the limit",
      "outcome": "passed",
-     "seconds": 0.007
+     "seconds": 0.006
     },
     {
      "name": "a resting foot must also get there",
@@ -1030,7 +1035,7 @@
     {
      "name": "check strength failure names the limb",
      "outcome": "passed",
-     "seconds": 0.002
+     "seconds": 0.001
     },
     {
      "name": "check balance failure",
@@ -1040,7 +1045,7 @@
     {
      "name": "check reach failure from flexibility",
      "outcome": "passed",
-     "seconds": 0.004
+     "seconds": 0.003
     },
     {
      "name": "no force limb carries nothing but must reach",

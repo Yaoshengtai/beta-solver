@@ -12,7 +12,7 @@ All solving happens offline in Python; the website only reads the exported resul
 
 ```
 src/betasolver/     model, body, stance, moves, search, sweep, routes, export
-tests/              pytest tests
+tests/              pytest tests (conftest.py at the root adds --report)
 site/               template.html, build_page.py
 docs/index.html     built site, published by GitHub Pages
 scripts/            first_push.sh, sync.sh
