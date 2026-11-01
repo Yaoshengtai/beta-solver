@@ -167,3 +167,13 @@ def test_solver_section_embedded(html):
     assert S["size"]["variables"] == 17 and S["size"]["cones"] == 8
     assert 'data-draw="solver-stats"' in html
     assert "Planned · unit 2." not in html  # chapter 2 is complete
+
+
+
+def test_move_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    M = json.loads(raw)["figures"]["move"]
+    works, fails = M["moves"]
+    assert works["ok"] and abs(works["difficulty"] - max(works["t_release"], works["t_catch"])) < 2e-3
+    assert not fails["ok"] and not fails["release_ok"] and fails["catch_ok"]
+    assert 'data-draw="move"' in html and "Planned · unit 3.1" not in html
