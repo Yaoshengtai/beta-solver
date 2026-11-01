@@ -1470,6 +1470,14 @@ var Draw = (function () {
         });
         tb.appendChild(tr);
       });
+      Object.keys(v.F).forEach(function (k) {  // strength changes, e.g. a stronger grip on jugs
+        if (v.F[k] === b.F[k]) return;
+        var tr = document.createElement("tr");
+        [v.name, k + " strength", num(b.F[k], 2), num(v.F[k], 2), v.blurb].forEach(function (t, i) {
+          var td = document.createElement("td"); td.textContent = t; if (i === 2 || i === 3) td.className = "num"; tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
     });
     tbl.appendChild(tb);
   }

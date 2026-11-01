@@ -121,4 +121,29 @@ EXAMPLES: list = [
             ("Ava (injured) is stopped by a crimp", lambda R: R["D"]["fail"]["reason"] == "unusable"),
         ),
     ),
+    Example(
+        "ex3", "One-Arm Bandit",
+        "The last move is a campus move: hang on one hand, reach with the other.",
+        _route("ex3", "One-Arm Bandit", [
+            ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"), ("R1", 1.50, 2.20, "jug"), ("T", 1.50, 3.24, "jug"),
+            ("F1", 1.30, 0.50, "foot_big"), ("F2", 1.70, 0.50, "foot_big"),
+            ("F3", 1.35, 1.00, "foot_big"), ("F4", 1.65, 1.15, "foot_big")], feet_on_hands=False),
+        ("B", "A", "C", "C_grip"),
+        {"B": "ok", "A": "fail", "C": "fail", "C_grip": "ok"},
+        (
+            "A rung R1, and the top jug a long way straight above it, with nothing in between and the footholds far "
+            "below. The feet cannot help, so the last move is made hanging from one hand: that hand holds the whole "
+            "body while the other reaches for the top.",
+            "{B.label} does it (crux {B.crux}), and the crux is exactly that one-armed hang.",
+            "{A.label} could hang on one arm, but is {A.fail}. Hanging below one hand, her free hand cannot get high enough.",
+            "{C.label} is tall enough, but is {C.fail}. One hand on a jug cannot hold the whole body.",
+            "{C_grip.label}, Cal with Ava's grip on jugs, tops out (crux {C_grip.crux}): for Cal it was the grip, not the reach.",
+        ),
+        (
+            ("Ava fails on reach", lambda R: R["A"]["fail"]["reason"] == "reach"),
+            ("Cal fails on strength", lambda R: R["C"]["fail"]["reason"] == "strength"),
+            ("Ben's crux is the one-armed hang on R1 or T", lambda R: R["B"]["steps"][R["B"]["crux_step"]]["to"] == "T"),
+            ("Cal with a stronger grip gets up", lambda R: R["C_grip"]["status"] == "ok"),
+        ),
+    ),
 ]
