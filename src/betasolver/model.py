@@ -257,10 +257,10 @@ VARIANTS: dict[str, Climber] = {
     c.key: c
     for c in (
         AVA.variant("A_stiff", "Ava (less flexible)", flex=-0.10,
-                    blurb="Ava with Ben's hip flexibility. Used in example 4."),
+                    blurb="Ava with Ben's hip flexibility."),
         AVA.variant("A_cross0", "Ava (crosses freely)", w_cross=0.0,
-                    blurb="Ava with no dislike of crossing hands. Used in example 7."),
+                    blurb="Ava with no dislike of crossing hands."),
         AVA.variant("A_cross4", "Ava (avoids crossing)", w_cross=0.4,
-                    blurb="Ava with a strong dislike of crossing hands. Used in example 7."),
+                    blurb="Ava with a strong dislike of crossing hands."),
     )
 }

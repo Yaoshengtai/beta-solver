@@ -121,4 +121,32 @@ EXAMPLES: list = [
             ("Ava (injured) is stopped by a crimp", lambda R: R["D"]["fail"]["reason"] == "unusable"),
         ),
     ),
+    Example(
+        "ex3", "Lean on Me",
+        "A layback: hands pull sideways on a flake, feet push back, and nothing may twist open.",
+        _route("ex3", "Lean on Me", [
+            ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"),
+            ("L1", 1.30, 1.90, "sidepull", 0.0), ("L2", 1.33, 2.35, "sidepull", 0.0),
+            ("L3", 1.30, 2.80, "sidepull", 0.0), ("L4", 1.33, 3.25, "sidepull", 0.0), ("T", 1.55, 3.70, "jug"),
+            ("F1", 1.36, 0.55, "foot_big"), ("F2", 1.41, 1.00, "foot_big"), ("F3", 1.36, 1.45, "foot_big"),
+            ("F4", 1.41, 1.90, "foot_big"), ("F5", 1.36, 2.35, "foot_big")], feet_on_hands=False),
+        ("A", "B", "C"),
+        {"A": "ok", "B": "ok", "C": "fail"},
+        (
+            "A flake runs straight up: four sidepulls, L1 to L4, that pull the hands to the right, with the footholds "
+            "almost directly below them, a few centimetres to the right. The hands pull, the feet push back, and every "
+            "time a hand or foot moves, whatever stays on must also stop the body twisting open.",
+            "{A.label} laybacks up it in {A.steps} moves (crux {A.crux}).",
+            "{B.label} gets up too (crux {B.crux}), but needs {B.steps} moves, with more shuffling. He stands further "
+            "from the wall, so his hands must pull in harder, and the same small offset of the feet needs more twist.",
+            "{C.label} gets both hands onto L2 and then cannot move either foot: one foot pushing a few centimetres "
+            "to the side of two weak sidepull grips swings the body open. With the feet stuck low, Cal is {C.fail}.",
+        ),
+        (
+            ("Ben needs more moves than Ava", lambda R: len(R["B"]["steps"]) > len(R["A"]["steps"])),
+            ("Cal is stuck with both hands on L2 and his feet low",
+             lambda R: R["C"]["fail"]["state"]["LH"] == R["C"]["fail"]["state"]["RH"] == "L2"
+             and all(R["C"]["fail"]["state"][f] in ("F1", "F2", None) for f in ("LF", "RF"))),
+        ),
+    ),
 ]
