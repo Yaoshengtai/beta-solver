@@ -7,8 +7,8 @@ the smallest effort t.
 
 This module holds the framework (states, unknowns, result type, checks done
 before any solving) and the constraints built so far: reach, direction,
-strength, in-plane balance, plus the linear program that puts them
-together. Out-of-wall balance and flexibility are added in units 2.5 to 2.9.
+strength, in-plane balance, no tipping, plus the linear program that puts
+them together. The barn-door and flexibility are added in units 2.6 to 2.9.
 """
 
 from __future__ import annotations
@@ -427,6 +427,55 @@ def band(t: float) -> dict:
     return EFFORT_BANDS[-1]
 
 
+# ------------------------------------------------------------ ⑤ out-of-wall balance: no tipping
+
+def wall_distance(body: Body, AF: tuple[str, ...]) -> float:
+    """d: how far the centre of mass is from the wall.
+
+    With no foot pushing, the body swings in under the hands and hangs flat
+    against the wall, so d = 0 and every pull-in and push is zero (section 3.5).
+    """
+    return body.d_wall if any(l in FEET for l in AF) else 0.0
+
+
+def tipping_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], lay: Layout):
+    """⑤ (a), (b) as equations and the pull-in limit as inequalities.
+
+    The z axis points out of the wall; the centre of mass is at height y_c,
+    distance d from the wall. Hands are pulled in by N_k, feet pushed out by M_k:
+        (a)  sum M_k - sum N_k = 0                   (no moving away from the wall)
+        (b)  sum p_ky N_k - sum p_ky M_k = d         (no tipping backwards)
+        N_k <= beta_k d_k . f_k   for hands          (pull-in limit of the hold)
+    Gravity's moment about the horizontal axis in the wall is d times the
+    weight, which the hand pulls high up and the foot pushes low down must cancel.
+    """
+    d = wall_distance(body, AF)
+    A = np.zeros((2, lay.size))
+    for limb in AF:
+        h = route.hold(state.hold(limb))
+        if limb in HANDS:
+            i = lay[("N", limb)].start
+            A[0, i], A[1, i] = -1.0, h.y
+        else:
+            i = lay[("M", limb)].start
+            A[0, i], A[1, i] = 1.0, -h.y
+    rows, owner = [], []
+    for limb in AF:
+        if limb not in HANDS:
+            continue
+        kind, theta = route.hold(state.hold(limb)).contact(limb)
+        t = math.radians(theta)
+        row = np.zeros(lay.size)
+        row[lay[("N", limb)].start] = 1.0
+        sf = lay[("f", limb)]
+        row[sf.start] = -kind.beta * math.cos(t)
+        row[sf.start + 1] = -kind.beta * math.sin(t)
+        rows.append(row)
+        owner.append(limb)
+    G = np.array(rows, dtype=float).reshape(len(rows), lay.size)
+    return A, np.array([0.0, d]), ["push equals pull", "no tipping"], G, np.zeros(len(rows)), owner
+
+
 # ------------------------------------------------------- the linear program
 
 def variable_bounds(lay: Layout) -> list:
@@ -490,19 +539,42 @@ class Program:
     eq_owners: list  # (constraint, name) of each row of A
 
 
-def assemble(body: Body, route: Route, state: State, no_force: str | None = None) -> Program:
-    """The constraints built so far: ① reach, ② direction, ③ strength and ④ in-plane balance."""
-    A, AF = limb_sets(state, no_force)
+# The constraint families in the order they are built; `upto` stops after one of them.
+BUILT = ("reach", "direction", "strength", "inplane", "outofwall")
+
+
+def assemble(body: Body, route: Route, state: State, no_force: str | None = None, upto: str | None = None) -> Program:
+    """The constraints built so far, as one linear program.
+
+    upto: stop after this constraint family (one of BUILT), so a figure can
+    show the model as it stood in its own section. None means all of them.
+    """
+    keep = BUILT if upto is None else BUILT[: BUILT.index(upto) + 1]
+    A_, AF = limb_sets(state, no_force)
     lay = layout(AF)
-    Gr, hr, orr = reach_rows(body, route, state)
-    G1 = np.zeros((len(Gr), lay.size))
-    G1[:, lay[("x", None)]] = Gr
-    G2, h2, o2 = direction_rows(route, state, AF, lay)
-    G3, h3, o3 = strength_rows(body, route, state, AF, lay)
-    owners = [("reach", l) for l in orr] + [("direction", l) for l in o2] + [("strength", l) for l in o3]
-    Ab, bb, ob = balance_rows(route, state, AF, lay)
-    return Program(lay, np.vstack([G1, G2, G3]), np.concatenate([hr, h2, h3]), owners,
-                   Ab, bb, [("inplane", n) for n in ob])
+    Gs, hs, owners = [], [], []
+    Aeq, beq, eq_owners = [], [], []
+    if "reach" in keep:
+        Gr, hr, orr = reach_rows(body, route, state)
+        G1 = np.zeros((len(Gr), lay.size))
+        G1[:, lay[("x", None)]] = Gr
+        Gs.append(G1); hs.append(hr); owners += [("reach", l) for l in orr]
+    if "direction" in keep:
+        G2, h2, o2 = direction_rows(route, state, AF, lay)
+        Gs.append(G2); hs.append(h2); owners += [("direction", l) for l in o2]
+    if "strength" in keep:
+        G3, h3, o3 = strength_rows(body, route, state, AF, lay)
+        Gs.append(G3); hs.append(h3); owners += [("strength", l) for l in o3]
+    if "inplane" in keep:
+        Ab, bb, ob = balance_rows(route, state, AF, lay)
+        Aeq.append(Ab); beq.append(bb); eq_owners += [("inplane", n) for n in ob]
+    if "outofwall" in keep:
+        At, bt, ot, Gt, ht, gt = tipping_rows(body, route, state, AF, lay)
+        Aeq.append(At); beq.append(bt); eq_owners += [("outofwall", n) for n in ot]
+        Gs.append(Gt); hs.append(ht); owners += [("outofwall", l) for l in gt]
+    A = np.vstack(Aeq) if Aeq else np.zeros((0, lay.size))
+    b = np.concatenate(beq) if beq else np.zeros(0)
+    return Program(lay, np.vstack(Gs), np.concatenate(hs), owners, A, b, eq_owners)
 
 
 def _tidy(P: Program, bounds: list, t_star: float, AF: tuple[str, ...]):
@@ -536,24 +608,25 @@ def _tidy(P: Program, bounds: list, t_star: float, AF: tuple[str, ...]):
     c[n:] = 1.0
     for limb in AF:
         c[lay[(_normal(limb), limb)].start] = 1.0
-    res = linprog(c, A_ub=G, b_ub=h, A_eq=A, b_eq=P.b, bounds=bounds + [(0.0, None)] * k, method="highs")
+    res = linprog(c, A_ub=G, b_ub=h, A_eq=A if len(A) else None, b_eq=P.b if len(A) else None,
+                  bounds=bounds + [(0.0, None)] * k, method="highs")
     return res.x[:n] if res.status == 0 else None
 
 
 def solve(body: Body, route: Route, state: State, no_force: str | None = None,
-          fixed: dict | None = None, torso=None, tidy: bool = True) -> dict:
+          fixed: dict | None = None, torso=None, tidy: bool = True, upto: str | None = None) -> dict:
     """Minimise t subject to the constraints built so far, with scipy's HiGHS.
 
     fixed: optional forces held at given values, in the format of `effort`.
     torso: optional body position (x_c, y_c) held fixed.
     tidy: run the second stage (`_tidy`) that removes useless squeezing.
+    upto: use only the constraints up to this family (see `assemble`).
     Returns ok, t, the body position, every pushing limb's forces, each
-    limb's exact share of its strength and the limiting limb. The
-    out-of-wall unknowns are only bounded by strength until unit 2.5.
+    limb's exact share of its strength and the limiting limb.
     """
     from scipy.optimize import linprog
 
-    P = assemble(body, route, state, no_force)
+    P = assemble(body, route, state, no_force, upto)
     lay = P.layout
     bounds = variable_bounds(lay)
     for limb, F in (fixed or {}).items():
@@ -567,7 +640,8 @@ def solve(body: Body, route: Route, state: State, no_force: str | None = None,
         bounds[sx.start], bounds[sx.start + 1] = (torso[0],) * 2, (torso[1],) * 2
     c = np.zeros(lay.size)
     c[lay[("t", None)]] = 1.0
-    res = linprog(c, A_ub=P.G, b_ub=P.h, A_eq=P.A, b_eq=P.b, bounds=bounds, method="highs")
+    eq = len(P.A) > 0
+    res = linprog(c, A_ub=P.G, b_ub=P.h, A_eq=P.A if eq else None, b_eq=P.b if eq else None, bounds=bounds, method="highs")
     if res.status != 0:
         return {"ok": False, "status": res.status, "message": res.message}
     z = res.x
@@ -595,4 +669,4 @@ def check(body: Body, route: Route, state: State, no_force: str | None = None) -
         return early
     if not torso_region(body, route, state, REACH_SIDES):
         return Result(ok=False, reason="reach")
-    raise NotImplementedError("out-of-wall balance and flexibility are added in units 2.5 to 2.9")
+    raise NotImplementedError("the barn-door and flexibility are added in units 2.6 to 2.9")

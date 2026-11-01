@@ -222,7 +222,8 @@ def strength_figure() -> dict:
     For each climber: the strength limit of every contact, each limb's share
     of it, the effort t (exact), and t from the linear program with the forces
     held fixed, which can only be a little higher (the polyhedron sits inside
-    the ball).
+    the ball). Balance beyond the in-plane equations is left out: the fixed
+    forces are an illustration, and the wall distance differs per climber.
     """
     from betasolver.stance import EFFORT_BANDS, State, band, coverage, effort, solve, strength_limit, torso_region
 
@@ -237,7 +238,7 @@ def strength_figure() -> dict:
         if not region:
             raise ValueError(f"{c.name} cannot reach the strength example")
         t, share, limiting = effort(body, route, state, STRENGTH_FORCES)
-        lp = solve(body, route, state, fixed=STRENGTH_FORCES)
+        lp = solve(body, route, state, fixed=STRENGTH_FORCES, upto="inplane")
         if not lp["ok"]:
             raise ValueError(f"the example forces break a constraint for {c.name}: {lp['message']}")
         # in-plane balance fixes x_c for these forces; y_c is free, so draw it mid-range
@@ -291,13 +292,14 @@ def balance_figure() -> dict:
     """
     from betasolver.stance import State, effort, moment, solve, torso_region
 
+    UPTO = "inplane"  # the model as it stands in this section: constraints 1 to 4
     body = make_body(AVA)
     panels = []
 
     hang = _route("hang", [Hold("H1", 1.50, 2.30, "jug"), Hold("T", 1.50, 3.60, "jug")], ("H1", "H1"))
     s1 = State("H1", "H1")
     region = torso_region(body, hang, s1)
-    r1 = solve(body, hang, s1, no_force="RH")
+    r1 = solve(body, hang, s1, no_force="RH", upto=UPTO)
     if not r1["ok"]:
         raise ValueError("one-hand hang should hold")
     # hanging: draw the body low in its range, arms nearly straight
@@ -305,7 +307,7 @@ def balance_figure() -> dict:
     shift = 0.20
     # same height if the arm still reaches, otherwise as low as it reaches
     torso2 = (torso1[0] + shift, max(torso1[1], mid_y(region, torso1[0] + shift, 0.03)))
-    r2 = solve(body, hang, s1, no_force="RH", torso=torso2)
+    r2 = solve(body, hang, s1, no_force="RH", torso=torso2, upto=UPTO)
     if r2["ok"]:
         raise ValueError("a body to the side of a single hand must not balance")
     hold1 = hang.hold("H1")
@@ -323,7 +325,7 @@ def balance_figure() -> dict:
     side = _route("side", [Hold("H1", 1.20, 2.05, "crimp"), Hold("H2", 1.90, 2.00, "sidepull", dir=0),
                            Hold("F1", 1.75, 1.00, "foot_big"), Hold("T", 1.50, 3.60, "jug")], ("H1", "H2"))
     s3 = State("H1", "H2", None, "F1")
-    r3 = solve(body, side, s3, no_force="LH")
+    r3 = solve(body, side, s3, no_force="LH", upto=UPTO)
     if not r3["ok"]:
         raise ValueError("the sidepull example should hold")
     torso3 = (r3["torso"][0], mid_y(torso_region(body, side, s3), r3["torso"][0]))
@@ -342,7 +344,7 @@ def balance_figure() -> dict:
     for key in ("A", "B", "C"):
         c = PROFILES[key]
         b = make_body(c)
-        res = solve(b, route, state)
+        res = solve(b, route, state, upto=UPTO)
         again.append({"climber": key, "name": c.name, "t_fixed": effort(b, route, state, STRENGTH_FORCES)[0],
                       "t": res["t_exact"], "t_lp": res["t"], "share": res["share"], "limiting": res["limiting"]})
 
@@ -352,4 +354,66 @@ def balance_figure() -> dict:
         "strength_again": again,
         "force_scale": 0.3,
         "view": {"x0": 1.0, "y0": 0.5, "x1": 2.15, "y1": 2.68},
+    })
+
+
+# ------------------------------------------------------------ ⑤ no tipping
+
+def tipping_figure() -> dict:
+    """Data for the no-tipping figure in #check.
+
+    One hand on a jug, one foot below it, the other hand only touching
+    (no_force). Two side views (a low foot and a high foot) and a sweep of the
+    hand-foot height difference h, each solved by the state check, against
+    the closed form N = d / h. Also the strength example once more, now with
+    the hands pulling the body in.
+    """
+    from betasolver.stance import State, solve, torso_region
+
+    body = make_body(AVA)
+    hand = (1.50, 2.30)
+    state = State("H1", "H1", "F1")
+
+    def run(h):
+        r = _route("tip", [Hold("H1", hand[0], hand[1], "jug"), Hold("F1", hand[0], hand[1] - h, "foot_big"),
+                           Hold("T", 1.50, 3.60, "jug")], ("H1", "H1"))
+        return r, solve(body, r, state, no_force="RH")
+
+    views = []
+    for h in (1.2, 0.6):
+        r, res = run(h)
+        if not res["ok"]:
+            raise ValueError(f"tipping example h={h} should hold")
+        torso = (res["torso"][0], mid_y(torso_region(body, r, state), res["torso"][0]))
+        views.append({"h": h, "hand_y": hand[1], "foot_y": hand[1] - h, "torso": list(torso),
+                      "N": res["forces"]["LH"]["n"], "M": res["forces"]["LF"]["m"],
+                      "share": res["share"]["LH"], "formula": body.d_wall / h})
+    sweep = []
+    for i in range(12):
+        h = round(0.4 + 0.1 * i, 2)
+        r, res = run(h)
+        if res["ok"]:
+            sweep.append({"h": h, "N": res["forces"]["LH"]["n"], "formula": body.d_wall / h})
+    err = max(abs(p["N"] - p["formula"]) / p["formula"] for p in sweep)
+
+    route, s4 = strength_route(), State("H1", "H2", "F1", "F2")
+    again = []
+    for key in ("A", "B", "C"):
+        c = PROFILES[key]
+        b = make_body(c)
+        before = solve(b, route, s4, upto="inplane")
+        after = solve(b, route, s4)
+        again.append({"climber": key, "name": c.name, "t_before": before["t_exact"], "t": after["t_exact"],
+                      "pull": after["forces"]["LH"]["n"] + after["forces"]["RH"]["n"],
+                      "share": after["share"], "limiting": after["limiting"]})
+
+    return _round({
+        "climber": {"key": AVA.key, "name": AVA.name, "H": AVA.H, "head": list(body.head),
+                    "shoulder": body.offsets["LH"][1], "hip": body.offsets["LF"][1]},
+        "d": body.d_wall,
+        "views": views,
+        "sweep": sweep,
+        "max_error": err,
+        "force_scale": 0.5,
+        "strength_again": again,
     })

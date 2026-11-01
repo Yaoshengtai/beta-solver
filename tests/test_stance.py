@@ -355,10 +355,13 @@ def test_lp_rejects_a_force_outside_the_cone():
 def test_lp_size_matches_plan():
     # section 3.7: about 17 variables and 180 constraints for a four-limb state
     P = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
-    assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (3, 17)
-    assert {o[0] for o in P.owners} == {"reach", "direction", "strength"}
-    assert {o[0] for o in P.eq_owners} == {"inplane"}
-    assert 150 <= len(P.h) + len(P.b) <= 180
+    assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (5, 17)
+    assert {o[0] for o in P.owners} == {"reach", "direction", "strength", "outofwall"}
+    assert {o[0] for o in P.eq_owners} == {"inplane", "outofwall"}
+    assert 150 <= len(P.h) + len(P.b) <= 185
+    # a figure can ask for the model as it stood in an earlier section
+    Q = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"), upto="inplane")
+    assert Q.A.shape == (3, 17) and {o[0] for o in Q.owners} == {"reach", "direction", "strength"}
 
 
 # ------------------------------------------------------------ ④ in-plane balance
@@ -431,3 +434,92 @@ def test_balance_rows_ignore_the_resting_limb():
     used = set(np.flatnonzero(np.any(A != 0, axis=0)))
     allowed = {i for l in AF for i in range(lay[("f", l)].start, lay[("f", l)].stop)} | {lay[("x", None)].start}
     assert used == allowed
+
+
+
+# ------------------------------------------------------------ ⑤ no tipping
+from betasolver.stance import tipping_rows, wall_distance  # noqa: E402
+
+
+def _hand_and_foot(foot_y, hand_kind="jug"):
+    holds = [Hold("H1", 1.5, 2.3, hand_kind), Hold("H3", 1.5, 3.6, "jug"), Hold("F1", 1.5, foot_y, "foot_big")]
+    return route(holds=holds, start_hands=("H1", "H1"))
+
+
+@pytest.mark.parametrize("climber", [AVA, BEN, CAL])
+def test_pull_in_is_d_over_h(climber):
+    # step 10: one hand and one foot, height difference h: the hand's pull-in N = d / h (within 1%)
+    b = make_body(climber)
+    for h in (0.6, 0.9, 1.2):
+        r = _hand_and_foot(2.3 - h)
+        lp = solve(b, r, State("H1", "H1", "F1"), no_force="RH")
+        assert lp["ok"], h
+        N, M = lp["forces"]["LH"]["n"], lp["forces"]["LF"]["m"]
+        assert N == pytest.approx(b.d_wall / h, rel=0.01)
+        assert M == pytest.approx(N, abs=1e-9)
+
+
+def test_no_feet_means_no_pull_in():
+    lp = solve(make_body(AVA), _two_jugs(), State("H1", "H2"))
+    assert lp["ok"] and all(v["n"] == pytest.approx(0.0, abs=1e-9) for v in lp["forces"].values())
+
+
+def test_a_resting_foot_does_not_hold_the_body_off_the_wall():
+    b, r = make_body(AVA), _two_jugs()
+    s = State("H1", "H2", "F1")
+    assert wall_distance(b, limb_sets(s)[1]) == b.d_wall
+    assert wall_distance(b, limb_sets(s, no_force="LF")[1]) == 0.0
+    lp = solve(b, r, s, no_force="LF")
+    assert lp["ok"] and all(v["n"] == pytest.approx(0.0, abs=1e-9) for v in lp["forces"].values())
+
+
+def test_solution_does_not_tip():
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    lp = solve(b, r, s)
+    F = lp["forces"]
+    pull = sum(F[l]["n"] for l in ("LH", "RH"))
+    push = sum(F[l]["m"] for l in ("LF", "RF"))
+    assert pull == pytest.approx(push, abs=1e-9) and pull > 0
+    y = {l: r.hold(s.hold(l)).y for l in s.on()}
+    tip = sum(y[l] * F[l]["n"] for l in ("LH", "RH")) - sum(y[l] * F[l]["m"] for l in ("LF", "RF"))
+    assert tip == pytest.approx(b.d_wall, abs=1e-9)
+
+
+def test_pull_in_limit_of_each_hold():
+    # N_k <= beta d_k . f_k: a sloper (beta 0.3) can hold a body in far less than a jug (beta 1.5)
+    b = make_body(AVA)
+    for kind in ("jug", "crimp", "sloper"):
+        r = _hand_and_foot(1.4, kind)
+        lp = solve(b, r, State("H1", "H1", "F1"), no_force="RH")
+        if not lp["ok"]:
+            continue
+        f, N = lp["forces"]["LH"]["f"], lp["forces"]["LH"]["n"]
+        assert N <= HOLD_TYPES[kind].beta * f[1] + 1e-9
+
+
+def test_jug_to_sloper_makes_it_harder():
+    # step 10: swap one hand from a jug to a sloper in the same state: t goes up or the state fails
+    b = make_body(AVA)
+    holds = lambda kind: [Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, kind), Hold("H3", 1.5, 3.6, "jug"),
+                          Hold("F1", 1.3, 0.9, "foot_big"), Hold("F2", 1.7, 1.0, "foot_big")]
+    s = State("H1", "H2", "F1", "F2")
+    jug = solve(b, route(holds=holds("jug")), s)
+    slo = solve(b, route(holds=holds("sloper")), s)
+    assert jug["ok"]
+    assert not slo["ok"] or slo["t"] > jug["t"] + 1e-6
+
+
+def test_tipping_makes_the_hands_work_harder():
+    b, r, s = make_body(AVA), _hand_and_foot(1.1), State("H1", "H1", "F1")
+    before = solve(b, r, s, no_force="RH", upto="inplane")
+    after = solve(b, r, s, no_force="RH")
+    assert after["share"]["LH"] > before["share"]["LH"]
+
+
+def test_tipping_rows_shape():
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    A_, AF = limb_sets(s)
+    lay = layout(AF)
+    A, bvec, names, G, h, owner = tipping_rows(b, r, s, AF, lay)
+    assert A.shape == (2, lay.size) and list(bvec) == [0.0, b.d_wall] and len(names) == 2
+    assert G.shape == (2, lay.size) and owner == ["LH", "RH"] and np.all(h == 0)

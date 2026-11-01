@@ -134,3 +134,12 @@ def test_balance_figure_embedded(html):
     assert [p["key"] for p in B["panels"]] == ["hang", "off", "sidepull"]
     assert 'data-draw="balance"' in html and 'data-text="balance-strength"' in html
     assert "Planned · unit 2.4" not in html
+
+
+def test_tipping_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    T = json.loads(raw)["figures"]["tipping"]
+    assert len(T["views"]) == 2 and len(T["sweep"]) >= 10 and T["max_error"] < 0.01
+    for slot in ('data-draw="tipping"', 'data-draw="tipping-chart"', 'data-text="tip-strength"'):
+        assert slot in html
+    assert "Planned · unit 2.5" not in html

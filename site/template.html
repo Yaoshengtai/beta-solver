@@ -330,6 +330,21 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .swing { stroke: var(--limit); fill: none; stroke-width: 2; }
 .swing-head { stroke: var(--limit); fill: var(--limit); stroke-width: 1; }
 .poly-f { stroke: var(--accent); fill: var(--accent); stroke-width: 2; }
+.tip-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.tip-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; font-size: 0.85rem; color: var(--muted); }
+.tip-cell svg { width: 100%; max-width: 270px; height: auto; }
+@media (max-width: 520px) { .tip-row { grid-template-columns: minmax(0, 1fr); } }
+.tip-cell b { color: var(--ink); }
+.side-limb { stroke-width: 3; stroke-linecap: round; fill: none; }
+.chart-axis { stroke: var(--muted); stroke-width: 1; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-tick { fill: var(--muted); font: 11px var(--font-body); }
+.chart-label { fill: var(--ink); font: 600 11px var(--font-body); }
+.chart-line { stroke: var(--accent); stroke-width: 2; fill: none; }
+.chart-dot { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.chart-hit { fill: transparent; }
+.chart-pt:hover .chart-dot, .chart-pt:focus .chart-dot { fill: var(--accent); }
+.chart-svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
 @media (max-width: 640px) { .bal-row { grid-template-columns: minmax(0, 1fr); } .bal-cell svg { max-width: 230px; } }
 details.impl { margin: 8px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
 details.impl summary { cursor: pointer; font-weight: 600; }
@@ -661,7 +676,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
 
   <figure class="fig" id="fig-balance">
     <div class="bal-row" data-draw="balance"></div>
-    <figcaption><b>Balance in three cases, each solved by the state check.</b> Solid arrows: forces from the holds. Dashed arrow: gravity at the centre of mass. A dashed grey arm only touches its hold and carries nothing (<code>no_force</code>). In the third panel the arrows are also drawn head to tail: they close up, which is what "no net force" looks like.</figcaption>
+    <figcaption><b>Balance in three cases, each solved with constraints ① to ④.</b> Solid arrows: forces from the holds. Dashed arrow: gravity at the centre of mass. A dashed grey arm only touches its hold and carries nothing (<code>no_force</code>). In the third panel the arrows are also drawn head to tail: they close up, which is what "no net force" looks like.</figcaption>
   </figure>
 
   <h4 class="sub-h">Back to the strength example</h4>
@@ -672,7 +687,45 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>The three equations are added as equality rows <code>A z = b</code>: one each for the sideways force, the vertical force and the moment, with \(-x_c\) moved to the left side. They are exact, with no approximation. Because the strength polyhedron has flat faces, several force splits can share the same optimal \(t\); some of them have two limbs squeezing sideways against each other for no reason. A second linear program therefore holds \(t\) at its optimum and minimises \(\sum_k |f_{k,x}| + \sum_k N_k + \sum_k M_k\). It never changes \(t\), only which of the equally good solutions is reported. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>balance_rows</code>, <code>moment</code>, <code>solve</code>, <code>_tidy</code>.</p>
   </details>
   <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.5</span><p>The hands must pull the body in toward the wall; the pull-in force grows as the feet come up.</p></div>
+  <p><b>The idea.</b> The front view is not enough. Standing on two big footholds satisfies in-plane balance with the hands doing nothing at all. But the centre of mass sits some way out from the wall, so gravity tips the body backwards, and the hands have to keep pulling it in. So each contact force is treated as a 3D vector, and the remaining balance equations are added. No 3D body is needed: the wall is flat, every contact is on it, and the centre of mass stays a fixed distance \(d\) from it, so the new equations are still linear.</p>
+  <p><b>Setup.</b> The \(z\) axis points out of the wall. The centre of mass is at \((x_c, y_c, d)\) with <span data-text="tip-d"></span> The wall pulls hand \(k\) in with \(N_k \ge 0\) and pushes foot \(k\) out with \(M_k \ge 0\). A 3D body needs six balance equations:</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Equation</th><th>Meaning</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Sideways force is zero</td><td>no sliding</td><td><a href="#check-inplane">in-plane balance</a></td></tr>
+      <tr><td>Vertical force is zero</td><td>no falling</td><td><a href="#check-inplane">in-plane balance</a></td></tr>
+      <tr><td>Moment about the axis out of the wall is zero</td><td>no swinging, seen from the front</td><td><a href="#check-inplane">in-plane balance</a></td></tr>
+      <tr><td>Force toward or away from the wall is zero</td><td>no moving off the wall</td><td>(a) below</td></tr>
+      <tr><td>Moment about a horizontal axis in the wall is zero</td><td>no tipping backwards</td><td>(b) below</td></tr>
+      <tr><td>Moment about a vertical axis is zero</td><td>no swinging open like a door</td><td><a href="#check-barndoor">barn-door</a>, next section</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>The math.</b></p>
+  <div class="math-block">\[ \text{(a)}\quad \sum_{k \in A_F \cap \text{feet}} M_k \;=\; \sum_{k \in A_F \cap \text{hands}} N_k \]</div>
+  <div class="math-block">\[ \text{(b)}\quad \sum_{k \in A_F \cap \text{hands}} p_{k,y}\, N_k \;-\; \sum_{k \in A_F \cap \text{feet}} p_{k,y}\, M_k \;=\; d \]</div>
+  <p>Equation (b) says the moment of the hands' pull, high up, minus that of the feet's push, low down, must cancel gravity's moment, which is \(d\) times one body weight. A hold also limits how hard it can hold a hand in. With \(\beta\) from the hold table:</p>
+  <div class="math-block">\[ N_k \;\le\; \beta_{\text{type}}\; d_k^\top f_k, \qquad k \in A_F \cap \text{hands} \]</div>
+  <p>The pull-in is at most \(\beta\) times the force along the hold's direction. A sloper can only hold you in by friction from pressing down, so its \(\beta\) is small; a jug hooks the fingers, so its \(\beta\) is large. All of this is linear. <b>With both feet off,</b> the body swings in under the hands and hangs flat against the wall: \(d = 0\), and every \(N_k\) and \(M_k\) is zero.</p>
+
+  <h4 class="sub-h">Feet up high: the hands work harder</h4>
+  <p>Take one hand and one foot, with height difference \(h\). Equation (a) gives \(M = N\), and (b) then gives \(N\,h = d\):</p>
+  <div class="math-block">\[ N = \frac{d}{h} \]</div>
+  <p data-text="tip-example"></p>
+
+  <figure class="fig" id="fig-tipping">
+    <div class="tip-row" data-draw="tipping"></div>
+    <div class="fig-main" data-draw="tipping-chart"></div>
+    <p class="t-note" data-text="tip-check"></p>
+    <figcaption><b>Side view: the wall on the left, the climber facing it.</b> The hand is pulled toward the wall, the foot pushed away from it, and gravity acts at the centre of mass, a distance \(d\) out. Raising the foot shortens \(h\) and lengthens the hand's arrow. Below: the hand's pull-in from the state check at many foot heights (dots) against \(d/h\) (line).</figcaption>
+  </figure>
+
+  <h4 class="sub-h">Back to the strength example, again</h4>
+  <p data-text="tip-strength"></p>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>Equations (a) and (b) are two more equality rows, and the pull-in limit is one inequality row per hand, all exact. When no foot pushes, the right side of (b) is 0 instead of \(d\). Earlier figures on this page are still drawn with the constraints of their own sections, so they keep showing what they explain. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>tipping_rows</code>, <code>wall_distance</code>, and the <code>upto</code> option of <code>solve</code>.</p>
+  </details>
   <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
   <div class="planned"><span class="chip">Planned · unit 2.6</span><p>With one hand on, the body swings open unless the feet are placed on both sides.</p></div>
   <h3 id="check-flex">Flexibility</h3>
@@ -2059,6 +2112,108 @@ var Draw = (function () {
       ". Nothing yet makes the hands pull the body in toward the wall; they carry load only because sharing it lowers t. The out-of-wall balance in the next section changes that.";
   }
   if (DATA.figures && DATA.figures.balance) renderBalance(DATA.figures.balance);
+
+  /* ---------- #check: no tipping (unit 2.5) ---------- */
+  function renderTipping(T) {
+    var row = document.querySelector('[data-draw="tipping"]');
+    if (!row) return;
+    var C = T.climber, d = T.d, s = T.force_scale;
+    function m2(x) { return x.toFixed(2); }
+    function pct(u) { return Math.round(u * 100 + 1e-6) + "%"; }
+    document.querySelector('[data-text="tip-d"]').textContent =
+      "d = " + DATA.model.body.d_wall.toFixed(2) + " H, " + Math.round(d * 100) + " cm for " + C.name + ".";
+    var lo = T.views[0], hi = T.views[1];
+    document.querySelector('[data-text="tip-example"]').textContent =
+      "With d = " + m2(d) + " m: hand and foot " + m2(lo.h) + " m apart give N = " + m2(lo.N) + "; " + m2(hi.h) +
+      " m apart give N = " + m2(hi.N) + ". The pull-in counts against the hand's strength like any other force, so finger strength matters in every state, and stepping the feet up makes the hands work harder: here the hand's share goes from " +
+      pct(lo.share) + " to " + pct(hi.share) + ".";
+
+    var y0 = Math.min.apply(null, T.views.map(function (v) { return v.foot_y; })) - 0.15;
+    var y1 = Math.max.apply(null, T.views.map(function (v) { return Math.max(v.hand_y + 0.1, v.torso[1] + C.head[0] + C.head[1] + 0.06); }));
+    T.views.forEach(function (v) {
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var sc = Draw.scene(cell, { x0: -0.48, y0: y0, x1: 0.72, y1: y1, k: 215, pad: 4, title: "Side view, hand and foot " + m2(v.h) + " m apart" });
+      var g = sc.layers.wall;
+      Draw.el(g, "rect", { x: sc.X(-0.48), y: sc.Y(y1), width: (0.48 * sc.k).toFixed(1), height: ((y1 - y0) * sc.k).toFixed(1) }, "w-wall");
+      Draw.el(g, "line", { x1: sc.X(0), y1: sc.Y(y1), x2: sc.X(0), y2: sc.Y(y0) }, "side-wall");
+      var com = [d, v.torso[1]], sh = [d, v.torso[1] + C.shoulder], hp = [d, v.torso[1] + C.hip];
+      var b = Draw.el(sc.layers.body, "g", null, "cl-" + C.key);
+      function ln(p, q) { Draw.el(b, "line", { x1: sc.X(p[0]), y1: sc.Y(p[1]), x2: sc.X(q[0]), y2: sc.Y(q[1]) }, "side-limb cl-stroke"); }
+      ln(hp, sh); ln(sh, [0, v.hand_y]); ln(hp, [0, v.foot_y]);
+      Draw.el(b, "circle", { cx: sc.X(d), cy: sc.Y(v.torso[1] + C.head[0]), r: (C.head[1] * sc.k).toFixed(1) }, "fg-head cl-stroke");
+      Draw.el(sc.layers.holds, "rect", { x: sc.X(0) - 2, y: sc.Y(v.hand_y) - 5, width: 9, height: 10, rx: 2 }, "h-shape");
+      Draw.el(sc.layers.holds, "rect", { x: sc.X(0) - 2, y: sc.Y(v.foot_y) - 4, width: 11, height: 8, rx: 2 }, "h-shape foot");
+      var f = sc.layers.forces;
+      Draw.arrowPx(f, sc.X(v.N * s), sc.Y(v.hand_y), sc.X(0) + 2, sc.Y(v.hand_y), "force", 8);
+      Draw.arrowPx(f, sc.X(0) + 2, sc.Y(v.foot_y), sc.X(v.M * s), sc.Y(v.foot_y), "force", 8);
+      Draw.arrowPx(f, sc.X(com[0]), sc.Y(com[1]), sc.X(com[0]), sc.Y(com[1] - s), "gravity", 8);
+      Draw.com(sc, com);
+      function txt(x, y, t, cls, anchor) { Draw.el(sc.layers.over, "text", { x: x, y: y, "text-anchor": anchor || "start" }, cls || "anno-strong").textContent = t; }
+      txt(sc.X(0) + 4, sc.Y(v.hand_y) - 10, "N = " + m2(v.N));
+      txt(sc.X(v.M * s) + 5, sc.Y(v.foot_y) + 4, "M = " + m2(v.M));
+      txt(sc.X(com[0]) + 6, sc.Y(com[1] - s) + 2, "gravity", "anno");
+      // d: wall to centre of mass
+      var yd = com[1] + 0.07;
+      Draw.el(sc.layers.over, "line", { x1: sc.X(0), y1: sc.Y(yd), x2: sc.X(d), y2: sc.Y(yd) }, "anno-line");
+      txt((sc.X(0) + sc.X(d)) / 2, sc.Y(yd) - 4, "d", "anno-strong", "middle");
+      // h: hand to foot, on the wall side
+      var zh = -0.16;
+      Draw.el(sc.layers.over, "line", { x1: sc.X(zh), y1: sc.Y(v.hand_y), x2: sc.X(zh), y2: sc.Y(v.foot_y) }, "anno-line");
+      Draw.el(sc.layers.over, "line", { x1: sc.X(zh) - 5, y1: sc.Y(v.hand_y), x2: sc.X(0), y2: sc.Y(v.hand_y) }, "anno-line");
+      Draw.el(sc.layers.over, "line", { x1: sc.X(zh) - 5, y1: sc.Y(v.foot_y), x2: sc.X(0), y2: sc.Y(v.foot_y) }, "anno-line");
+      txt(sc.X(zh) - 6, sc.Y((v.hand_y + v.foot_y) / 2) + 4, "h = " + m2(v.h), "anno-strong", "end");
+      txt(sc.X(-0.46), sc.Y(y0) - 6, "wall", "anno");
+      var cap = document.createElement("span");
+      var bb = document.createElement("b"); bb.textContent = (v === lo ? "Foot low" : "Foot high"); cap.appendChild(bb);
+      cap.appendChild(document.createTextNode(": N = " + m2(v.N) + ", d/h = " + m2(v.formula) + "; the hand uses " + pct(v.share) + " of its limit."));
+      cell.appendChild(cap);
+      row.appendChild(cell);
+    });
+
+    // N against h: the state check (dots) and d/h (line)
+    var slot = document.querySelector('[data-draw="tipping-chart"]');
+    var W = 560, H = 240, mL = 52, mR = 18, mT = 14, mB = 42;
+    var hx = [0.35, 1.55], ny = [0, 0.65];
+    function X(h) { return mL + (h - hx[0]) / (hx[1] - hx[0]) * (W - mL - mR); }
+    function Y(n) { return H - mB - (n - ny[0]) / (ny[1] - ny[0]) * (H - mT - mB); }
+    var svg = Draw.el(slot, "svg", { viewBox: "0 0 " + W + " " + H, role: "img" }, "chart-svg");
+    Draw.el(svg, "title").textContent = "Pull-in N against the hand-foot height difference h";
+    [0, 0.2, 0.4, 0.6].forEach(function (n) {
+      Draw.el(svg, "line", { x1: mL, y1: Y(n), x2: W - mR, y2: Y(n) }, "chart-grid");
+      Draw.el(svg, "text", { x: mL - 8, y: Y(n) + 4, "text-anchor": "end" }, "chart-tick").textContent = n.toFixed(1);
+    });
+    [0.4, 0.6, 0.8, 1.0, 1.2, 1.4].forEach(function (h) {
+      Draw.el(svg, "text", { x: X(h), y: H - mB + 16, "text-anchor": "middle" }, "chart-tick").textContent = h.toFixed(1);
+    });
+    Draw.el(svg, "line", { x1: mL, y1: H - mB, x2: W - mR, y2: H - mB }, "chart-axis");
+    Draw.el(svg, "text", { x: (mL + W - mR) / 2, y: H - 6, "text-anchor": "middle" }, "chart-tick").textContent = "hand–foot height difference h (m)";
+    Draw.el(svg, "text", { x: 14, y: (mT + H - mB) / 2, "text-anchor": "middle", transform: "rotate(-90 14 " + (mT + H - mB) / 2 + ")" }, "chart-tick").textContent = "pull-in N (body weights)";
+    var pts = [];
+    for (var h = 0.37; h <= 1.55 + 1e-9; h += 0.01) pts.push(X(h).toFixed(1) + " " + Y(d / h).toFixed(1));
+    Draw.el(svg, "path", { d: "M" + pts.join("L") }, "chart-line");
+    T.sweep.forEach(function (p) {
+      var g = Draw.el(svg, "g", { tabindex: "0" }, "chart-pt");
+      Draw.el(g, "title").textContent = "h = " + p.h.toFixed(2) + " m: state check N = " + p.N.toFixed(3) + ", d/h = " + p.formula.toFixed(3);
+      Draw.el(g, "circle", { cx: X(p.h), cy: Y(p.N), r: 5 }, "chart-dot");
+      Draw.el(g, "circle", { cx: X(p.h), cy: Y(p.N), r: 12 }, "chart-hit");
+    });
+    // legend
+    var lx = W - mR - 150, ly = mT + 8;
+    Draw.el(svg, "line", { x1: lx, y1: ly, x2: lx + 20, y2: ly }, "chart-line");
+    Draw.el(svg, "text", { x: lx + 26, y: ly + 4 }, "chart-label").textContent = "d / h";
+    Draw.el(svg, "circle", { cx: lx + 10, cy: ly + 18, r: 5 }, "chart-dot");
+    Draw.el(svg, "text", { x: lx + 26, y: ly + 22 }, "chart-label").textContent = "state check";
+    document.querySelector('[data-text="tip-check"]').textContent =
+      T.sweep.length + " foot heights from " + m2(T.sweep[0].h) + " to " + m2(T.sweep[T.sweep.length - 1].h) +
+      " m; largest gap between the state check and d/h: " + (T.max_error * 100 < 0.1 ? "below 0.1%" : (T.max_error * 100).toFixed(1) + "%") + ". Hover a dot for its values.";
+
+    var A = T.strength_again;
+    document.querySelector('[data-text="tip-strength"]').textContent =
+      "On the strength example's four holds, the hands now have to pull the body in as well. The total pull-in is about " + m2(A[0].pull) +
+      " body weights, and t rises: " + A.map(function (r) { return r.name + " " + m2(r.t_before) + " → " + m2(r.t); }).join(", ") +
+      ". Cal rises most: Cal\u2019s crimp limit is the lowest of the three, and the sloper can hardly help, since its β lets it hold the body in only a little.";
+  }
+  if (DATA.figures && DATA.figures.tipping) renderTipping(DATA.figures.tipping);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
