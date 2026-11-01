@@ -542,3 +542,68 @@ def flex_figure() -> dict:
         "panels": panels,
         "view": {"x0": 0.85, "y0": 0.55, "x1": 2.25, "y1": 2.6},
     })
+
+
+# ------------------------------------------------------------ the full problem: result cards
+
+def result_cards() -> list:
+    """A few preset states with the exact check's verdict: one that holds and one per failure reason."""
+    from betasolver.model import VARIANTS
+    from betasolver.stance import State, check
+
+    cases = [
+        ("holds", AVA, [Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, "jug"),
+                        Hold("F1", 1.30, 0.90, "foot_big"), Hold("F2", 1.70, 0.95, "foot_big")],
+         State("H1", "H2", "F1", "F2"), None,
+         "Two jugs and two good footholds."),
+        ("strength", CAL_, [Hold("H1", 1.30, 2.0, "crimp"), Hold("H2", 1.70, 2.0, "crimp")],
+         State("H1", "H2"), None,
+         "Hanging from two crimps with no feet."),
+        ("reach", VARIANTS["A_stiff"], [Hold("H1", 1.30, 2.25, "jug"), Hold("H2", 1.75, 2.30, "jug"),
+                                        Hold("F2", 1.25, 0.75, "foot_big"), Hold("F1", 1.85, 1.45, "foot_big")],
+         State("H1", "H2", "F2", "F1"), None,
+         "The high foothold of the flexibility figure."),
+        ("balance", AVA, [Hold("H1", 1.60, 2.20, "sidepull", dir=0)],
+         State("H1", "H1"), None,
+         "Both hands on one sidepull, no feet."),
+        ("unusable", PROFILES["D"], [Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, "crimp"),
+                                     Hold("F1", 1.30, 0.90, "foot_big"), Hold("F2", 1.70, 0.95, "foot_big")],
+         State("H1", "H2", "F1", "F2"), None,
+         "A crimp, for a climber with an injured finger."),
+    ]
+    out = []
+    for key, climber, holds, state, no_force, text in cases:
+        r = _route("card", holds + [Hold("T", 1.5, 3.6, "jug")], (state.LH, state.RH))
+        body = make_body(climber)
+        res = check(body, r, state, no_force, exact=True)
+        if (res.reason or "holds") != key:
+            raise ValueError(f"card {key}: got {res.reason}")
+        ends = {l: (r.hold(h).x, r.hold(h).y) for l, h in state.as_dict().items() if h}
+        card = {"key": key, "text": text, "climber": climber.key, "name": climber.name, "head": list(body.head),
+                "holds": [{**h, "role": "normal"} for h in r.to_dict()["holds"] if h["id"] != "T"],
+                "state": state.as_dict(), "result": res.to_dict()}
+        card["color"] = climber.key.split("_")[0]
+        if res.torso is not None:
+            # the body height is often free; draw it mid-way through the heights reach and flexibility allow
+            from betasolver.stance import torso_region
+            x = res.torso[0]
+            lo, hi = _y_range(torso_region(body, r, state), x)
+            feet = [r.hold(h).y for l, h in state.as_dict().items() if h and l in ("LF", "RF")]
+            if feet:
+                lo = max(lo, max(feet) - body.foot_limit((0.0, 0.0)))
+            torso = (x, lo + (0.35 if feet else 0.06) * (hi - lo))  # hanging: arms nearly straight
+            card["draw_torso"] = list(torso)
+            card["joints"] = body.joints(torso, ends)
+            card["share"] = None
+        if res.limb:
+            kind, _ = r.hold(res.hold).contact(res.limb)
+            card["hold_type"] = kind.name
+        if res.forces:
+            from betasolver.stance import effort
+            fx = {l: {k: (tuple(v) if isinstance(v, list) else v) for k, v in F.items()} for l, F in res.forces.items()}
+            card["share"] = effort(body, r, state, fx)[1]
+        out.append(card)
+    return _round(out)
+
+
+CAL_ = PROFILES["C"]

@@ -22,11 +22,11 @@ scripts/            first_push.sh, sync.sh
 ## Running
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,exact]"
 pytest
 ```
 
-The exact second-order-cone check used for comparison needs `pip install -e ".[exact]"`.
+The `exact` extra (cvxpy and Clarabel) is needed for the exact second-order-cone check, which the tests and the site build compare against.
 
 ## Status
 

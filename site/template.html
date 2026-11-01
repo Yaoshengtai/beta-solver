@@ -759,7 +759,20 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>One linear inequality per foot on a hold, on the body height only: \(-y_c \le -p_{k,y} + (\text{flex} - 0.03)\,H\). It applies to a resting foot too, since that foot still has to get there. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>flex_rows</code>.</p>
   </details>
   <h3 id="check-problem">The full problem and why it fails</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.8</span><p>All six constraints as one convex program, solved exactly, with an example of each failure reason.</p></div>
+  <p><b>All six together.</b> \(A\) is every limb on a hold, and \(A_F\) the ones that push (all of \(A\) except a <code>no_force</code> limb). The sums in balance run over \(A_F\).</p>
+  <div class="math-block" data-math="full-problem"></div>
+  <p><b>Why it is convex.</b> The objective is linear. Reach and strength are second-order cones, direction is a convex cone, and the two balances and flexibility are linear. So the whole problem is a second-order cone program: convex, with a single optimal effort \(t^\star\). Two consequences matter later. The answer does not depend on where a solver starts. And for any bound on \(t\), the body positions that work form a convex set, which is what makes a move between two positions safe (<a href="#move">One move</a>).</p>
+  <p><b>Solving it exactly.</b> The problem above is solved as it stands with <code>cvxpy</code> and the Clarabel solver: real discs for reach and real balls for strength. The site's search uses a linear version instead (next section); the exact one is the yardstick it is measured against.</p>
+
+  <h4 class="sub-h">Why a state fails</h4>
+  <ul>
+    <li><b>Not strong enough:</b> there is a solution, but \(t^\star > 1\). The report names the limb with the largest share and its hold.</li>
+    <li><b>Cannot reach:</b> there is no solution, and there is still none when only reach and flexibility are kept. The report names a hold to blame: a foot too high for the hip, or else the hold farthest out of reach.</li>
+    <li><b>Direction or balance does not work:</b> there is no solution, but reach and flexibility alone can be met. The holds are within reach, yet no forces in the allowed directions balance the body, like a sidepull with nothing pushing back.</li>
+    <li><b>Unusable hold:</b> a hold the climber has no strength for, found before solving anything.</li>
+  </ul>
+  <div class="cards" data-draw="result-cards"></div>
+  <p class="t-note">Each card is one state checked with the exact problem. Same marks as elsewhere: a red limb is the one the report blames.</p>
   <h3 id="check-lp">From cones to a linear program</h3>
   <div class="planned"><span class="chip">Planned · unit 2.9</span><p>Replacing circles and cones by polygons, and how close the linear program stays to the exact answer.</p></div>
 </section>
@@ -2349,6 +2362,76 @@ var Draw = (function () {
     });
   }
   if (DATA.figures && DATA.figures.flex) renderFlex(DATA.figures.flex, DATA.model.body);
+
+  /* ---------- #check: the full problem and result cards (unit 2.8) ---------- */
+  function renderProblem(cards, B) {
+    var fm = document.querySelector('[data-math="full-problem"]');
+    if (!fm) return;
+    var hip = Math.abs(B.hip[1]);
+    fm.textContent = "\\[ \\begin{aligned} t^\\star(\\sigma) = \\min_{x,\\ f,\\ N,\\ M,\\ \\tau,\\ t}\\quad & t \\\\" +
+      " \\text{s.t.}\\quad & \\text{\u2460}\\ \\ \\|p_k - x - o_k\\|_2 \\le L_k && k \\in A \\\\" +
+      " & \\text{\u2461}\\ \\ f_k \\in K_k && k \\in A_F \\\\" +
+      " & \\text{\u2462}\\ \\ \\|(f_k, N_k)\\|_2 \\le t F_k \\ (\\text{hands}),\\ \\ \\|(f_k, M_k)\\|_2 \\le t F_{\\text{foot}} \\ (\\text{feet}) && k \\in A_F \\\\" +
+      " & \\text{\u2463}\\ \\ \\textstyle\\sum f_k = (0, 1),\\ \\ \\sum (p_{k,x} f_{k,y} - p_{k,y} f_{k,x}) = x_c \\\\" +
+      " & \\text{\u2464}\\ \\ \\textstyle\\sum M_k = \\sum N_k,\\ \\ \\sum p_{k,y} N_k - \\sum p_{k,y} M_k = d,\\ \\ \\sum p_{k,x} N_k - \\sum p_{k,x} M_k + \\sum \\tau_k = 0 \\\\" +
+      " & \\phantom{\\text{\u2464}}\\ \\ N_k \\le \\beta_k\\, d_k^\\top f_k,\\ \\ |\\tau_k| \\le r_k F_k && k \\in A_F \\cap \\text{hands} \\\\" +
+      " & \\text{\u2465}\\ \\ p_{k,y} \\le y_c - " + hip + "H + \\text{flex}\\cdot H && k \\in A \\cap \\text{feet} \\\\" +
+      " & N_k,\\ M_k,\\ t \\ge 0 \\end{aligned} \\]";
+
+    var wrap = document.querySelector('[data-draw="result-cards"]');
+    var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    function pct(u) { return Math.round(u * 100 + 1e-6) + "%"; }
+    cards.forEach(function (c) {
+      var R = c.result;
+      var card = document.createElement("div"); card.className = "card cl-" + c.color;
+      var h = document.createElement("h4");
+      var sw = document.createElement("span"); sw.className = "swatch"; h.appendChild(sw);
+      h.appendChild(document.createTextNode(c.name));
+      card.appendChild(h);
+      var p = document.createElement("p"); p.className = "blurb"; p.textContent = c.text; card.appendChild(p);
+      var xs = c.holds.map(function (q) { return q.x; }), ys = c.holds.map(function (q) { return q.y; });
+      var x0 = Math.min.apply(null, xs) - 0.45, x1 = Math.max.apply(null, xs) + 0.45;
+      var y0 = Math.min(Math.min.apply(null, ys), c.draw_torso ? c.draw_torso[1] - 0.9 : 9) - 0.2, y1 = Math.max.apply(null, ys) + 0.3;
+      if (y1 - y0 < 1.0) y0 = y1 - 1.0;
+      var holder = document.createElement("div"); holder.className = "fig-main";
+      var sc = Draw.scene(holder, { x0: x0, y0: y0, x1: x1, y1: y1, k: 120, pad: 2, title: c.text });
+      card.appendChild(holder);
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      var used = {};
+      Object.keys(c.state).forEach(function (l) { if (c.state[l]) used[c.state[l]] = (used[c.state[l]] ? used[c.state[l]] + "+" : "") + l; });
+      c.holds.forEach(function (q) {
+        Draw.hold(sc, q, { used: true });
+        Draw.el(sc.layers.over, "text", { x: sc.X(q.x), y: sc.Y(q.y) + 18, "text-anchor": "middle" }, "h-label").textContent = q.id + " " + (used[q.id] || "");
+      });
+      if (c.joints) {
+        var cls = {};
+        if (R.limb) cls[R.limb] = "limb-out";
+        Draw.figure(sc, { torso: c.draw_torso, joints: c.joints }, { key: c.color, head: c.head }, { limbClass: cls });
+        Draw.com(sc, c.draw_torso);
+      }
+      var v = document.createElement("p"); v.className = "t-read";
+      var b = document.createElement("b");
+      b.className = R.ok ? "easy" : "fail";
+      if (R.ok) {
+        b.textContent = "\u2713 Holds, t* = " + R.t.toFixed(2);
+        v.appendChild(b);
+        v.appendChild(document.createTextNode(" (largest share: " + NAMES[R.limiting] + ")."));
+      } else {
+        var head = { strength: "Not strong enough", reach: "Cannot reach", balance: "Direction or balance does not work", unusable: "Unusable hold" }[R.reason];
+        b.textContent = "\u2717 " + head;
+        v.appendChild(b);
+        var why = "";
+        if (R.reason === "strength") why = ": t* = " + R.t.toFixed(2) + "; the " + NAMES[R.limb] + " on the " + c.hold_type + " (" + R.hold + ") would need " + pct(c.share[R.limb]) + " of its limit.";
+        else if (R.reason === "reach") why = ": " + NAMES[R.limb] + " cannot reach " + R.hold + ".";
+        else if (R.reason === "balance") why = ": the holds can be reached, but no forces balance the body.";
+        else why = ": " + c.name + " has no strength for the " + c.hold_type + " (" + R.hold + "), found before solving.";
+        v.appendChild(document.createTextNode(why));
+      }
+      card.appendChild(v);
+      wrap.appendChild(card);
+    });
+  }
+  if (DATA.figures && DATA.figures.cards) renderProblem(DATA.figures.cards, DATA.model.body);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

@@ -145,3 +145,11 @@ def test_flex_figure():
     ava, stiff = X["panels"]
     assert ava["ok"] and ava["foot"] <= ava["limit"] + TOL
     assert not stiff["ok"] and stiff["foot"] > stiff["best_limit"]
+
+
+def test_result_cards_cover_every_outcome():
+    cards = legend.result_cards()
+    assert [c["key"] for c in cards] == ["holds", "strength", "reach", "balance", "unusable"]
+    assert cards[0]["result"]["ok"] and cards[0]["result"]["t"] <= 1
+    assert all(c["result"]["reason"] == c["key"] for c in cards[1:])
+    assert cards[1]["result"]["t"] > 1

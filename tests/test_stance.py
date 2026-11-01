@@ -74,9 +74,9 @@ def test_injured_climber_rules_out_crimps_without_solving():
     assert precheck(make_body(PROFILES["D"]), r, State("H1", "H2", "F1", "F2"), no_force="RH").reason == "unusable"
 
 
-def test_remaining_constraints_not_built_yet():
-    with pytest.raises(NotImplementedError):
-        check(make_body(AVA), route(), State("H1", "H2", "F1", "F2"))
+def test_check_holds_a_good_state():
+    res = check(make_body(AVA), route(), State("H1", "H2", "F1", "F2"))
+    assert res.ok and 0 < res.t <= 1 and res.reason is None and res.limiting in ("LH", "RH", "LF", "RF")
 
 
 # ------------------------------------------------------------ ① reach
@@ -622,3 +622,52 @@ def test_flex_rows_shape():
     assert G.shape == (2, lay.size) and owner == ["LF", "RF"]
     assert np.all(G[:, lay[("x", None)].start + 1] == -1.0)
     assert h[1] == pytest.approx(b.foot_limit((0, 0)) - 1.45)
+
+
+
+# ------------------------------------------------------------ the full check and its diagnosis
+from betasolver.stance import diagnose, solve_exact  # noqa: E402
+
+cp = pytest.importorskip("cvxpy")
+
+
+def test_check_strength_failure_names_the_limb():
+    holds = [Hold("H1", 1.3, 2.0, "crimp"), Hold("H2", 1.7, 2.0, "crimp"), Hold("H3", 1.5, 3.6, "jug")]
+    res = check(make_body(CAL), route(holds=holds), State("H1", "H2"))
+    assert not res.ok and res.reason == "strength" and res.t > 1
+    assert res.limb in ("LH", "RH") and res.hold == ("H1" if res.limb == "LH" else "H2")
+
+
+def test_check_balance_failure():
+    res = check(make_body(AVA), _hang(1.6, 2.2, "sidepull", dir=0), State("H1", "H1"))
+    assert not res.ok and res.reason == "balance" and res.limb is None
+
+
+def test_check_reach_failure_from_flexibility():
+    # every hold is within reach on its own, but not with the high foot below the stiff hip
+    res = check(make_body(VARIANTS["A_stiff"]), _high_foot(1.45), State("H1", "H2", "F2", "F1"))
+    assert not res.ok and res.reason == "reach" and res.limb == "RF" and res.hold == "F1"
+    assert diagnose(make_body(VARIANTS["A_stiff"]), _high_foot(1.45), State("H1", "H2", "F2", "F1"))[0] == "reach"
+
+
+def test_no_force_limb_carries_nothing_but_must_reach():
+    # step 10: with no_force=k, limb k has no force; moving its hold out of reach makes the check fail
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    res = check(b, r, s, no_force="RF")
+    assert res.ok and "RF" not in res.forces
+    far = route(holds=[Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, "jug"), Hold("H3", 1.5, 3.6, "jug"),
+                       Hold("F1", 1.25, 0.6, "foot_big"), Hold("F2", 2.9, 0.1, "foot_big")])
+    bad = check(b, far, s, no_force="RF")
+    assert not bad.ok and bad.reason == "reach"
+
+
+def test_exact_is_never_above_the_lp():
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    lp, ex = solve(b, r, s), solve_exact(b, r, s)
+    assert lp["ok"] and ex["ok"] and ex["t"] <= lp["t"] + 1e-6
+    assert check(b, r, s, exact=True).ok
+
+
+def test_exact_agrees_on_the_failure_examples():
+    assert check(make_body(AVA), _hang(1.6, 2.2, "sidepull", dir=0), State("H1", "H1"), exact=True).reason == "balance"
+    assert check(make_body(VARIANTS["A_stiff"]), _high_foot(1.45), State("H1", "H2", "F2", "F1"), exact=True).reason == "reach"

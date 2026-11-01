@@ -154,3 +154,7 @@ def test_barndoor_figure_embedded(html):
 
 def test_flex_figure_embedded(html):
     assert 'data-draw="flex"' in html and 'data-draw="flex-table"' in html and "Planned · unit 2.7" not in html
+
+
+def test_full_problem_and_cards(html):
+    assert 'data-math="full-problem"' in html and 'data-draw="result-cards"' in html and "Planned · unit 2.8" not in html

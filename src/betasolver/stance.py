@@ -8,7 +8,8 @@ the smallest effort t.
 This module holds the framework (states, unknowns, result type, checks done
 before any solving) and the constraints built so far: reach, direction,
 strength, in-plane balance, no tipping, no barn-door and flexibility,
-plus the linear program that puts them together.
+the linear program that puts them together, the exact cone program it
+approximates, and the check with its diagnosis of failures.
 """
 
 from __future__ import annotations
@@ -727,13 +728,156 @@ def solve(body: Body, route: Route, state: State, no_force: str | None = None,
             "forces": forces, "share": share, "t_exact": t_exact, "limiting": limiting, "z": z, "layout": lay}
 
 
-def check(body: Body, route: Route, state: State, no_force: str | None = None) -> Result:
-    """Check one state: can the climber hold still here, and with what effort t?"""
+# ------------------------------------------------------- the exact problem
+
+def solve_exact(body: Body, route: Route, state: State, no_force: str | None = None) -> dict:
+    """The state check as the exact second-order cone program of section 3.7, solved with cvxpy and Clarabel.
+
+    Discs instead of polygons for reach, balls instead of polyhedra for
+    strength; everything else is the same as the linear program. Used to
+    measure how far the linear program is from the exact answer.
+    """
+    import cvxpy as cp
+
+    A, AF = limb_sets(state, no_force)
+    x = cp.Variable(2)
+    t = cp.Variable(nonneg=True)
+    f = {l: cp.Variable(2) for l in AF}
+    out = {l: cp.Variable(nonneg=True) for l in AF}  # N for hands, M for feet
+    tau = {l: cp.Variable() for l in AF if l in HANDS}
+    p = {l: route.hold(state.hold(l)) for l in A}
+    cons = []
+    for l in A:  # 1 reach
+        o = body.offsets[l]
+        cons.append(cp.norm(np.array([p[l].x - o[0], p[l].y - o[1]]) - x) <= body.L[l])
+    for l in AF:  # 2 direction (exact in 2D), 3 strength
+        theta, alpha = cone(route, state, l)
+        for n in cone_normals(theta, alpha):
+            cons.append(n[0] * f[l][0] + n[1] * f[l][1] >= 0)
+        cons.append(cp.norm(cp.hstack([f[l], out[l]])) <= t * strength_limit(body, route, state, l))
+    if AF:  # 4 in-plane balance
+        cons.append(sum(f[l][0] for l in AF) == 0)
+        cons.append(sum(f[l][1] for l in AF) == 1)
+        cons.append(sum(p[l].x * f[l][1] - p[l].y * f[l][0] for l in AF) == x[0])
+    else:
+        return {"ok": False, "status": "no limb carries force"}
+    d = wall_distance(body, AF)  # 5 out-of-wall balance
+    hands, feet = [l for l in AF if l in HANDS], [l for l in AF if l in FEET]
+    cons.append(sum(out[l] for l in feet) - sum(out[l] for l in hands) == 0)
+    cons.append(sum(p[l].y * out[l] for l in hands) - sum(p[l].y * out[l] for l in feet) == d)
+    cons.append(sum(p[l].x * out[l] for l in hands) - sum(p[l].x * out[l] for l in feet) + sum(tau[l] for l in hands) == 0)
+    for l in hands:
+        kind, theta = p[l].contact(l)
+        dk = (math.cos(math.radians(theta)), math.sin(math.radians(theta)))
+        cons.append(out[l] <= kind.beta * (dk[0] * f[l][0] + dk[1] * f[l][1]))
+        cons.append(cp.abs(tau[l]) <= kind.r * strength_limit(body, route, state, l))
+    top = body.foot_limit((0.0, 0.0))  # 6 flexibility
+    for l in A:
+        if l in FEET:
+            cons.append(p[l].y <= x[1] + top)
+    prob = cp.Problem(cp.Minimize(t), cons)
+    try:
+        prob.solve(solver=cp.CLARABEL)
+    except cp.error.SolverError as e:
+        return {"ok": False, "status": f"solver error: {e}"}
+    if prob.status not in ("optimal", "optimal_inaccurate"):
+        return {"ok": False, "status": prob.status}
+    forces = {}
+    for l in AF:
+        forces[l] = {"f": (float(f[l].value[0]), float(f[l].value[1])), ("n" if l in HANDS else "m"): float(out[l].value)}
+        if l in HANDS:
+            forces[l]["tau"] = float(tau[l].value)
+    t_exact, share, limiting = effort(body, route, state, forces)
+    return {"ok": True, "t": float(t.value), "torso": (float(x.value[0]), float(x.value[1])), "forces": forces,
+            "share": share, "limiting": limiting}
+
+
+# --------------------------------------------------------------------- check
+
+def _geometry_ok(body: Body, route: Route, state: State, skip: str | None = None, exact: bool = False,
+                 flex: bool = True, skip_flex: str | None = None) -> bool:
+    """Can some body position meet reach (1) and flexibility (6) alone?
+
+    skip drops one limb's reach (and, for a foot, its flexibility row);
+    flex=False drops every flexibility row; skip_flex drops only that foot's.
+    """
+    from scipy.optimize import linprog
+
+    pts = targets(body, route, state)
+    top = body.foot_limit((0.0, 0.0))
+    feet = [l for l in pts if l in FEET and flex and l != skip and l != skip_flex]
+    if exact:
+        import cvxpy as cp
+        x = cp.Variable(2)
+        cons = [cp.norm(np.array([pts[l][0] - body.offsets[l][0], pts[l][1] - body.offsets[l][1]]) - x) <= body.L[l]
+                for l in pts if l != skip]
+        cons += [pts[l][1] <= x[1] + top for l in feet]
+        prob = cp.Problem(cp.Minimize(0), cons)
+        prob.solve(solver=cp.CLARABEL)
+        return prob.status in ("optimal", "optimal_inaccurate")
+    G, h, owner = reach_rows(body, route, state)
+    keep = [i for i, o in enumerate(owner) if o != skip]
+    G, h = G[keep], h[keep]
+    for l in feet:
+        G = np.vstack([G, [0.0, -1.0]])
+        h = np.append(h, top - pts[l][1])
+    res = linprog(np.zeros(2), A_ub=G, b_ub=h, bounds=[(None, None)] * 2, method="highs")
+    return res.status == 0
+
+
+def diagnose(body: Body, route: Route, state: State, exact: bool = False) -> tuple[str, str | None]:
+    """Why does a state have no solution? (section 3.7)
+
+    Solve again with only reach and flexibility. If that has a solution, the
+    holds can be reached, so the directions or the balance do not work.
+    Otherwise the reason is reach, and the limb is found like this: if the
+    holds are reachable once flexibility is ignored, it is the foot whose
+    flexibility limit is to blame (the highest such foot); if not, it is a
+    limb whose hold, if dropped, makes the rest reachable, the one farthest
+    out of reach from where the other holds put the body.
+    """
+    if _geometry_ok(body, route, state, exact=exact):
+        return "balance", None
+    pts = targets(body, route, state)
+    if _geometry_ok(body, route, state, exact=exact, flex=False):
+        feet = [l for l in pts if l in FEET and _geometry_ok(body, route, state, exact=exact, skip_flex=l)]
+        if feet:
+            return "reach", max(feet, key=lambda l: pts[l][1])
+        return "reach", None
+    cands = [l for l in pts if _geometry_ok(body, route, state, skip=l, exact=exact)]
+    if not cands:
+        return "reach", None
+
+    def gap(l):
+        others = [o for o in pts if o != l]
+        cx = sum(pts[o][0] - body.offsets[o][0] for o in others) / len(others)
+        cy = sum(pts[o][1] - body.offsets[o][1] for o in others) / len(others)
+        ax, ay = cx + body.offsets[l][0], cy + body.offsets[l][1]
+        return math.hypot(pts[l][0] - ax, pts[l][1] - ay) - body.L[l]
+    return "reach", max(cands, key=gap)
+
+
+def check(body: Body, route: Route, state: State, no_force: str | None = None, exact: bool = False) -> Result:
+    """Check one state: can the climber hold still here, and with what effort t?
+
+    Cheap prechecks first, then the linear program (or, with exact=True, the
+    exact cone program). With a solution, the state holds if t <= 1; above 1
+    the reason is strength and the limb is the most loaded one. With no
+    solution, `diagnose` tells reach from balance.
+    """
     validate(body, route, state)
     A, AF = limb_sets(state, no_force)
     early = precheck(body, route, state, no_force)
     if early is not None:
         return early
-    if not torso_region(body, route, state, REACH_SIDES):
-        return Result(ok=False, reason="reach")
-    raise NotImplementedError("the full check and its diagnosis are added in unit 2.8")
+    res = solve_exact(body, route, state, no_force) if exact else solve(body, route, state, no_force)
+    if not res["ok"]:
+        reason, limb = diagnose(body, route, state, exact=exact)
+        return Result(ok=False, reason=reason, limb=limb, hold=state.hold(limb) if limb else None)
+    t = res["t"]
+    forces = {l: {k: (list(v) if isinstance(v, tuple) else v) for k, v in F.items()} for l, F in res["forces"].items()}
+    lim = res["limiting"]
+    if t > 1.0:
+        return Result(ok=False, t=t, torso=res["torso"], forces=forces, limiting=lim,
+                      reason="strength", limb=lim, hold=state.hold(lim))
+    return Result(ok=True, t=t, torso=res["torso"], forces=forces, limiting=lim)
