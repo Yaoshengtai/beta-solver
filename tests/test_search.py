@@ -53,3 +53,66 @@ def test_swing_move_into_a_state_that_does_not_hold_fails():
     assert Move(State("S1", "S2"), "RF", "F9").swing
     assert res.catch.ok and not res.end.ok
     assert not res.ok and res.failure["phase"] == "end"
+
+
+# ------------------------------------------------------------ two-stage Dijkstra (unit 4.2)
+from betasolver.model import BEN, CAL  # noqa: E402
+from betasolver.search import EPS, pareto_reference, solve  # noqa: E402
+
+SMALL = Route("small", "small", "", [Hold("S1", 1.30, 1.80, "jug"), Hold("S2", 1.70, 1.85, "crimp"),
+                                     Hold("H3", 1.40, 2.25, "pinch"), Hold("T", 1.60, 2.55, "jug"),
+                                     Hold("F1", 1.30, 0.70, "foot_big"), Hold("F2", 1.70, 0.75, "foot_big"),
+                                     Hold("F3", 1.45, 1.10, "foot_chip"), Hold("F4", 1.70, 1.35, "foot_big")],
+              ("S1", "S2"), "T")
+
+
+def _three(top=2.65):
+    return Route("three", "three", "", [Hold("S1", 1.30, 1.80, "jug"), Hold("S2", 1.70, 1.80, "jug"),
+                                        Hold("H3", 1.50, 2.25, "jug"), Hold("T", 1.50, top, "jug"),
+                                        Hold("F1", 1.35, 0.95, "foot_big"), Hold("F2", 1.65, 0.95, "foot_big")],
+                 ("S1", "S2"), "T", allow_feet_on_handholds=False)
+
+
+def test_three_move_route_gives_the_expected_beta():
+    # step 10: the top is out of reach from the start, so one hand goes via H3
+    r = _three()
+    b = solve(r, AVA)
+    assert b.status == "ok"
+    assert [m.describe(r) for m, _, _ in b.steps] == ["Right hand → H3 (jug)", "Left hand → T (jug)", "Right hand → T (jug)"]
+
+
+@pytest.mark.parametrize("climber", [AVA, BEN, CAL])
+def test_two_stages_match_the_exhaustive_reference(climber):
+    # step 10: on a small route, the (crux, total) of the two-stage search equals the best over all short paths
+    b = solve(SMALL, climber)
+    ref = pareto_reference(SMALL, climber, 8)
+    assert b.status == "ok" and len(b.steps) <= 8
+    path_crux = max(w["total"] for _, _, w in b.steps)
+    assert path_crux == pytest.approx(ref[0], abs=EPS) and b.total == pytest.approx(ref[1], abs=1e-9)
+
+
+def test_beta_is_consistent():
+    b = solve(SMALL, AVA)
+    costs = [w["total"] for _, _, w in b.steps]
+    assert b.total == pytest.approx(sum(costs))
+    assert max(costs) <= b.crux + EPS and costs[b.crux_step] == max(costs)
+    labels = [lab for _, lab in b.trace["stage1"]]
+    assert all(a <= c + 1e-12 for a, c in zip(labels, labels[1:]))      # bottleneck labels never decrease
+    s = b.start
+    for m, _, _ in b.steps:                                              # the steps chain from the start
+        assert m.state == s
+        s = m.new_state
+    assert s.LH == s.RH == SMALL.finish
+
+
+def test_infeasible_route_reports_where_it_got_stuck():
+    # step 10: no solution gives "infeasible" with a fail record that says release or catch
+    r = _three(top=3.30)
+    b = solve(r, AVA)
+    assert b.status == "infeasible" and b.steps == []
+    assert b.fail["phase"] in ("release", "catch") and b.fail["reason"] and b.fail["limb"] in ("LH", "RH")
+    assert b.fail["hold"] == "T" and b.fail["step"] >= 1
+
+
+def test_search_limit():
+    assert solve(SMALL, AVA, max_expansions=2).status == "limit"

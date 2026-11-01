@@ -373,6 +373,9 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .funnel { grid-template-columns: 150px minmax(0, 1fr) 52px; }
 .funnel .lab { font-family: var(--font-body); font-size: 0.82rem; color: var(--ink); }
 .funnel-fill { background: var(--accent); }
+.crux-tag { display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--surface); background: var(--limit); border-radius: 4px; padding: 0 5px; }
+.dashed-arrow { stroke-dasharray: 4 3; }
+.chart-dot-plain { fill: var(--ink); opacity: 0.75; }
 .seg-ok { fill: var(--easy); } .seg-fail { fill: var(--limit); } .seg-pruned { fill: var(--muted); opacity: 0.55; }
 .cost-tbl { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 8px; }
 .cost-tbl td { padding: 3px 0; border-bottom: 1px solid var(--line); }
@@ -895,7 +898,30 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p data-text="graph-impl"></p>
   </details>
   <h3 id="search-dijkstra">Two-stage Dijkstra</h3>
-  <div class="planned"><span class="chip">Planned · unit 4.2</span><p>A bottleneck search for the crux, then an ordinary shortest path under that crux.</p></div>
+  <p>The best beta makes the hardest move, the <b>crux</b>, as easy as possible, and among betas with that crux has the smallest total cost. Two searches do this:</p>
+  <ol>
+    <li><b>Bottleneck Dijkstra.</b> A path's label is the largest move cost on it. Expand states in order of label, starting from every start state at once; the first goal popped has the smallest possible crux \(B^\star\).</li>
+    <li><b>Ordinary Dijkstra</b> on the sum of costs, using only moves with \(w \le B^\star\) (plus \(10^{-6}\) for rounding).</li>
+  </ol>
+  <p>Why not one search with the label \((\text{crux}, \text{total})\) compared in that order? Because the order does not survive extending a path. Take a path with the smaller crux but the larger total, and another with a slightly larger crux but a smaller total. Add a move harder than both, and the cruxes become equal, so the second path now wins. Dijkstra would already have thrown it away. Two stages avoid this. Both share the cached checks, so the second costs almost nothing; the search stops with a "search limit" report after 200,000 expansions.</p>
+  <p><b>No solution:</b> if the first stage runs out of states, the report names the highest state reached and why the next hand move fails, using the diagnosis of step 3, for example “Stuck at step 4 (catch): left hand cannot reach T”.</p>
+
+  <figure class="fig" id="fig-dijkstra">
+    <div class="tip-row" data-draw="dijkstra-charts"></div>
+    <figcaption><b>Both stages on the toy route</b>, for <span data-text="dijkstra-climber"></span>. Each dot is one expanded state, in the order expanded. Stage 1: the label (largest move cost so far) never decreases, and the first goal fixes \(B^\star\). Stage 2: the total cost so far, over moves no harder than \(B^\star\).</figcaption>
+  </figure>
+  <figure class="fig" id="fig-beta">
+    <div class="fig-row">
+      <div class="fig-main" data-draw="beta-route"></div>
+      <div class="fig-key"><div class="tbl-wrap"><table class="tbl" data-draw="beta-steps"></table></div></div>
+    </div>
+    <figcaption><b>The beta it finds.</b> Numbered arrows: hand moves (solid) and foot moves (dashed), in order. The crux is marked in the list.</figcaption>
+  </figure>
+  <ul data-draw="dijkstra-stats"></ul>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>The tests compare the two-stage search with an exhaustive reference on small routes: for every state and every path length up to a bound, it keeps each (crux, total) pair that no other path beats in both, so the best pair overall is always kept. For Ava, Ben and Cal on an eight-hold route, the two agree exactly on the crux and the total. Code: <a data-src="src/betasolver/search.py">search.py</a>, <code>bottleneck</code>, <code>cheapest</code>, <code>solve</code>, <code>pareto_reference</code>.</p>
+  </details>
   <h3 id="search-player">The beta player</h3>
   <div class="planned"><span class="chip">Planned · unit 4.3</span><p>Smoothing the poses and playing a beta step by step.</p></div>
 </section>
@@ -2954,6 +2980,92 @@ var Draw = (function () {
       " s here. Every reachable state can be held: a swing move also checks its end state. Code: search.py, Graph, graph_stats.";
   }
   if (DATA.figures && DATA.figures.graph) renderGraph(DATA.figures.graph);
+
+  /* ---------- #search: two-stage Dijkstra (unit 4.2) ---------- */
+  function renderDijkstra(D) {
+    var row = document.querySelector('[data-draw="dijkstra-charts"]');
+    if (!row) return;
+    document.querySelector('[data-text="dijkstra-climber"]').textContent = D.climber.name;
+    function chart(title, ys, line, lineLabel, yLabel, zoom) {
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var b = document.createElement("b"); b.textContent = title; cell.appendChild(b);
+      var W = 300, H = 200, mL = 44, mR = 10, mT = 16, mB = 34;
+      var pos = ys.filter(function (v) { return v > 0; });
+      // stage 1: every move costs about the same, so zoom onto the labels above zero (the starts sit at 0, below the axis)
+      var ymin = zoom && pos.length ? Math.min.apply(null, pos) - 0.15 * (line - Math.min.apply(null, pos) + 0.01) : 0;
+      var ymax = line + 0.12 * (line - ymin);
+      function X(i) { return mL + i / Math.max(1, ys.length - 1) * (W - mL - mR); }
+      function Y(v) { return H - mB - (Math.max(v, ymin) - ymin) / (ymax - ymin) * (H - mT - mB); }
+      var svg = Draw.el(cell, "svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": title }, "chart-svg");
+      [0, 0.5, 1].forEach(function (f) {
+        var v = ymin + (line - ymin) * f;
+        Draw.el(svg, "line", { x1: mL, y1: Y(v), x2: W - mR, y2: Y(v) }, "chart-grid");
+        Draw.el(svg, "text", { x: mL - 6, y: Y(v) + 4, "text-anchor": "end" }, "chart-tick").textContent = v.toFixed(zoom ? 3 : 2);
+      });
+      Draw.el(svg, "line", { x1: mL, y1: H - mB, x2: W - mR, y2: H - mB }, "chart-axis");
+      Draw.el(svg, "text", { x: (mL + W - mR) / 2, y: H - 8, "text-anchor": "middle" }, "chart-tick").textContent = "states in the order expanded (" + ys.length + ")";
+      Draw.el(svg, "text", { x: 10, y: (mT + H - mB) / 2, "text-anchor": "middle", transform: "rotate(-90 10 " + (mT + H - mB) / 2 + ")" }, "chart-tick").textContent = yLabel;
+      Draw.el(svg, "line", { x1: mL, y1: Y(line), x2: W - mR, y2: Y(line) }, "limit-line");
+      Draw.el(svg, "text", { x: W - mR, y: Y(line) - 5, "text-anchor": "end" }, "limit-text").textContent = lineLabel;
+      ys.forEach(function (v, i) { if (!zoom || v > 0) Draw.el(svg, "circle", { cx: X(i).toFixed(1), cy: Y(v).toFixed(1), r: 1.6 }, "chart-dot-plain"); });
+      if (zoom) {
+        var n0 = ys.length - pos.length;
+        var note = document.createElement("span"); note.textContent = n0 + " start states at label 0 are not drawn; the axis starts near the cheapest move.";
+        cell.appendChild(note);
+      }
+      row.appendChild(cell);
+    }
+    chart("Stage 1: bottleneck", D.stage1, D.crux, "B* = " + D.crux.toFixed(3), "largest move cost", true);
+    chart("Stage 2: total cost", D.stage2, D.total, "total = " + D.total.toFixed(3), "total cost so far", false);
+
+    // the beta on the wall
+    var R = D.route, byId = {};
+    R.holds.forEach(function (h) { byId[h.id] = h; });
+    var sc = Draw.scene(document.querySelector('[data-draw="beta-route"]'), { x0: 1.0, y0: 0.45, x1: 2.0, y1: 3.2, k: 175, pad: 4, title: "The beta on the toy route" });
+    Draw.wall(sc, R.wall, { grid: 0.5, clip: true });
+    var used = {};
+    Object.keys(D.start).forEach(function (l) { if (D.start[l]) used[D.start[l]] = true; });
+    D.steps.forEach(function (st) { if (st.to) used[st.to] = true; });
+    R.holds.forEach(function (h) { Draw.hold(sc, h, { used: !!used[h.id], label: true }); });
+    D.steps.forEach(function (st) {
+      if (!st.from || !st.to) return;
+      var a = byId[st.from], b = byId[st.to], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+      if (L < 1e-6) return;
+      var off = 0.035 * (st.limb[0] === "L" ? -1 : 1), nx = -dy / L * off, ny = dx / L * off;
+      var x1 = sc.X(a.x + nx + dx / L * 0.05), y1 = sc.Y(a.y + ny + dy / L * 0.05), x2 = sc.X(b.x + nx - dx / L * 0.05), y2 = sc.Y(b.y + ny - dy / L * 0.05);
+      Draw.arrowPx(sc.layers.over, x1, y1, x2, y2, st.limb[1] === "H" ? "force" : "force dashed-arrow", 7);
+      Draw.el(sc.layers.over, "text", { x: (x1 + x2) / 2 + (st.limb[0] === "L" ? -9 : 9), y: (y1 + y2) / 2 + 4, "text-anchor": "middle" }, "anno-strong").textContent = String(st.n);
+    });
+    var tb = document.querySelector('[data-draw="beta-steps"]');
+    tb.innerHTML = "<thead><tr><th>#</th><th>Move</th><th>Release</th><th>Catch</th><th>w</th></tr></thead>";
+    var body = document.createElement("tbody");
+    var start = document.createElement("tr");
+    var sd = document.createElement("td"); sd.colSpan = 5; sd.className = "mono";
+    sd.textContent = "Start: LH " + D.start.LH + ", RH " + D.start.RH + ", LF " + (D.start.LF || "–") + ", RF " + (D.start.RF || "–");
+    start.appendChild(sd); body.appendChild(start);
+    D.steps.forEach(function (st) {
+      var tr = document.createElement("tr");
+      [String(st.n), st.describe + (st.crux ? "  crux" : ""), st.t_release == null ? "–" : st.t_release.toFixed(2),
+       st.t_catch == null ? "–" : st.t_catch.toFixed(2), st.cost.toFixed(3)].forEach(function (t, i) {
+        var td = document.createElement("td"); td.textContent = t; if (i >= 2) td.className = "num";
+        if (i === 1 && st.crux) { td.textContent = st.describe + " "; var c = document.createElement("span"); c.className = "crux-tag"; c.textContent = "crux"; td.appendChild(c); }
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    tb.appendChild(body);
+    var S = D.stats, st = document.querySelector('[data-draw="dijkstra-stats"]');
+    [["Stage 1", S.expanded_1 + " states expanded, " + S.checks_1.toLocaleString("en") + " state checks"],
+     ["Stage 2", S.expanded_2 + " states expanded, only " + S.checks_2 + " new checks"],
+     ["Against the whole graph", D.full_graph.toLocaleString("en") + " reachable states; the search touched " + S.expanded_1 + " in stage 1"],
+     ["Time", S.seconds.toFixed(1) + " s for both stages"],
+     ["Result", D.steps.length + " moves, crux " + D.crux.toFixed(3) + " at move " + (D.crux_step + 1) + ", total " + D.total.toFixed(3)]
+    ].forEach(function (r) {
+      var li = document.createElement("li"); var b = document.createElement("b"); b.textContent = r[0] + ": ";
+      li.appendChild(b); li.appendChild(document.createTextNode(r[1])); st.appendChild(li);
+    });
+  }
+  if (DATA.figures && DATA.figures.dijkstra) renderDijkstra(DATA.figures.dijkstra);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
