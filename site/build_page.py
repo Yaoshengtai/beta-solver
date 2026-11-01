@@ -57,6 +57,7 @@ def collect_data() -> dict:
             "unknowns": stance.UNKNOWNS,
             "constraints": stance.CONSTRAINTS,
             "reasons": stance.REASONS,
+            "reach_sides": stance.REACH_SIDES,
             "sizes": {
                 "four": stance.layout(("LH", "RH", "LF", "RF")).size,
                 "one_foot": stance.layout(("LH", "RH", "LF")).size,
@@ -68,6 +69,7 @@ def collect_data() -> dict:
             "route_example": legend.route_example(),
             "bodies": legend.body_figures(),
             "state_example": legend.state_example(),
+            "reach": legend.reach_figure(),
         },
     }
 

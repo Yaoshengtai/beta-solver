@@ -12,7 +12,10 @@ one by one in units 2.1 to 2.9.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
+
+import numpy as np
 
 from .body import Body
 from .model import FEET, HANDS, LIMBS, Route
@@ -168,7 +171,9 @@ def precheck(body: Body, route: Route, state: State, no_force: str | None = None
     """Cheap tests done before any solving. Returns a failed Result, or None to go on.
 
     A hold whose strength limit is zero for this climber (an injured finger on
-    a crimp) is ruled out without solving anything (section 3.7).
+    a crimp) is ruled out without solving anything. So is a pair of holds
+    farther apart than the two limbs plus the distance between their
+    attachment points (section 3.7).
     """
     A, _ = limb_sets(state, no_force)
     for limb in A:
@@ -176,7 +181,90 @@ def precheck(body: Body, route: Route, state: State, no_force: str | None = None
         kind, _ = h.contact(limb)
         if body.climber.strength(kind.name) <= 0:
             return Result(ok=False, reason="unusable", limb=limb, hold=h.id)
+    pts = targets(body, route, state)
+    for i, a in enumerate(A):
+        for b in A[i + 1:]:
+            gap = math.dist(pts[a], pts[b])
+            span = body.L[a] + body.L[b] + math.dist(body.offsets[a], body.offsets[b])
+            if gap > span:
+                return Result(ok=False, reason="reach", limb=b, hold=state.hold(b))
     return None
+
+
+# ------------------------------------------------------------ ① reach
+
+REACH_SIDES = 16  # the disc of each limb is replaced by an inscribed regular 16-gon
+
+
+def targets(body: Body, route: Route, state: State) -> dict:
+    """Position of the hold each limb is on."""
+    return {l: (route.hold(state.hold(l)).x, route.hold(state.hold(l)).y) for l in state.on()}
+
+
+def centres(body: Body, route: Route, state: State) -> dict:
+    """For each limb on a hold, the centre p_k - o_k of the disc of torso positions that reach it."""
+    pts = targets(body, route, state)
+    return {l: (pts[l][0] - body.offsets[l][0], pts[l][1] - body.offsets[l][1]) for l in pts}
+
+
+def reaches_all(body: Body, route: Route, state: State, torso, tol: float = 1e-9) -> dict:
+    """Exact form of ①: for each limb on a hold, is it within reach from this torso position?"""
+    pts = targets(body, route, state)
+    return {l: body.reaches(l, torso, pts[l], tol) for l in pts}
+
+
+def reach_rows(body: Body, route: Route, state: State, sides: int = REACH_SIDES):
+    """① as linear inequalities G x <= h in the torso position x = (x_c, y_c).
+
+    For every limb k on a hold and every direction u_i of the polygon:
+        u_i . (p_k - x - o_k) <= L_k cos(pi / sides)
+    which is the inscribed regular polygon of the disc |p_k - x - o_k| <= L_k.
+    """
+    c = math.cos(math.pi / sides)
+    rows, rhs, owner = [], [], []
+    for limb, (cx, cy) in centres(body, route, state).items():
+        for i in range(sides):
+            a = 2 * math.pi * i / sides
+            u = (math.cos(a), math.sin(a))
+            rows.append((-u[0], -u[1]))
+            rhs.append(body.L[limb] * c - (u[0] * cx + u[1] * cy))
+            owner.append(limb)
+    return np.array(rows, dtype=float), np.array(rhs, dtype=float), owner
+
+
+def _clip(poly, a, b, c):
+    """Keep the part of a convex polygon where a*x + b*y <= c."""
+    out = []
+    n = len(poly)
+    for i in range(n):
+        p, q = poly[i], poly[(i + 1) % n]
+        fp, fq = a * p[0] + b * p[1] - c, a * q[0] + b * q[1] - c
+        if fp <= 0:
+            out.append(p)
+        if fp * fq < 0:
+            t = fp / (fp - fq)
+            out.append((p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])))
+    return out
+
+
+def torso_region(body: Body, route: Route, state: State, sides: int = 128) -> list:
+    """Every torso position from which all limbs reach their holds, as a polygon.
+
+    This is the intersection of one disc per limb (centre p_k - o_k, radius
+    L_k), each replaced by an inscribed polygon with `sides` sides. An empty
+    list means no position reaches every hold. The intersection of discs is
+    convex, which section 4.2 relies on.
+    """
+    G, h, _ = reach_rows(body, route, state, sides)
+    cs = list(centres(body, route, state).values())
+    big = max(body.L.values()) + 1.0
+    x0, y0 = cs[0]
+    poly = [(x0 - big, y0 - big), (x0 + big, y0 - big), (x0 + big, y0 + big), (x0 - big, y0 + big)]
+    for (a, b), c in zip(G, h):
+        poly = _clip(poly, a, b, c)
+        if len(poly) < 3:
+            return []
+    return poly
 
 
 def check(body: Body, route: Route, state: State, no_force: str | None = None) -> Result:
@@ -186,4 +274,6 @@ def check(body: Body, route: Route, state: State, no_force: str | None = None) -
     early = precheck(body, route, state, no_force)
     if early is not None:
         return early
-    raise NotImplementedError("the six constraints are added in units 2.1 to 2.9")
+    if not torso_region(body, route, state, REACH_SIDES):
+        return Result(ok=False, reason="reach")
+    raise NotImplementedError("constraints 2 to 6 are added in units 2.2 to 2.9")
