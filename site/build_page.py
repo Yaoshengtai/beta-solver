@@ -80,6 +80,7 @@ def collect_data() -> dict:
             "move": legend.move_figure(),
             "convex": legend.convex_figure(),
             "twochecks": legend.twochecks_figure(),
+            "checker": legend.checker_figure(),
             # the four typical holds of section 3.2; a sidepull faces right here
             "direction_picks": [{"type": "jug"}, {"type": "sloper"}, {"type": "sidepull", "dir": 0}, {"type": "undercling"}],
         },

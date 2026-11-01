@@ -758,3 +758,48 @@ def twochecks_figure() -> dict:
             "t_release": e.t_release, "t_catch": e.t_catch,
         })
     return _round({"panels": out, "limb": "RH"})
+
+
+# ------------------------------------------------------------ one move: cost, types, candidates
+
+def checker_route() -> Route:
+    holds = [Hold("H1", 1.25, 1.95, "jug"), Hold("H2", 1.70, 1.90, "crimp"), Hold("H3", 1.15, 2.35, "pinch"),
+             Hold("H4", 1.95, 2.30, "sidepull", dir=180), Hold("H5", 1.55, 2.50, "jug"), Hold("H6", 2.05, 1.95, "sloper"),
+             Hold("H7", 1.05, 2.15, "crimp"),
+             Hold("F1", 1.25, 0.75, "foot_big"), Hold("F2", 1.70, 0.80, "foot_big"), Hold("F3", 1.45, 1.10, "foot_chip"),
+             Hold("F4", 1.95, 1.20, "foot_big"), Hold("F5", 1.00, 1.05, "foot_chip")]
+    return Route("checker", "Move checker", "Every move from one state.", holds, ("H1", "H2"), "H5")
+
+
+def checker_figure() -> dict:
+    """Data for the single-move checker in #move: every candidate move from two states, checked."""
+    from betasolver.moves import COST, Checker, cost, crossed, distance
+    from betasolver.stance import State
+
+    route, body = checker_route(), make_body(AVA)
+    presets = []
+    for key, label, state in (("four", "All four on", State("H1", "H2", "F1", "F2")),
+                              ("hang", "Left foot hanging", State("H1", "H2", None, "F2"))):
+        C = Checker(body, route)
+        start = C.check(state)
+        pose = _keyframe(body, route, state, start)  # same forces, body drawn low in its allowed range
+        moves = []
+        for m, res in C.candidates(state):
+            e = {"limb": m.limb, "to": m.to, "kind": m.kind, "describe": m.describe(route), "swing": m.swing,
+                 "distance": distance(route, m), "crossed_after": crossed(route, m.new_state)}
+            if res is None:
+                e["status"] = "pruned"
+            else:
+                e.update({"status": "ok" if res.ok else "fail", "t_release": res.t_release, "t_catch": res.t_catch,
+                          "failure": res.failure, "cost": cost(route, AVA.w_cross, res)})
+            moves.append(e)
+        presets.append({"key": key, "label": label, "state": state.as_dict(), "crossed": crossed(route, state),
+                        "torso": pose["torso"], "t": start.t, "joints": pose["joints"],
+                        "moves": moves, "solves": C.solves})
+    return _round({
+        "holds": [{**h, "role": route.role(h["id"])} for h in route.to_dict()["holds"]],
+        "climber": {"key": AVA.key, "name": AVA.name, "head": list(body.head), "w_cross": AVA.w_cross},
+        "cost": COST,
+        "presets": presets,
+        "view": {"x0": 0.75, "y0": 0.5, "x1": 2.35, "y1": 2.75},
+    })

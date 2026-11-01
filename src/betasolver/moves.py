@@ -213,3 +213,111 @@ def region(body: Body, route: Route, state: State, limb: str, inside, rays: int 
                 hi = mid
         poly.append((inside[0] + lo * math.cos(a), inside[1] + lo * math.sin(a)))
     return poly
+
+
+# ------------------------------------------------------------ cost, move types and candidates (section 4.4)
+
+# Style costs in the units of t. w_cross comes from the climber profile.
+COST = {
+    "c0": 0.03,        # every move: prefer fewer moves
+    "lam_d": 0.05,     # per metre the limb travels: prefer shorter moves
+    "c_cut": 0.10,     # taking a foot off
+    "cross_gap": 0.10,  # hands count as crossed when the left is this far right of the right (m)
+}
+
+
+def crossed(route: Route, state: State, gap: float = COST["cross_gap"]) -> bool:
+    """Are the hands crossed: the left hand more than `gap` to the right of the right hand?"""
+    return route.hold(state.LH).x - route.hold(state.RH).x > gap
+
+
+def distance(route: Route, move: Move) -> float:
+    """How far the limb travels; zero when a foot comes off or goes on from hanging."""
+    if move.frm is None or move.to is None:
+        return 0.0
+    a, b = route.hold(move.frm), route.hold(move.to)
+    return ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
+
+
+def cost(route: Route, w_cross: float, res: MoveResult) -> dict | None:
+    """The cost of a move that works, term by term (section 4.4); None for a move that fails.
+
+        w = max(t_release, t_catch) + c0 + lam_d |p_B - p_A| + w_cross [enters a crossed state] + c_cut [cut]
+    """
+    if not res.ok:
+        return None
+    m = res.move
+    enters = crossed(route, m.new_state) and not crossed(route, m.state)
+    terms = {
+        "difficulty": res.difficulty,
+        "step": COST["c0"],
+        "distance": COST["lam_d"] * distance(route, m),
+        "cross": w_cross if enters else 0.0,
+        "cut": COST["c_cut"] if m.kind == "cut" else 0.0,
+    }
+    terms["total"] = sum(terms.values())
+    return terms
+
+
+def targets_for(route: Route, state: State, limb: str) -> list:
+    """Every hold the limb may move to under the rules: its own use, hands never hang, a hand and a
+    foot share a hold only if feet may use it (`Hold.usable_by` and the route's flag)."""
+    out = []
+    for h in route.holds:
+        if h.id != state.hold(limb) and h.usable_by(limb, route.allow_feet_on_handholds):
+            out.append(h.id)
+    if limb in FEET and state.hold(limb) is not None:
+        out.append(None)  # a foot can always come off
+    return out
+
+
+class Checker:
+    """State checks for one climber on one route, cached by (state, no_force).
+
+    Each candidate move costs at most one new check: the catch check (the
+    one that fails most often) first; the release check depends only on the
+    state and the limb, so it is shared by every target of that limb.
+    """
+
+    def __init__(self, body: Body, route: Route):
+        self.body, self.route = body, route
+        self.cache: dict = {}
+        self.solves = 0
+
+    def check(self, state: State, no_force: str | None = None) -> Result:
+        key = (state, no_force)
+        if key not in self.cache:
+            self.solves += 1
+            self.cache[key] = check(self.body, self.route, state, no_force)
+        return self.cache[key]
+
+    def possible(self, move: Move) -> bool:
+        """Cheap geometric filter before any full check: the new state passes the pairwise
+        distance test, and some body position meets reach and flexibility for all its holds."""
+        from .stance import _geometry_ok, precheck
+
+        s1 = move.new_state
+        early = precheck(self.body, self.route, s1)
+        if early is not None and early.reason == "reach":
+            return False
+        return _geometry_ok(self.body, self.route, s1)
+
+    def evaluate(self, move: Move) -> MoveResult:
+        s0, s1, k = move.state, move.new_state, move.limb
+        catch = self.check(s1, k) if move.to is not None else None
+        if catch is not None and not catch.ok:
+            return MoveResult(move, self.check(s0), None if move.frm is None else self.check(s0, k), catch, self.check(s1))
+        release = self.check(s0, k) if move.frm is not None else None
+        return MoveResult(move, self.check(s0), release, catch, self.check(s1))
+
+    def candidates(self, state: State) -> list:
+        """Every move from `state` under the rules, each tagged 'pruned' or with its MoveResult."""
+        out = []
+        for limb in state.on() + tuple(l for l in FEET if state.hold(l) is None):
+            for to in targets_for(self.route, state, limb):
+                move = Move(state, limb, to)
+                if to is not None and not self.possible(move):
+                    out.append((move, None))
+                else:
+                    out.append((move, self.evaluate(move)))
+        return out
