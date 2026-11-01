@@ -7,8 +7,8 @@ the smallest effort t.
 
 This module holds the framework (states, unknowns, result type, checks done
 before any solving) and the constraints built so far: reach, direction,
-strength, in-plane balance, no tipping, no barn-door, plus the linear
-program that puts them together. Flexibility is added in unit 2.7.
+strength, in-plane balance, no tipping, no barn-door and flexibility,
+plus the linear program that puts them together.
 """
 
 from __future__ import annotations
@@ -509,6 +509,29 @@ def barndoor_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], l
     return A, np.zeros(1), ["no barn-door"], G, np.array(rhs, dtype=float), owner
 
 
+# ------------------------------------------------------------ ⑥ flexibility
+
+def flex_rows(body: Body, route: Route, state: State, lay: Layout):
+    """⑥ as linear inequalities on the body position: no foot higher than the hip plus flex H.
+
+        p_ky <= y_c - 0.03 H + flex H,   i.e.   -y_c <= -p_ky + body.foot_limit((0, 0))
+    for every foot on a hold, including a foot that only rests there (no_force):
+    it still has to get there.
+    """
+    rows, rhs, owner = [], [], []
+    top = body.foot_limit((0.0, 0.0))  # highest foot relative to y_c
+    for limb in state.on():
+        if limb not in FEET:
+            continue
+        row = np.zeros(lay.size)
+        row[lay[("x", None)].start + 1] = -1.0
+        rows.append(row)
+        rhs.append(top - route.hold(state.hold(limb)).y)
+        owner.append(limb)
+    G = np.array(rows, dtype=float).reshape(len(rows), lay.size)
+    return G, np.array(rhs, dtype=float), owner
+
+
 # ------------------------------------------------------- the linear program
 
 def variable_bounds(lay: Layout) -> list:
@@ -573,7 +596,7 @@ class Program:
 
 
 # The constraint families in the order they are built; `upto` stops after one of them.
-BUILT = ("reach", "direction", "strength", "inplane", "outofwall", "barndoor")
+BUILT = ("reach", "direction", "strength", "inplane", "outofwall", "barndoor", "flex")
 
 
 def assemble(body: Body, route: Route, state: State, no_force: str | None = None, upto: str | None = None) -> Program:
@@ -609,6 +632,9 @@ def assemble(body: Body, route: Route, state: State, no_force: str | None = None
         Ad, bd, od, Gd, hd, gd = barndoor_rows(body, route, state, AF, lay)
         Aeq.append(Ad); beq.append(bd); eq_owners += [("barndoor", n) for n in od]
         Gs.append(Gd); hs.append(hd); owners += [("barndoor", l) for l in gd]
+    if "flex" in keep:
+        Gf, hf, of = flex_rows(body, route, state, lay)
+        Gs.append(Gf); hs.append(hf); owners += [("flex", l) for l in of]
     A = np.vstack(Aeq) if Aeq else np.zeros((0, lay.size))
     b = np.concatenate(beq) if beq else np.zeros(0)
     return Program(lay, np.vstack(Gs), np.concatenate(hs), owners, A, b, eq_owners)
@@ -710,4 +736,4 @@ def check(body: Body, route: Route, state: State, no_force: str | None = None) -
         return early
     if not torso_region(body, route, state, REACH_SIDES):
         return Result(ok=False, reason="reach")
-    raise NotImplementedError("flexibility is added in unit 2.7")
+    raise NotImplementedError("the full check and its diagnosis are added in unit 2.8")

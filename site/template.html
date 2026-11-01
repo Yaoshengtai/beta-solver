@@ -744,7 +744,20 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p data-text="door-impl"></p>
   </details>
   <h3 id="check-flex">Flexibility</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.7</span><p>A foot cannot go too far above the hip.</p></div>
+  <p><b>The idea.</b> A foot cannot go too far above the hip. How far depends on the climber's flexibility, \(\text{flex}\) in the profile. The hip moves with the body, so this too limits where the body can be: to stand on a high foot, the body has to come up.</p>
+  <p><b>The math.</b> For every foot on a hold, including one that only rests there:</p>
+  <div class="math-block" data-math="flex-row"></div>
+  <div class="tbl-wrap"><table class="tbl" data-draw="flex-table"></table></div>
+
+  <figure class="fig" id="fig-flex">
+    <div class="tip-row" data-draw="flex"></div>
+    <figcaption><b>The same high foothold for two versions of Ava.</b> Dashed grey line: hip height. Shaded band and red line: how high a foot can go. Left: Ava is flexible, so the body can sit at a height where every limb reaches and the high foot is inside the band. Right: Ava with Ben's stiff hips. Even standing as tall as the low foot allows, the high foothold stays above the line, so the state check fails.</figcaption>
+  </figure>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>One linear inequality per foot on a hold, on the body height only: \(-y_c \le -p_{k,y} + (\text{flex} - 0.03)\,H\). It applies to a resting foot too, since that foot still has to get there. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>flex_rows</code>.</p>
+  </details>
   <h3 id="check-problem">The full problem and why it fails</h3>
   <div class="planned"><span class="chip">Planned · unit 2.8</span><p>All six constraints as one convex program, solved exactly, with an example of each failure reason.</p></div>
   <h3 id="check-lp">From cones to a linear program</h3>
@@ -2286,6 +2299,56 @@ var Draw = (function () {
       m2(D.r) + " m × " + m2(D.F) + " = " + m3(D.panels[0].cap) + " for " + C.name + " on a jug, and “twist needed” is the smallest twist over every way of meeting the other constraints with t ≤ 1, found by a separate linear program. The second stage of the solver now also keeps |τ| as small as it can. Code: stance.py, barndoor_rows.";
   }
   if (DATA.figures && DATA.figures.barndoor) renderBarndoor(DATA.figures.barndoor);
+
+  /* ---------- #check: flexibility (unit 2.7) ---------- */
+  function renderFlex(X, B) {
+    var row = document.querySelector('[data-draw="flex"]');
+    if (!row) return;
+    function m2(x) { return x.toFixed(2); }
+    function cm(x) { return Math.round(Math.abs(x) * 100) + " cm"; }
+    var hip = Math.abs(B.hip[1]);
+    document.querySelector('[data-math="flex-row"]').textContent =
+      "\\[ p_{k,y} \;\\le\; y_c - " + hip + "\\,H + \\text{flex}\\cdot H, \\qquad k \\in A \\cap \\text{feet} \\]";
+    var tb = document.querySelector('[data-draw="flex-table"]');
+    tb.innerHTML = "<thead><tr><th>Climber</th><th>flex</th><th>Highest foot</th></tr></thead>";
+    var body = document.createElement("tbody");
+    var rows = DATA.model.climbers.concat(DATA.model.variants.filter(function (v) { return v.flex !== undefined && v.key === "A_stiff"; }));
+    rows.forEach(function (c) {
+      var tr = document.createElement("tr"), off = c.flex * c.H;
+      [c.name, (c.flex > 0 ? "+" : c.flex < 0 ? "−" : "") + Math.abs(c.flex).toFixed(2),
+       off === 0 ? "at hip height" : cm(off) + (off > 0 ? " above the hip" : " below the hip")].forEach(function (t, i) {
+        var td = document.createElement("td"); td.textContent = t; if (i === 1) td.className = "num"; tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    tb.appendChild(body);
+
+    var v = X.view;
+    X.panels.forEach(function (P) {
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var sc = Draw.scene(cell, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 190, pad: 4, title: P.name });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      var lo = Math.min(P.hip, P.limit), hi = Math.max(P.hip, P.limit);
+      Draw.el(sc.layers.trail, "rect", { x: sc.X(v.x0), y: sc.Y(hi), width: ((v.x1 - v.x0) * sc.k).toFixed(1), height: ((hi - lo) * sc.k).toFixed(1) }, "region");
+      Draw.el(sc.layers.over, "line", { x1: sc.X(v.x0), y1: sc.Y(P.hip), x2: sc.X(v.x1), y2: sc.Y(P.hip) }, "anno-line");
+      Draw.el(sc.layers.over, "line", { x1: sc.X(v.x0), y1: sc.Y(P.limit), x2: sc.X(v.x1), y2: sc.Y(P.limit) }, "limit-line");
+      Draw.el(sc.layers.over, "text", { x: sc.X(v.x0) + 4, y: sc.Y(P.hip) + (P.limit > P.hip ? 13 : -5) }, "anno").textContent = "hip";
+      Draw.el(sc.layers.over, "text", { x: sc.X(v.x0) + 4, y: sc.Y(P.limit) + (P.limit > P.hip ? -5 : 13) }, "limit-text").textContent = "highest foot";
+      X.holds.forEach(function (h) { Draw.hold(sc, h, { used: true }); });
+      Draw.figure(sc, { torso: P.torso, joints: P.joints }, { key: "A", head: P.head }, P.ok ? {} : { limbClass: { RF: "limb-out" } });
+      Draw.com(sc, P.torso);
+      var st = document.createElement("span");
+      st.style.fontWeight = "600"; st.style.color = P.ok ? "var(--easy)" : "var(--limit)";
+      st.textContent = P.ok ? "✓ Holds" : "✗ Not flexible enough";
+      var note = document.createElement("span");
+      note.textContent = P.name + " (flex " + (P.flex > 0 ? "+" : "−") + Math.abs(P.flex).toFixed(2) + "): " + (P.ok
+        ? "the foothold at " + m2(P.foot) + " m is below the limit of " + m2(P.limit) + " m in this position."
+        : "standing as tall as the other holds allow, the foot can go up to " + m2(P.best_limit) + " m, but the foothold is at " + m2(P.foot) + " m.");
+      cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+    });
+  }
+  if (DATA.figures && DATA.figures.flex) renderFlex(DATA.figures.flex, DATA.model.body);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

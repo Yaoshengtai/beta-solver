@@ -356,7 +356,7 @@ def test_lp_size_matches_plan():
     # section 3.7: about 17 variables and 180 constraints for a four-limb state
     P = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
     assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (6, 17)
-    assert {o[0] for o in P.owners} == {"reach", "direction", "strength", "outofwall", "barndoor"}
+    assert {o[0] for o in P.owners} == {"reach", "direction", "strength", "outofwall", "barndoor", "flex"}
     assert {o[0] for o in P.eq_owners} == {"inplane", "outofwall", "barndoor"}
     assert 150 <= len(P.h) + len(P.b) <= 185
     # a figure can ask for the model as it stood in an earlier section
@@ -574,3 +574,51 @@ def test_barndoor_rows_shape():
     assert A.shape == (1, lay.size) and list(bvec) == [0.0] and names == ["no barn-door"]
     assert G.shape == (4, lay.size) and owner == ["LH", "LH", "RH", "RH"]
     assert np.allclose(h, HOLD_TYPES["jug"].r * AVA.F["jug"])
+
+
+
+# ------------------------------------------------------------ ⑥ flexibility
+from betasolver.model import VARIANTS  # noqa: E402
+from betasolver.stance import flex_rows  # noqa: E402
+
+
+def _high_foot(y):
+    holds = [Hold("H1", 1.3, 2.25, "jug"), Hold("H2", 1.75, 2.3, "jug"), Hold("H3", 1.5, 3.6, "jug"),
+             Hold("F1", 1.85, y, "foot_big"), Hold("F2", 1.25, 0.75, "foot_big")]
+    return route(holds=holds)
+
+
+def test_flexible_climber_reaches_the_high_foot_stiff_one_does_not():
+    # step 10: the same state is feasible with flex = +0.08 and infeasible with flex = -0.10
+    r, s = _high_foot(1.45), State("H1", "H2", "F2", "F1")
+    stiff = VARIANTS["A_stiff"]
+    assert AVA.flex == 0.08 and stiff.flex == -0.10
+    assert solve(make_body(AVA), r, s)["ok"]
+    assert not solve(make_body(stiff), r, s)["ok"]
+    # every other constraint can be met: flexibility alone decides it
+    assert solve(make_body(stiff), r, s, upto="barndoor")["ok"]
+
+
+def test_solution_keeps_feet_below_the_limit():
+    for c in (AVA, BEN, CAL):
+        b = make_body(c)
+        r, s = _high_foot(1.25), State("H1", "H2", "F2", "F1")
+        lp = solve(b, r, s)
+        assert lp["ok"]
+        for limb in ("LF", "RF"):
+            assert r.hold(s.hold(limb)).y <= b.foot_limit(lp["torso"]) + 1e-9
+
+
+def test_a_resting_foot_must_also_get_there():
+    r, s = _high_foot(1.45), State("H1", "H2", "F2", "F1")
+    stiff = make_body(VARIANTS["A_stiff"])
+    assert not solve(stiff, r, s, no_force="RF")["ok"]
+
+
+def test_flex_rows_shape():
+    b, r, s = make_body(AVA), _high_foot(1.45), State("H1", "H2", "F2", "F1")
+    lay = layout(limb_sets(s)[1])
+    G, h, owner = flex_rows(b, r, s, lay)
+    assert G.shape == (2, lay.size) and owner == ["LF", "RF"]
+    assert np.all(G[:, lay[("x", None)].start + 1] == -1.0)
+    assert h[1] == pytest.approx(b.foot_limit((0, 0)) - 1.45)

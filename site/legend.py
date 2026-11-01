@@ -494,3 +494,51 @@ def barndoor_figure() -> dict:
         "force_scale": 0.3,
         "view": {"x0": 0.95, "y0": 0.62, "x1": 2.5, "y1": 2.5},
     })
+
+
+# ------------------------------------------------------------ ⑥ flexibility
+
+def _y_range(region, x):
+    lo, hi = mid_y(region, x, 0.0), mid_y(region, x, 1.0)
+    return lo, hi
+
+
+def flex_figure() -> dict:
+    """Data for the flexibility figure in #check: one high foothold, Ava and a less flexible Ava.
+
+    Flexible: the state check holds; the body is drawn in the middle of the
+    heights that satisfy both reach and flexibility. Stiff: the state check
+    fails; the body is drawn as tall as the other holds allow, and the foot
+    is still above the limit.
+    """
+    from betasolver.model import VARIANTS
+    from betasolver.stance import State, solve, torso_region
+
+    r = _route("flex", [Hold("H1", 1.30, 2.25, "jug"), Hold("H2", 1.75, 2.30, "jug"), Hold("F1", 1.85, 1.45, "foot_big"),
+                        Hold("F2", 1.25, 0.75, "foot_big"), Hold("T", 1.50, 3.60, "jug")], ("H1", "H2"))
+    state = State("H1", "H2", "F2", "F1")
+    ends = {l: (r.hold(h).x, r.hold(h).y) for l, h in state.as_dict().items()}
+    high = r.hold("F1").y
+    panels = []
+    for c in (AVA, VARIANTS["A_stiff"]):
+        body = make_body(c)
+        full = solve(body, r, state)
+        base = full if full["ok"] else solve(body, r, state, upto="barndoor")
+        region = torso_region(body, r, state)
+        x = base["torso"][0]
+        lo, hi = _y_range(region, x)
+        need = high - body.foot_limit((0.0, 0.0))  # lowest y_c that lets the foot reach its hold
+        y = (max(lo, need) + hi) / 2 if full["ok"] else hi - 0.005
+        torso = (x, y)
+        panels.append({
+            "climber": c.key, "name": c.name, "flex": c.flex, "H": c.H, "ok": full["ok"],
+            "torso": [x, y], "joints": body.joints(torso, ends), "head": list(body.head),
+            "hip": y + body.offsets["LF"][1], "limit": body.foot_limit(torso), "foot": high,
+            "best_limit": body.foot_limit((x, hi)), "t": full["t_exact"] if full["ok"] else None,
+        })
+    return _round({
+        "holds": [{**h, "role": "normal"} for h in r.to_dict()["holds"] if h["id"] != "T"],
+        "state": state.as_dict(),
+        "panels": panels,
+        "view": {"x0": 0.85, "y0": 0.55, "x1": 2.25, "y1": 2.6},
+    })

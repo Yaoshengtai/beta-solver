@@ -150,3 +150,7 @@ def test_barndoor_figure_embedded(html):
     D = json.loads(raw)["figures"]["barndoor"]
     assert [p["ok"] for p in D["panels"]] == [True, False]
     assert 'data-draw="barndoor"' in html and "Planned · unit 2.6" not in html
+
+
+def test_flex_figure_embedded(html):
+    assert 'data-draw="flex"' in html and 'data-draw="flex-table"' in html and "Planned · unit 2.7" not in html

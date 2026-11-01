@@ -138,3 +138,10 @@ def test_barndoor_figure():
     assert not side["ok"] and side["needed"] > side["cap"]
     assert min(between["feet_x"]) < between["hand_x"] < max(between["feet_x"])
     assert min(side["feet_x"]) > side["hand_x"]
+
+
+def test_flex_figure():
+    X = legend.flex_figure()
+    ava, stiff = X["panels"]
+    assert ava["ok"] and ava["foot"] <= ava["limit"] + TOL
+    assert not stiff["ok"] and stiff["foot"] > stiff["best_limit"]
