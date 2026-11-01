@@ -187,3 +187,13 @@ def test_convex_figure_embedded(html):
     assert max(p["t_min"] for p in X["points"]) <= X["difficulty"] + 2e-3
     assert X["sweep"]["all_feasible"] and X["sweep"]["moves"] == 100
     assert 'data-draw="convex-chart"' in html and "Planned · unit 3.2" not in html
+
+
+
+def test_twochecks_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    T = json.loads(raw)["figures"]["twochecks"]
+    works, fails = T["panels"]
+    assert works["ok"] and works["x1"] and works["x2"] and len(works["S3"]) == 72
+    assert not fails["ok"] and fails["x1"] is None and fails["x2"]
+    assert 'data-draw="twochecks"' in html and "Planned · unit 3.3" not in html

@@ -720,3 +720,41 @@ def convex_figure() -> dict:
         "t": {"start": e.start.t, "release": e.t_release, "catch": e.t_catch, "end": e.end.t},
         "points": [{"phase": p["phase"], "u": p["u"], "t_min": p["t_min"], "t_mix": p["t_mix"], "ok": p["ok_mix"]} for p in pts],
     }) | {"sweep": path_sweep()}  # not rounded: the worst excess is of order 1e-7
+
+
+# ------------------------------------------------------------ one move: why two checks are enough
+
+def twochecks_figure() -> dict:
+    """Data for the S3 / D_A / D_B figure in #move: the two moves of the animation, in body-position space.
+
+    S3 is traced by the state check itself (bisection along rays); D_A and D_B
+    are the moving hand's reach discs for its old and new hold.
+    """
+    from betasolver.moves import Move, evaluate, region
+    from betasolver.stance import State
+
+    body = make_body(AVA)
+    cases = [
+        ("works", [Hold("H1", 1.25, 2.05, "jug"), Hold("H2", 1.75, 2.00, "jug"), Hold("H3", 1.85, 2.45, "jug"),
+                   Hold("F1", 1.30, 0.90, "foot_big"), Hold("F2", 1.75, 1.00, "foot_big")]),
+        ("release", [Hold("H1", 1.29, 2.27, "sidepull", dir=0), Hold("H2", 2.02, 1.67, "jug"), Hold("H3", 1.41, 2.35, "jug"),
+                     Hold("F1", 1.10, 0.93, "foot_big"), Hold("F2", 1.43, 0.74, "foot_big")]),
+    ]
+    out = []
+    for key, holds in cases:
+        r = _route("move", holds + [Hold("T", 1.5, 3.6, "jug")], ("H1", "H2"))
+        state = State("H1", "H2", "F1", "F2")
+        m = Move(state, "RH", "H3")
+        e = evaluate(body, r, m)
+        inside = e.release.torso if e.release.ok else e.catch.torso
+        S3 = region(body, r, state, "RH", inside)
+        o, L = body.offsets["RH"], body.L["RH"]
+        disc = lambda h: {"c": [r.hold(h).x - o[0], r.hold(h).y - o[1]], "r": L, "hold": h}
+        out.append({
+            "key": key, "ok": e.ok, "describe": m.describe(r),
+            "S3": [list(p) for p in S3], "DA": disc("H2"), "DB": disc("H3"),
+            "x1": list(e.release.torso) if e.release.ok else None,
+            "x2": list(e.catch.torso) if e.catch.ok else None,
+            "t_release": e.t_release, "t_catch": e.t_catch,
+        })
+    return _round({"panels": out, "limb": "RH"})
