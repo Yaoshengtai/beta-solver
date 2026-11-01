@@ -219,34 +219,43 @@ def cheapest(g: Graph, cap: float, max_expansions: int = MAX_EXPANSIONS):
 
 
 def _stuck(g: Graph, order: list, parent: dict) -> dict:
-    """Where an infeasible search got stuck: the highest state it reached (by its lower hand),
-    and the first failing hand move from there toward a higher hold, with the step-3 diagnosis."""
+    """Where an infeasible search got stuck: the highest states it reached (by the lower hand, then the
+    higher), and the failing hand move from there toward a higher hold that says most. A real failing
+    check beats a move ruled out by geometry, a move that only fails at the catch (the climber could let
+    go, but not hold the new hold) beats one that cannot even let go, then the nearest hold wins."""
     reached = [s for s, _ in order]
-    y = lambda s: min(g.route.hold(s.LH).y, g.route.hold(s.RH).y)
-    top = max(reached, key=lambda s: (y(s), max(g.route.hold(s.LH).y, g.route.hold(s.RH).y)))
-    steps, _ = _path(parent, top)
+    lo = lambda s: min(g.route.hold(s.LH).y, g.route.hold(s.RH).y)
+    hi = lambda s: max(g.route.hold(s.LH).y, g.route.hold(s.RH).y)
+    best_h = max((lo(s), hi(s)) for s in reached)
+    tops = [s for s in reached if (lo(s), hi(s)) == best_h]
     best = None
-    for move, res in g.checker.candidates(top):
-        if move.limb not in HANDS or move.to is None:
-            continue
-        h = g.route.hold(move.to)
-        if h.y <= g.route.hold(top.hold(move.limb)).y:
-            continue
-        if res is None:
-            f = {"phase": "catch", "reason": "reach", "limb": move.limb, "hold": move.to}
-        elif not res.ok:
-            f = dict(res.failure)
-            f.setdefault("limb", move.limb)
-            if f.get("limb") is None:
+    for top in tops:
+        for move, res in g.checker.candidates(top):
+            if move.limb not in HANDS or move.to is None:
+                continue
+            h = g.route.hold(move.to)
+            if h.y <= g.route.hold(top.hold(move.limb)).y:
+                continue
+            if res is None:
+                f, rank = {"phase": "catch", "reason": "reach", "limb": move.limb, "hold": move.to}, 2
+            elif not res.ok:
+                f = dict(res.failure)
+                f["limb"] = f.get("limb") or move.limb
+                if f.get("hold") is None or f["phase"] == "release":
+                    f["hold"] = move.to
                 f["limb"] = move.limb
-            if f.get("hold") is None:
-                f["hold"] = move.to
-        else:
-            continue
-        key = (0 if move.to == g.route.finish else 1, h.y)
-        if best is None or key < best[0]:
-            best = (key, f)
-    fail = best[1] if best else {"phase": None, "reason": None, "limb": None, "hold": None}
+                rank = 0 if f["phase"] in ("catch", "end") else 1
+            else:
+                continue
+            key = (rank, h.y)
+            if best is None or key < best[0]:
+                best = (key, f, top)
+    if best is None:
+        top = tops[0]
+        fail = {"phase": None, "reason": None, "limb": None, "hold": None}
+    else:
+        _, fail, top = best
+    steps, _ = _path(parent, top)
     return {"step": len(steps) + 1, "state": top.as_dict(), **fail}
 
 

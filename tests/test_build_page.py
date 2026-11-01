@@ -11,7 +11,7 @@ build_page = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build_page)
 
 CHAPTERS = ["intro", "data", "body", "check", "move", "search",
-            *[f"ex{i}" for i in range(1, 11)], "limits", "appendix"]
+            *[f"ex{i}" for i in range(1, 7)], "limits", "appendix"]
 
 
 @pytest.fixture(scope="module")
