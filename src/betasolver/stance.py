@@ -232,6 +232,49 @@ def reach_rows(body: Body, route: Route, state: State, sides: int = REACH_SIDES)
     return np.array(rows, dtype=float), np.array(rhs, dtype=float), owner
 
 
+# ------------------------------------------------------------ ② direction
+
+def cone(route: Route, state: State, limb: str) -> tuple[float, float]:
+    """Centre direction theta and half-width alpha (degrees) of limb k's cone K_k.
+
+    A foot on a hand hold uses the foothold's cone (step 1).
+    """
+    kind, theta = route.hold(state.hold(limb)).contact(limb)
+    return theta, float(kind.alpha)
+
+
+def in_cone(f, theta: float, alpha: float, tol: float = 1e-9) -> bool:
+    """Exact form of ②: d^T f >= |f| cos(alpha), with d the unit vector at angle theta."""
+    t = math.radians(theta)
+    d = (math.cos(t), math.sin(t))
+    return d[0] * f[0] + d[1] * f[1] >= math.hypot(f[0], f[1]) * math.cos(math.radians(alpha)) - tol
+
+
+def cone_normals(theta: float, alpha: float):
+    """Inward normals of the two edges of the cone. In 2D the cone is exactly
+    {f : n_minus . f >= 0 and n_plus . f >= 0} when alpha < 90 degrees."""
+    lo, hi = math.radians(theta - alpha), math.radians(theta + alpha)
+    return (-math.sin(lo), math.cos(lo)), (math.sin(hi), -math.cos(hi))
+
+
+def direction_rows(route: Route, state: State, AF: tuple[str, ...], lay: Layout):
+    """② as linear inequalities G z <= 0 on the solver's variable vector z.
+
+    Two rows per limb that pushes: -n . f_k <= 0 for both edge normals n.
+    """
+    rows, owner = [], []
+    for limb in AF:
+        theta, alpha = cone(route, state, limb)
+        sl = lay[("f", limb)]
+        for n in cone_normals(theta, alpha):
+            row = np.zeros(lay.size)
+            row[sl] = (-n[0], -n[1])
+            rows.append(row)
+            owner.append(limb)
+    G = np.array(rows, dtype=float).reshape(len(rows), lay.size)
+    return G, np.zeros(len(rows)), owner
+
+
 def _clip(poly, a, b, c):
     """Keep the part of a convex polygon where a*x + b*y <= c."""
     out = []

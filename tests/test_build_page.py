@@ -110,3 +110,7 @@ def test_reach_figure_embedded(html):
     R = json.loads(raw)["figures"]["reach"]
     assert len(R["region"]) > 10 and set(R["presets"]) == {"good", "low"}
     assert 'data-draw="reach"' in html
+
+
+def test_direction_figure_slots(html):
+    assert 'data-draw="direction"' in html and 'data-draw="direction-reset"' in html

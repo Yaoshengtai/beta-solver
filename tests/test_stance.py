@@ -165,3 +165,64 @@ def test_region_is_convex():
     turns = [(reg[(i + 1) % n][0] - reg[i][0]) * (reg[(i + 2) % n][1] - reg[i][1])
              - (reg[(i + 1) % n][1] - reg[i][1]) * (reg[(i + 2) % n][0] - reg[i][0]) for i in range(n)]
     assert all(t >= -1e-12 for t in turns)
+
+
+# ------------------------------------------------------------ ② direction
+from betasolver.model import HOLD_TYPES  # noqa: E402
+from betasolver.stance import cone, cone_normals, direction_rows, in_cone  # noqa: E402
+
+
+def _unit(deg, r=1.0):
+    return (r * math.cos(math.radians(deg)), r * math.sin(math.radians(deg)))
+
+
+@pytest.mark.parametrize("name", list(HOLD_TYPES))
+def test_cone_edges_match_half_width(name):
+    t = HOLD_TYPES[name]
+    theta = 0.0 if t.dir is None else t.dir
+    assert in_cone(_unit(theta), theta, t.alpha)
+    assert in_cone(_unit(theta + t.alpha - 0.5), theta, t.alpha)
+    assert in_cone(_unit(theta - t.alpha + 0.5), theta, t.alpha)
+    assert not in_cone(_unit(theta + t.alpha + 0.5), theta, t.alpha)
+    assert not in_cone(_unit(theta - t.alpha - 0.5), theta, t.alpha)
+
+
+def test_normals_describe_the_same_cone():
+    rng = np.random.default_rng(2)
+    for theta, alpha in [(90, 70), (90, 15), (0, 35), (180, 35), (270, 40)]:
+        nm, npl = cone_normals(theta, alpha)
+        for f in rng.normal(size=(500, 2)):
+            linear = nm[0] * f[0] + nm[1] * f[1] >= -1e-12 and npl[0] * f[0] + npl[1] * f[1] >= -1e-12
+            assert linear == in_cone(f, theta, alpha, tol=1e-12)
+
+
+def test_hanging_works_on_jug_and_sloper_only():
+    up = (0.0, 1.0)
+    assert in_cone(up, 90, HOLD_TYPES["jug"].alpha) and in_cone(up, 90, HOLD_TYPES["sloper"].alpha)
+    assert not in_cone(up, 0, HOLD_TYPES["sidepull"].alpha)
+    assert not in_cone(up, 270, HOLD_TYPES["undercling"].alpha)
+
+
+def test_foot_on_a_hand_hold_uses_the_foothold_cone():
+    r = route(holds=[Hold("H1", 1.2, 1.6, "jug"), Hold("H2", 1.75, 1.55, "undercling"), Hold("H3", 1.5, 3.6, "jug")])
+    s = State("H1", "H2", "H2", None)
+    assert cone(r, s, "RH") == (270.0, HOLD_TYPES["undercling"].alpha)
+    assert cone(r, s, "LF") == (90.0, HOLD_TYPES["foot_big"].alpha)
+
+
+def test_direction_rows_act_on_force_variables_only():
+    r, s = route(), State("H1", "H2", "F1", "F2")
+    A, AF = limb_sets(s, no_force="LF")
+    lay = layout(AF)
+    G, h, owner = direction_rows(r, s, AF, lay)
+    assert G.shape == (2 * len(AF), lay.size) and owner.count("LF") == 0 and np.all(h == 0)
+    used = np.flatnonzero(np.any(G != 0, axis=0))
+    allowed = {i for l in AF for i in range(lay[("f", l)].start, lay[("f", l)].stop)}
+    assert set(used) <= allowed
+    # a straight-up force on every limb satisfies the rows (all these holds point up)
+    z = np.zeros(lay.size)
+    for l in AF:
+        z[lay[("f", l)]] = (0.0, 0.5)
+    assert np.all(G @ z <= 1e-12)
+    z[lay[("f", "LH")]] = (0.5, 0.0)  # sideways on a jug is outside its 70 degrees
+    assert np.any(G @ z > 0)

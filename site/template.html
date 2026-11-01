@@ -277,6 +277,19 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .sub-h { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; margin: 28px 0 8px; }
+.dir-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.dir-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; padding: 8px 4px; border-radius: 6px; background: var(--bg); }
+.dir-cell svg { width: 100%; max-width: 150px; height: auto; touch-action: none; cursor: grab; }
+.dir-cell svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dir-cell b { font-family: var(--font-mono); font-size: 0.85rem; }
+.dir-cell .st { font-size: 0.8rem; font-weight: 600; }
+.dir-cell .st.ok { color: var(--easy); }
+.dir-cell .st.bad { color: var(--limit); }
+.dir-cell .note { font-size: 0.78rem; color: var(--muted); line-height: 1.35; }
+.f-ok { stroke: var(--easy); fill: var(--easy); stroke-width: 2.4; }
+.f-bad { stroke: var(--limit); fill: var(--limit); stroke-width: 2.4; }
+.tip { fill: var(--surface); stroke: var(--ink); stroke-width: 1.4; }
+@media (max-width: 640px) { .dir-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .reach-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .reach-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 .reach-cell svg { touch-action: none; cursor: grab; }
@@ -572,7 +585,21 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>The solver needs linear constraints, so each disc is replaced by the regular polygon with <span data-text="reach-sides"></span> sides inscribed in it: for each direction \(u_i\), \(u_i^\top (p_k - x - o_k) \le L_k \cos(\pi / n)\). The polygon sits inside the circle, so it can only call a reachable hold unreachable, never the reverse, and by at most <span data-text="reach-loss"></span> of the limb length. Before solving, a pair of holds farther apart than the two limbs plus the distance between their attachment points is ruled out at once. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>reach_rows</code>, <code>torso_region</code>, <code>precheck</code>.</p>
   </details>
   <h3 id="check-direction">Direction</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.2</span><p>Each hold can only push on you within a range of directions.</p></div>
+  <p><b>The idea.</b> A hold can only push on a hand or foot within a range of directions: a jug holds you from almost anywhere, a sloper only from right below. Here \(f_k\) is the force <i>from the hold on the limb</i>; hanging still, it points up.</p>
+  <p><b>The math.</b> With \(\theta_k\) the hold's direction and \(\alpha_k\) its half-width (step 1), \(f_k\) must lie in the cone</p>
+  <div class="math-block">\[ f_k \in K_k = \big\{\, f \in \mathbb{R}^2 : d_k^\top f \ge \|f\|_2 \cos\alpha_k \,\big\}, \qquad d_k = (\cos\theta_k,\ \sin\theta_k), \qquad k \in A_F \]</div>
+  <p>that is, at most \(\alpha_k\) away from \(d_k\). Every \(\alpha_k\) is below 90°, so each \(K_k\) is a convex cone. A foot on a hand hold uses the foothold cone.</p>
+
+  <figure class="fig" id="fig-direction">
+    <div class="dir-row" data-draw="direction"></div>
+    <div class="seg" role="group" aria-label="Reset"><button type="button" data-draw="direction-reset">Reset: just hanging</button></div>
+    <figcaption><b>Which forces a hold can give.</b> Drag the tip of each arrow, or focus a panel and use the arrow keys. Green: the hold can push this way. Red: the hand would slip off. Hanging straight down works on a jug and a sloper, but a sidepull or an undercling needs another limb pushing the other way.</figcaption>
+  </figure>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>In two dimensions a cone is exactly the space between its two edges, so ② becomes two linear inequalities per limb with no approximation: \(n_k^{-} \cdot f_k \ge 0\) and \(n_k^{+} \cdot f_k \ge 0\), with \(n_k^{\pm}\) the inward normals of the edges at \(\theta_k \mp \alpha_k\). Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>cone</code>, <code>direction_rows</code>.</p>
+  </details>
   <h3 id="check-strength">Strength and effort</h3>
   <div class="planned"><span class="chip">Planned · unit 2.3</span><p>No limb may exceed its strength; the effort \(t\) is the share of strength used by the most loaded limb.</p></div>
   <h3 id="check-inplane">In-plane balance</h3>
@@ -1710,6 +1737,68 @@ var Draw = (function () {
     draw();
   }
   if (DATA.figures && DATA.figures.reach) renderReach(DATA.figures.reach, DATA.stance.reach_sides);
+
+  /* ---------- #check: direction (unit 2.2) ---------- */
+  function inCone(f, theta, alpha) {
+    var t = theta * Math.PI / 180, n = Math.hypot(f[0], f[1]);
+    return f[0] * Math.cos(t) + f[1] * Math.sin(t) >= n * Math.cos(alpha * Math.PI / 180) - 1e-9;
+  }
+  function renderDirection(types, picks) {
+    var row = document.querySelector('[data-draw="direction"]');
+    if (!row) return;
+    var T = {};
+    types.forEach(function (t) { T[t.name] = t; });
+    var start = [0, 0.2], cells = [];
+    picks.forEach(function (p) {
+      var t = T[p.type], theta = t.dir === null ? p.dir : t.dir;
+      var cell = document.createElement("div"); cell.className = "dir-cell";
+      var sc = Draw.scene(cell, { x0: -0.3, y0: -0.3, x1: 0.3, y1: 0.3, k: 250, pad: 0, title: p.type + ": drag the force arrow" });
+      sc.svg.setAttribute("tabindex", "0");
+      var b = document.createElement("b"); b.textContent = p.type;
+      var st = document.createElement("span"); st.className = "st";
+      var note = document.createElement("span"); note.className = "note"; note.textContent = t.note;
+      cell.appendChild(b); cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+      var c = { sc: sc, st: st, theta: theta, alpha: t.alpha, type: p.type, f: start.slice() };
+      function draw() {
+        Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; });
+        Draw.el(sc.layers.wall, "rect", { x: 0, y: 0, width: sc.W, height: sc.H, rx: 8 }, "w-wall");
+        Draw.sector(sc, 0, 0, c.theta, c.alpha, 0.26);
+        Draw.hold(sc, { x: 0, y: 0, type: c.type, dir: c.theta });
+        var ok = inCone(c.f, c.theta, c.alpha), cls = ok ? "f-ok" : "f-bad";
+        Draw.arrowPx(sc.layers.forces, sc.X(0), sc.Y(0), sc.X(c.f[0]), sc.Y(c.f[1]), cls, 10);
+        Draw.el(sc.layers.over, "circle", { cx: sc.X(c.f[0]), cy: sc.Y(c.f[1]), r: 6 }, "tip");
+        var ang = Math.round(Math.atan2(c.f[1], c.f[0]) * 180 / Math.PI), off = Math.abs(((ang - c.theta + 540) % 360) - 180);
+        st.className = "st " + (ok ? "ok" : "bad");
+        st.textContent = (ok ? "\u2713 holds" : "\u2717 slips") + " (" + off + "\u00b0 off centre, limit " + c.alpha + "\u00b0)";
+      }
+      c.draw = draw;
+      function setFrom(evt) {
+        var pt = sc.svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
+        var q = pt.matrixTransform(sc.svg.getScreenCTM().inverse());
+        var x = sc.ix(q.x), y = sc.iy(q.y), n = Math.hypot(x, y);
+        if (n < 0.06) return;
+        var r = Math.min(n, 0.27); c.f = [x * r / n, y * r / n]; draw();
+      }
+      var dragging = false;
+      sc.svg.addEventListener("pointerdown", function (e) { dragging = true; sc.svg.setPointerCapture(e.pointerId); setFrom(e); e.preventDefault(); });
+      sc.svg.addEventListener("pointermove", function (e) { if (dragging) setFrom(e); });
+      sc.svg.addEventListener("pointerup", function () { dragging = false; });
+      sc.svg.addEventListener("pointercancel", function () { dragging = false; });
+      sc.svg.addEventListener("keydown", function (e) {
+        var turn = { ArrowLeft: 5, ArrowRight: -5 }[e.key];
+        if (!turn) return;
+        e.preventDefault();
+        var a = Math.atan2(c.f[1], c.f[0]) + turn * Math.PI / 180, n = Math.hypot(c.f[0], c.f[1]);
+        c.f = [n * Math.cos(a), n * Math.sin(a)]; draw();
+      });
+      cells.push(c); draw();
+    });
+    document.querySelector('[data-draw="direction-reset"]').addEventListener("click", function () {
+      cells.forEach(function (c) { c.f = start.slice(); c.draw(); });
+    });
+  }
+  if (DATA.model) renderDirection(DATA.model.hold_types, DATA.figures.direction_picks || []);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
