@@ -134,7 +134,7 @@ def export_run(route: Route, climber: Climber, beta: Beta, label: str | None = N
     run_ = {"climber": climber.key.split("_")[0], "key": climber.key, "label": label or climber.name,
             "status": beta.status, "crux": beta.crux, "total": beta.total, "crux_step": beta.crux_step,
             "fail": beta.fail, "start": beta.start.as_dict() if beta.start else None,
-            "d_wall": body.d_wall, "head": list(body.head), "steps": [], "stats": beta.stats}
+            "d_wall": body.d_wall, "head": list(body.head), "body": body.to_dict(), "steps": [], "stats": beta.stats}
     prev = None
     for i, (move, res, w) in enumerate(beta.steps):
         frames, prev = frames_of(body, route, move, res, prev)

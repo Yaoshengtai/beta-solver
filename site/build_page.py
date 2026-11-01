@@ -64,6 +64,7 @@ def collect_data() -> dict:
                 "no_feet": stance.layout(("LH", "RH")).size,
             },
         },
+        "results": load_results(),
         "figures": {
             "legend": legend.legend(),
             "route_example": legend.route_example(),
@@ -87,6 +88,74 @@ def collect_data() -> dict:
     }
 
 
+RESULTS = ROOT / "site" / "results.json"
+N_EXAMPLES = 10
+
+
+def load_results() -> dict:
+    """The solved examples, written by `python -m betasolver.run_all`; empty if not run yet."""
+    if not RESULTS.exists():
+        return {"meta": {}, "examples": []}
+    return json.loads(RESULTS.read_text(encoding="utf-8"))
+
+
+NAMES = {"LH": "left hand", "RH": "right hand", "LF": "left foot", "RF": "right foot"}
+
+
+def fill(text: str, runs: dict) -> str:
+    """Replace {KEY.field} placeholders with numbers from the runs: crux, steps, total, label, fail."""
+    def one(m):
+        key, f = m.group(1), m.group(2)
+        r = runs[key]
+        if f == "crux":
+            return f"{r['crux']:.2f}" if r["crux"] is not None else "none"
+        if f == "steps":
+            return str(len(r["steps"]))
+        if f == "total":
+            return f"{r['total']:.2f}"
+        if f == "label":
+            return r["label"]
+        if f == "fail":
+            x = r["fail"] or {}
+            why = {"reach": "out of reach", "strength": "not strong enough", "balance": "direction or balance does not work",
+                   "unusable": "a hold this climber cannot use"}.get(x.get("reason"), x.get("reason"))
+            return (f"stuck at move {x.get('step')}, {NAMES.get(x.get('limb'), 'a limb')} to {x.get('hold')}, "
+                    f"which fails the {x.get('phase')} check: {why}")
+        raise KeyError(f)
+    return re.sub(r"\{([A-Za-z_]+)\.([a-z]+)\}", one, text)
+
+
+def html_escape(t: str) -> str:
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def examples_html(results: dict) -> str:
+    """The example chapters: one per solved example, then placeholders up to N_EXAMPLES."""
+    out = []
+    exs = results.get("examples", [])
+    for i in range(N_EXAMPLES):
+        n = i + 1
+        if i < len(exs):
+            e = exs[i]
+            runs = {r["key"]: r for r in e["runs"]}
+            paras = "\n".join(f"  <p>{html_escape(fill(t, runs))}</p>" for t in e["text"])
+            out.append(f"""<section class="chapter" id="ex{n}" data-group="Examples" data-short="{n}. {html_escape(e['title'])}" hidden>
+  <header><p class="eyebrow">Example {n}</p><h2>{html_escape(e['title'])}</h2>
+  <p class="lede">{html_escape(e['lesson'])}</p></header>
+  <div class="tbl-wrap"><table class="tbl" data-example-outcomes="{i}"></table></div>
+  <figure class="fig"><div class="player" data-example-player="{i}"></div>
+    <figcaption><b>Every climber's beta on this route.</b> Pick a climber, then play or step through the moves.</figcaption></figure>
+{paras}
+  <details class="impl"><summary>Acceptance checks</summary><ul data-example-checks="{i}"></ul></details>
+</section>""")
+        else:
+            out.append(f"""<section class="chapter" id="ex{n}" data-group="Examples" data-short="{n}. Example" hidden>
+  <header><p class="eyebrow">Example {n}</p><h2>Example {n}</h2></header>
+  <div class="planned"><span class="chip">Planned · unit 5.{n}</span></div>
+</section>""")
+    return "\n".join(out)
+
+
 def embed_json(data: dict) -> str:
     # "</" would close the <script> element early.
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
@@ -95,6 +164,8 @@ def embed_json(data: dict) -> str:
 def render(template: str, data: dict) -> str:
     if template.count("__DATA__") != 1:
         raise ValueError("template must contain exactly one __DATA__ placeholder")
+    if "__EXAMPLES__" in template:
+        template = template.replace("__EXAMPLES__", examples_html(data.get("results", {})))
     return template.replace("__DATA__", embed_json(data))
 
 
