@@ -303,6 +303,21 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .reach.out { stroke: var(--limit); opacity: 1; stroke-dasharray: none; stroke-width: 1.6; }
 .miss { stroke: var(--limit); stroke-width: 2; stroke-dasharray: 4 3; }
 .limb-out { stroke: var(--limit); fill: var(--limit); }
+.lim-ring { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-dasharray: 5 4; opacity: 0.7; }
+.load-disc { fill-opacity: 0.28; stroke-width: 1.2; }
+.ubars { display: grid; grid-template-columns: 44px minmax(0, 1fr) 46px; gap: 6px 8px; align-items: center; font-size: 0.85rem; }
+.ubars .lab { color: var(--muted); font-family: var(--font-mono); font-size: 0.8rem; }
+.ubars .lab small { display: block; font-family: var(--font-body); font-size: 0.72rem; line-height: 1.2; }
+.ubars .track { position: relative; height: 12px; background: var(--panel); border-radius: 6px; }
+.ubars .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; }
+.ubars .one { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 1.5px dashed var(--ink); opacity: 0.6; }
+.ubars .val { font-variant-numeric: tabular-nums; text-align: right; }
+.ubars .val.max { font-weight: 700; }
+.ub-easy { background: var(--easy); } .ub-mid { background: var(--hard); } .ub-hard { background: var(--limit); }
+.t-read { margin: 14px 0 0; font-size: 0.95rem; line-height: 1.45; }
+.t-read b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.t-read .easy { color: var(--easy); } .t-read .hard { color: var(--hard); } .t-read .limit, .t-read .fail { color: var(--limit); }
+.t-note { margin: 6px 0 0; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
 details.impl { margin: 8px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
 details.impl summary { cursor: pointer; font-weight: 600; }
 details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
@@ -601,7 +616,27 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>In two dimensions a cone is exactly the space between its two edges, so ② becomes two linear inequalities per limb with no approximation: \(n_k^{-} \cdot f_k \ge 0\) and \(n_k^{+} \cdot f_k \ge 0\), with \(n_k^{\pm}\) the inward normals of the edges at \(\theta_k \mp \alpha_k\). Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>cone</code>, <code>direction_rows</code>.</p>
   </details>
   <h3 id="check-strength">Strength and effort</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.3</span><p>No limb may exceed its strength; the effort \(t\) is the share of strength used by the most loaded limb.</p></div>
+  <p><b>The idea.</b> Every hand and foot has a limit: the most force it can take on that kind of hold, from the climber's profile. The effort \(t\) is the share of its limit that the most loaded limb uses. The total counts the in-wall force \(f_k\) and also the part perpendicular to the wall: the hand's pull toward the wall \(N_k\) and the wall's push on a foot \(M_k\), which the <a href="#check-tipping">out-of-wall balance</a> brings in.</p>
+  <p><b>The math.</b> With \(F_k(\text{type}_k)\) the limit of limb \(k\) on its hold (a sidepull uses the pinch limit, a foot always the foot limit):</p>
+  <div class="math-block">\[ \big\| (f_k,\ N_k) \big\|_2 \le t\, F_k(\text{type}_k) \ \ (\text{hands}), \qquad \big\| (f_k,\ M_k) \big\|_2 \le t\, F_{\text{foot}} \ \ (\text{feet}), \qquad k \in A_F, \qquad t \ge 0 \]</div>
+  <p>Every limb's share \(\|(f_k, N_k)\| / F_k\) is at most \(t\), so minimising \(t\) pushes the largest share as low as it will go. That is how a climber settles into a position: shift the weight off whichever limb is closest to letting go.</p>
+  <p data-text="effort-example"></p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="effort-table"></table></div>
+
+  <figure class="fig" id="fig-strength">
+    <div class="seg" role="group" aria-label="Climber" data-draw="strength-switch"></div>
+    <div class="fig-row">
+      <div class="fig-main" data-draw="strength"></div>
+      <div class="fig-key" data-draw="strength-bars"></div>
+    </div>
+    <figcaption><b>Same holds, same forces, three climbers.</b> Dashed circle: the limb's limit on its hold. Filled disc: the total force on it, including the part toward or away from the wall, so the ratio of the two radii is the share of strength used. Arrow: the in-wall force. Limbs and bars are coloured by their share. The forces are fixed example values here; once <a href="#check-inplane">balance</a> is in, the solver chooses them.</figcaption>
+  </figure>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p data-text="strength-impl"></p>
+    <p>Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>strength_rows</code>, <code>coverage</code>, <code>effort</code>, <code>solve</code>.</p>
+  </details>
   <h3 id="check-inplane">In-plane balance</h3>
   <div class="planned"><span class="chip">Planned · unit 2.4</span><p>No falling, no sliding, no swinging.</p></div>
   <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
@@ -1799,6 +1834,121 @@ var Draw = (function () {
     });
   }
   if (DATA.model) renderDirection(DATA.model.hold_types, DATA.figures.direction_picks || []);
+
+  /* ---------- #check: strength and effort (unit 2.3) ---------- */
+  function renderStrength(S, info, bands) {
+    var slot = document.querySelector('[data-draw="strength"]');
+    if (!slot) return;
+    var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    var byId = {};
+    S.holds.forEach(function (h) { byId[h.id] = h; });
+    var cut = [bands[0].upto, bands[1].upto];
+    // shares and t use the same rounding, so a bar at 129% never sits next to t = 1.28
+    function pct(v) { return Math.round(v * 100 + 1e-6) + "%"; }
+    function two(v) { return (Math.round(v * 100 + 1e-6) / 100).toFixed(2); }
+    function bandOf(t) { for (var i = 0; i < bands.length; i++) if (bands[i].upto === null || t <= bands[i].upto) return bands[i]; return bands[bands.length - 1]; }
+    function range(i) {
+      var lo = i ? bands[i - 1].upto : null, hi = bands[i].upto;
+      if (lo === null) return "below " + hi.toFixed(1);
+      if (hi === null) return "above " + lo.toFixed(1);
+      return lo.toFixed(1) + " to " + hi.toFixed(1);
+    }
+
+    // the reading table
+    var et = document.querySelector('[data-draw="effort-table"]');
+    et.innerHTML = "<thead><tr><th>Effort \\(t\\)</th><th>Meaning</th></tr></thead>";
+    var tb = document.createElement("tbody");
+    bands.forEach(function (b, i) {
+      var tr = document.createElement("tr");
+      var a = document.createElement("td"); a.className = "num"; a.textContent = range(i);
+      var c = document.createElement("td"); c.textContent = b.name.charAt(0).toUpperCase() + b.name.slice(1);
+      tr.appendChild(a); tr.appendChild(c); tb.appendChild(tr);
+    });
+    et.appendChild(tb);
+
+    // worked example in the text, from Ava's run
+    var ava = S.runs[0], u = ava.frame.util;
+    function typeOf(l) { var h = byId[S.state[l]]; return l[1] === "F" ? "foothold" : h.type; }
+    document.querySelector('[data-text="effort-example"]').textContent =
+      "Example: " + ava.name + "'s left hand on a " + typeOf("LH") + " uses " + pct(u.LH) + " of its limit of " + ava.limits.LH.toFixed(2) +
+      ", the right hand on a " + typeOf("RH") + " uses " + pct(u.RH) + " of " + ava.limits.RH.toFixed(2) +
+      ", and the feet about " + pct((u.LF + u.RF) / 2) + " each. So t = " + two(ava.t) + " and the right hand is the bottleneck. " +
+      "Once balance is in, the solver will try to move the body so that some of that load goes to the left hand or the feet.";
+
+    var c = info.coverage;
+    document.querySelector('[data-text="strength-impl"]').textContent =
+      "The solver needs linear constraints, so each ball is replaced by a polyhedron with " + info.faces + " faces: " +
+      info.azimuths + " directions around the wall plane at each of " + info.elevations.length + " tilts toward the wall (" +
+      info.elevations.map(function (e) { return e + "°"; }).join(", ") + "), every other ring turned by half a step. " +
+      "Each face u gives one row u·(f_k, N_k) ≤ c·t·F_k. The coverage factor c = " + c.toFixed(3) +
+      " shrinks the polyhedron until its farthest corner touches the ball, so the solver can understate a limb's strength by at most " +
+      ((1 - c) * 100).toFixed(1) + "% and never overstate it. In the figure, the linear program with the forces held fixed gives t = " +
+      S.runs.map(function (r) { return r.t_lp.toFixed(3) + " for " + r.name; }).join(", ") +
+      ", against exact values of " + S.runs.map(function (r) { return r.t.toFixed(3); }).join(", ") + ".";
+
+    // the figure
+    var v = S.view, sc = Draw.scene(slot, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 230, pad: 4, title: "Forces against strength limits" });
+    var keyEl = document.querySelector('[data-draw="strength-bars"]');
+    function draw(run) {
+      Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      S.holds.forEach(function (h) { Draw.hold(sc, h, { used: true, label: true }); });
+      var F = run.frame, g = Draw.el(sc.layers.trail, "g");
+      Draw.LIMBS.forEach(function (l) {
+        var h = byId[S.state[l]];
+        if (!h) return;
+        var f = F.forces[l], tot = Math.hypot(f.f[0], f.f[1], l[1] === "H" ? (f.n || 0) : (f.m || 0));
+        var x = sc.X(h.x), y = sc.Y(h.y), s = S.force_scale * sc.k;
+        Draw.el(g, "circle", { cx: x, cy: y, r: (tot * s).toFixed(1) }, "load-disc " + Draw.utilClass(F.util[l], cut));
+        Draw.el(g, "circle", { cx: x, cy: y, r: (run.limits[l] * s).toFixed(1) }, "lim-ring");
+      });
+      Draw.figure(sc, F, { key: run.climber, head: run.head }, { util: true, bands: cut });
+      Draw.forces(sc, F, S.force_scale);
+      Draw.com(sc, F.torso);
+
+      keyEl.textContent = "";
+      var bars = document.createElement("div"); bars.className = "ubars";
+      bars.setAttribute("role", "img");
+      var top = Math.max(1.25, run.t * 1.05);
+      bars.setAttribute("aria-label", "Share of strength used by each limb of " + run.name);
+      Draw.LIMBS.forEach(function (l) {
+        var lab = document.createElement("span"); lab.className = "lab"; lab.textContent = l;
+        var sm = document.createElement("small"); sm.textContent = typeOf(l) + ", " + run.limits[l].toFixed(2); lab.appendChild(sm);
+        var tr = document.createElement("span"); tr.className = "track";
+        var fl = document.createElement("span"); fl.className = "fill " + Draw.utilClass(F.util[l], cut).replace("u-", "ub-");
+        fl.style.width = (100 * Math.min(F.util[l], top) / top) + "%";
+        var one = document.createElement("span"); one.className = "one"; one.style.left = (100 / top) + "%";
+        tr.appendChild(fl); tr.appendChild(one);
+        var val = document.createElement("span"); val.className = "val" + (l === run.limiting ? " max" : ""); val.textContent = pct(F.util[l]);
+        bars.appendChild(lab); bars.appendChild(tr); bars.appendChild(val);
+      });
+      keyEl.appendChild(bars);
+      var b = bandOf(run.t);
+      var rd = document.createElement("p"); rd.className = "t-read";
+      var tv = document.createElement("b"); tv.className = b.key; tv.textContent = "t = " + two(run.t);
+      rd.appendChild(tv);
+      rd.appendChild(document.createTextNode(", " + b.name + ". The largest share is the " + NAMES[run.limiting] + " on the " + typeOf(run.limiting) + "."));
+      keyEl.appendChild(rd);
+      var nt = document.createElement("p"); nt.className = "t-note";
+      nt.textContent = "Dashed line: 100% of the limit. Linear program with these forces: t = " + run.t_lp.toFixed(3) + ".";
+      keyEl.appendChild(nt);
+    }
+    var sw = document.querySelector('[data-draw="strength-switch"]'), btns = [];
+    S.runs.forEach(function (run, i) {
+      var bt = document.createElement("button");
+      bt.type = "button"; bt.className = "cl-" + run.climber;
+      var s = document.createElement("span"); s.className = "swatch"; bt.appendChild(s);
+      bt.appendChild(document.createTextNode(run.name));
+      bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      bt.addEventListener("click", function () {
+        btns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
+        draw(run);
+      });
+      btns.push(bt); sw.appendChild(bt);
+    });
+    draw(S.runs[0]);
+  }
+  if (DATA.figures && DATA.figures.strength) renderStrength(DATA.figures.strength, DATA.stance.strength, DATA.stance.effort_bands);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

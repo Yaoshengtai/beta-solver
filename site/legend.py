@@ -187,3 +187,75 @@ def reach_figure() -> dict:
         "presets": {"good": list(good), "low": list(low)},
         "view": {"x0": 0.55, "y0": 0.05, "x1": 2.45, "y1": 2.25},
     })
+
+
+# ------------------------------------------------------------ ③ strength
+
+# Example forces of section 3.3, the same for every climber. They are fixed
+# inputs here, not solver output: until in-plane balance is added (unit 2.4)
+# nothing decides how the weight is shared. They still sum to the body weight
+# in the wall plane, the pull-ins equal the foot pushes, and every force lies
+# in its hold's cone.
+STRENGTH_FORCES = {
+    "LH": {"f": (0.06, 0.40), "n": 0.197},
+    "RH": {"f": (-0.03, 0.29), "n": 0.071},
+    "LF": {"f": (-0.01, 0.16), "m": 0.130},
+    "RF": {"f": (-0.02, 0.15), "m": 0.138},
+}
+
+
+def strength_route() -> Route:
+    holds = [
+        Hold("H1", 1.20, 2.10, "crimp"),
+        Hold("H2", 1.75, 2.20, "sloper"),
+        Hold("H3", 1.50, 3.60, "jug"),
+        Hold("F1", 1.10, 0.80, "foot_big"),
+        Hold("F2", 1.85, 0.90, "foot_big"),
+    ]
+    return Route("strength-demo", "Strength example", "A crimp, a sloper and two footholds.",
+                 holds, ("H1", "H2"), "H3")
+
+
+def strength_figure() -> dict:
+    """Data for the strength figure in #check: one state, fixed forces, three climbers.
+
+    For each climber: the strength limit of every contact, each limb's share
+    of it, the effort t (exact), and t from the linear program with the forces
+    held fixed, which can only be a little higher (the polyhedron sits inside
+    the ball).
+    """
+    from betasolver.stance import EFFORT_BANDS, State, band, coverage, effort, solve, strength_limit, torso_region
+
+    route = strength_route()
+    state = State("H1", "H2", "F1", "F2")
+    ends = {l: (route.hold(h).x, route.hold(h).y) for l, h in state.as_dict().items()}
+    runs = []
+    for key in ("A", "B", "C"):
+        c = PROFILES[key]
+        body = make_body(c)
+        region = torso_region(body, route, state)
+        if not region:
+            raise ValueError(f"{c.name} cannot reach the strength example")
+        torso = (float(sum(p[0] for p in region) / len(region)), float(sum(p[1] for p in region) / len(region)))
+        t, share, limiting = effort(body, route, state, STRENGTH_FORCES)
+        lp = solve(body, route, state, fixed=STRENGTH_FORCES)
+        if not lp["ok"]:
+            raise ValueError(f"the example forces break a constraint for {c.name}: {lp['message']}")
+        runs.append({
+            "climber": key, "name": c.name, "H": c.H, "head": list(body.head),
+            "frame": {"torso": list(torso), "joints": body.joints(torso, ends), "state": state.as_dict(),
+                      "forces": {l: {k: list(v) if isinstance(v, tuple) else v for k, v in F.items()}
+                                 for l, F in STRENGTH_FORCES.items()},
+                      "util": share},
+            "limits": {l: strength_limit(body, route, state, l) for l in state.on()},
+            "t": t, "t_lp": lp["t"], "limiting": limiting, "band": band(t)["key"],
+        })
+    return _round({
+        "holds": [{**h, "role": "normal"} for h in route.to_dict()["holds"] if h["id"] != "H3"],
+        "state": state.as_dict(),
+        "runs": runs,
+        "bands": EFFORT_BANDS,
+        "coverage": coverage(),
+        "force_scale": 0.25,
+        "view": {"x0": 0.68, "y0": 0.4, "x1": 2.32, "y1": 2.42},
+    })

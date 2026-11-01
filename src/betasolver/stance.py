@@ -5,9 +5,10 @@ hard is the most loaded limb working? The answer is a small convex problem:
 find a body position and contact forces that satisfy six constraints, with
 the smallest effort t.
 
-This module holds the framework: states, the set of unknowns, the result
-type and the checks done before any solving. The six constraints are added
-one by one in units 2.1 to 2.9.
+This module holds the framework (states, unknowns, result type, checks done
+before any solving) and the constraints built so far: reach, direction and
+strength, plus the linear program that puts them together. The other three
+constraints are added in units 2.4 to 2.9.
 """
 
 from __future__ import annotations
@@ -310,6 +311,177 @@ def torso_region(body: Body, route: Route, state: State, sides: int = 128) -> li
     return poly
 
 
+# ------------------------------------------------------------ ③ strength
+
+# The ball |(f_k, N_k)| <= t F_k is replaced by a polyhedron: 8 directions in
+# the wall plane times 3 elevations toward the wall, with every other layer
+# turned by half a step. Each direction u gives one row u . (f_k, N_k) <= c t F_k.
+# Alone, those rows describe a polyhedron slightly larger than the ball; the
+# coverage factor c shrinks it until its farthest corner touches the ball, so
+# the solver never credits a limb with more strength than it has.
+STRENGTH_AZIMUTHS = 8
+STRENGTH_ELEVATIONS = (5.0, 35.0, 70.0)
+
+# Reading the effort t (section 3.3): upper end of each band and its name.
+EFFORT_BANDS = [
+    {"upto": 0.5, "key": "easy", "name": "easy"},
+    {"upto": 0.8, "key": "hard", "name": "hard work"},
+    {"upto": 1.0, "key": "limit", "name": "near the limit"},
+    {"upto": None, "key": "fail", "name": "cannot hold: not strong enough"},
+]
+
+
+def strength_directions(azimuths: int = STRENGTH_AZIMUTHS, elevations=STRENGTH_ELEVATIONS) -> np.ndarray:
+    """Unit vectors u = (in-wall x, in-wall y, toward/away from the wall) of the polyhedron's faces."""
+    out = []
+    for j, e in enumerate(elevations):
+        e = math.radians(e)
+        turn = math.pi / azimuths if j % 2 else 0.0
+        for i in range(azimuths):
+            a = 2 * math.pi * i / azimuths + turn
+            out.append((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)))
+    return np.array(out)
+
+
+def _corners(U: np.ndarray) -> np.ndarray:
+    """Corners of {v : U v <= 1, v_z >= 0} (the out-of-wall part is never negative)."""
+    A = np.vstack([U, [0.0, 0.0, -1.0]])
+    b = np.r_[np.ones(len(U)), 0.0]
+    pts = []
+    n = len(A)
+    for i in range(n):
+        for j in range(i + 1, n):
+            for k in range(j + 1, n):
+                M = A[[i, j, k]]
+                if abs(np.linalg.det(M)) < 1e-9:
+                    continue
+                v = np.linalg.solve(M, b[[i, j, k]])
+                if np.all(A @ v <= b + 1e-9):
+                    pts.append(v)
+    return np.array(pts)
+
+
+_COVERAGE: dict = {}
+
+
+def coverage(azimuths: int = STRENGTH_AZIMUTHS, elevations=STRENGTH_ELEVATIONS) -> float:
+    """Coverage factor c: with rows U v <= c the polyhedron's farthest corner is exactly at |v| = 1."""
+    key = (azimuths, tuple(elevations))
+    if key not in _COVERAGE:
+        U = strength_directions(azimuths, elevations)
+        _COVERAGE[key] = 1.0 / float(np.max(np.linalg.norm(_corners(U), axis=1)))
+    return _COVERAGE[key]
+
+
+def strength_limit(body: Body, route: Route, state: State, limb: str) -> float:
+    """F_k: the most force limb k can take on its hold. A foot on a hand hold uses the foot limit."""
+    kind, _ = route.hold(state.hold(limb)).contact(limb)
+    return body.climber.strength(kind.name)
+
+
+def _normal(limb: str) -> str:
+    """The out-of-wall unknown of a limb: the pull-in N for a hand, the push M for a foot."""
+    return "N" if limb in HANDS else "M"
+
+
+def strength_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], lay: Layout):
+    """③ as linear inequalities G z <= 0: u . (f_k, N_k or M_k) - c F_k t <= 0 for every face u."""
+    U, c = strength_directions(), coverage()
+    rows, owner = [], []
+    for limb in AF:
+        F = strength_limit(body, route, state, limb)
+        sf, sn, st = lay[("f", limb)], lay[(_normal(limb), limb)], lay[("t", None)]
+        for u in U:
+            row = np.zeros(lay.size)
+            row[sf] = u[:2]
+            row[sn] = u[2]
+            row[st] = -c * F
+            rows.append(row)
+            owner.append(limb)
+    G = np.array(rows, dtype=float).reshape(len(rows), lay.size)
+    return G, np.zeros(len(rows)), owner
+
+
+def effort(body: Body, route: Route, state: State, forces: dict) -> tuple[float, dict, str | None]:
+    """Exact form of ③ for given forces: each limb's share of its strength, and t, the largest share.
+
+    forces: limb -> {"f": (fx, fy), "n": N} for a hand or {"f": ..., "m": M} for a foot.
+    Returns (t, {limb: share}, limiting limb).
+    """
+    share = {}
+    for limb, F in forces.items():
+        out = F.get("n", 0.0) if limb in HANDS else F.get("m", 0.0)
+        total = math.sqrt(F["f"][0] ** 2 + F["f"][1] ** 2 + out ** 2)
+        share[limb] = total / strength_limit(body, route, state, limb)
+    if not share:
+        return 0.0, {}, None
+    limiting = max(share, key=share.get)
+    return share[limiting], share, limiting
+
+
+def band(t: float) -> dict:
+    """Which row of the effort table t falls in."""
+    for b in EFFORT_BANDS:
+        if b["upto"] is None or t <= b["upto"]:
+            return b
+    return EFFORT_BANDS[-1]
+
+
+# ------------------------------------------------------- the linear program
+
+def variable_bounds(lay: Layout) -> list:
+    """N, M and t are never negative; the body position, forces and grip torques are free."""
+    b = [(None, None)] * lay.size
+    for (name, _), sl in lay.index.items():
+        if name in ("N", "M", "t"):
+            for i in range(sl.start, sl.stop):
+                b[i] = (0.0, None)
+    return b
+
+
+def assemble(body: Body, route: Route, state: State, no_force: str | None = None):
+    """The constraints built so far (① reach, ② direction, ③ strength) as G z <= h.
+
+    Returns (layout, G, h, owners); owners names the constraint and limb of each row.
+    """
+    A, AF = limb_sets(state, no_force)
+    lay = layout(AF)
+    Gr, hr, orr = reach_rows(body, route, state)
+    G1 = np.zeros((len(Gr), lay.size))
+    G1[:, lay[("x", None)]] = Gr
+    G2, h2, o2 = direction_rows(route, state, AF, lay)
+    G3, h3, o3 = strength_rows(body, route, state, AF, lay)
+    owners = [("reach", l) for l in orr] + [("direction", l) for l in o2] + [("strength", l) for l in o3]
+    return lay, np.vstack([G1, G2, G3]), np.concatenate([hr, h2, h3]), owners
+
+
+def solve(body: Body, route: Route, state: State, no_force: str | None = None, fixed: dict | None = None) -> dict:
+    """Minimise t subject to the constraints built so far, with scipy's HiGHS.
+
+    fixed: optional forces held at given values, in the format of `effort`.
+    Until in-plane balance is added (unit 2.4) nothing makes a limb carry
+    weight, so this is only meaningful with fixed forces.
+    """
+    from scipy.optimize import linprog
+
+    lay, G, h, _ = assemble(body, route, state, no_force)
+    bounds = variable_bounds(lay)
+    for limb, F in (fixed or {}).items():
+        sf = lay[("f", limb)]
+        bounds[sf.start], bounds[sf.start + 1] = (F["f"][0],) * 2, (F["f"][1],) * 2
+        v = F.get("n", 0.0) if limb in HANDS else F.get("m", 0.0)
+        sn = lay[(_normal(limb), limb)]
+        bounds[sn.start] = (v, v)
+    c = np.zeros(lay.size)
+    c[lay[("t", None)]] = 1.0
+    res = linprog(c, A_ub=G, b_ub=h, bounds=bounds, method="highs")
+    if res.status != 0:
+        return {"ok": False, "status": res.status, "message": res.message}
+    z = res.x
+    return {"ok": True, "t": float(z[lay[("t", None)]][0]), "torso": tuple(float(v) for v in z[lay[("x", None)]]),
+            "z": z, "layout": lay}
+
+
 def check(body: Body, route: Route, state: State, no_force: str | None = None) -> Result:
     """Check one state: can the climber hold still here, and with what effort t?"""
     validate(body, route, state)
@@ -319,4 +491,4 @@ def check(body: Body, route: Route, state: State, no_force: str | None = None) -
         return early
     if not torso_region(body, route, state, REACH_SIDES):
         return Result(ok=False, reason="reach")
-    raise NotImplementedError("constraints 2 to 6 are added in units 2.2 to 2.9")
+    raise NotImplementedError("balance and flexibility are added in units 2.4 to 2.9")
