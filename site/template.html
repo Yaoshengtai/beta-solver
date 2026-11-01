@@ -161,6 +161,9 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 
 .math-block mjx-container[display="true"] { display: block; max-width: 100%; margin: 0 !important; }
 .math-block mjx-container[display="true"] > svg { max-width: 100%; height: auto; }
 
+.limits { padding-left: 1.2em; }
+.limits li { margin: 0 0 0.7em; }
+.limits i { font-style: normal; font-weight: 600; color: var(--muted); }
 .planned {
   border: 1px dashed var(--line);
   border-radius: 8px;
@@ -572,7 +575,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <div class="fig-main" data-draw="to-scale"></div>
     <figcaption><b>To scale,</b> arms up at full length. <span data-text="same-body"></span></figcaption>
   </figure>
-  <p><b>Left out:</b> the torso never turns; limbs fold completely; the body stays <span data-text="d-wall"></span>; elbows and knees are drawn only; moves are static, no dynos.</p>
+  <p><b>Left out:</b> the torso never turns; limbs fold completely; the body stays <span data-text="d-wall"></span>; elbows and knees are drawn only; moves are static, no dynos. All of it is collected in <a href="#limits">What the model cannot see</a>.</p>
 </section>
 
 <section class="chapter" id="check" data-group="The model" data-short="Checking a state" hidden>
@@ -756,7 +759,33 @@ __EXAMPLES__
 <section class="chapter" id="limits" data-group="Notes" data-short="What the model cannot see" hidden>
   <header><p class="eyebrow">Limits</p><h2>What the model cannot see</h2>
   <p class="lede">Flagging, heel and toe hooks, hips against the wall, momentum and dynos.</p></header>
-  <div class="planned"><span class="chip">Planned · unit 7.1</span></div>
+  <p>The model is a flat, slow, rigid version of climbing. Each rule below keeps it small enough to check exactly, and each one costs something. For each: what a climber can do that the model cannot, what the model does instead, and where it shows in the examples.</p>
+
+  <h3 id="limits-body">The body</h3>
+  <ul class="limits">
+    <li><b>The torso never turns.</b> No hip turned into the wall, no drop knee, no flag (a leg pressed out sideways as a counterweight). These are exactly how climbers stop a barn-door, so here only the grip twist and the foot positions can. <i>Shows in:</i> Cal swinging open in <a href="#ex1">examples 1</a>, <a href="#ex2">2</a> and <a href="#ex3">3</a>; a real climber might flag and stay on. Barn-doors are only partly modelled, and the model is pessimistic about them.</li>
+    <li><b>The hips stay <span data-text="limits-d"></span> from the wall.</b> A climber pulls the hips in to take load off the hands; the model cannot, so the hands must hold the body in harder than they would. <i>Shows in:</i> slopers, which hold you in poorly, are almost unusable for everyone, and Ben, who stands furthest out, needs more twist in <a href="#ex3">example 3</a>.</li>
+    <li><b>Limbs are straight lines with a greatest length.</b> They fold completely and joints have no angle limits, so some positions are too comfortable. Elbows and knees are only drawn. The convexity argument of <a href="#move">One move</a> holds for this body, not a real one.</li>
+    <li><b>Feet only push, and only on holds.</b> No heel or toe hooks, and no smearing on blank wall. <i>Shows in:</i> <a href="#ex5">example 5</a>, where Ava lets go with her feet because the wall under the rail is blank; a real climber would probably smear.</li>
+  </ul>
+
+  <h3 id="limits-motion">Motion</h3>
+  <ul class="limits">
+    <li><b>Everything is static.</b> No momentum, no deadpoints, no dynos: every position along a move must hold on its own. <i>Shows in:</i> the height threshold of <a href="#ex6">example 6</a>; a small jump would let shorter climbers reach J2, so the real threshold is lower.</li>
+    <li><b>Swing moves are the exception.</b> Taking off the last foot, or putting on the first, swings the body between hanging flat and standing out from the wall. The search allows these moves but checks only that the climber can hold the positions before and after; the swing itself is not modelled.</li>
+    <li><b>One limb at a time.</b> No moving a hand and a foot together, and no foot swaps done as one motion: a swap is two moves, through the hold both feet share.</li>
+  </ul>
+
+  <h3 id="limits-holds">Holds, wall and strength</h3>
+  <ul class="limits">
+    <li><b>A hold is a point with a type.</b> No size, shape or texture, and no better or worse spots on the same hold. A sloper is just a narrow range of directions, which makes it harsher than a real one, where body position and friction matter.</li>
+    <li><b>The wall is flat and vertical.</b> No overhangs, slabs, aretes or volumes; everything happens in the wall plane plus a fixed distance out.</li>
+    <li><b>Strength never runs out.</b> Limits are fixed multiples of body weight: no fatigue, no pump, and a long route is no harder than its hardest move. Body weight itself cancels out.</li>
+    <li><b>The style costs are choices.</b> The extra cost of a move, of distance, of crossing hands and of taking a foot off only break ties between betas that work; they are not measured, and other values give other betas with the same crux.</li>
+  </ul>
+
+  <h3 id="limits-numbers">What the numbers mean</h3>
+  <p>The routes were designed to show one effect each, and the climbers are made-up profiles. Results are qualitative: who gets up and why is meaningful, but a crux of 0.64 or a threshold of 1.67 m belongs to this model and these profiles, not to a real gym. The reasons a climber fails are the most trustworthy output, because each one points at a single constraint that can be checked by hand.</p>
 </section>
 <section class="chapter" id="appendix" data-group="Notes" data-short="Implementation and tests" hidden>
   <header><p class="eyebrow">Appendix</p><h2>Implementation and tests</h2>
@@ -1615,6 +1644,8 @@ var Draw = (function () {
     document.querySelector('[data-text="d-wall"]').textContent =
       B.d_wall.toFixed(2) + " H from the wall (" +
       bodies.map(function (b) { return Math.round(b.d_wall * 100) + " cm for " + b.name; }).filter(function (t, i) { return bodies[i].climber !== "D"; }).join(", ") + ")";
+    var ld = document.querySelector('[data-text="limits-d"]');
+    if (ld) ld.textContent = B.d_wall.toFixed(2) + " H";
   }
   if (DATA.model && DATA.model.body && DATA.figures.bodies) renderBody(DATA.model.body, DATA.figures.bodies);
 
