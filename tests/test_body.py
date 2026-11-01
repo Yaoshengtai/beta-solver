@@ -1,3 +1,4 @@
+"""The body model (step 2): attachment points, limb lengths, reach and joints."""
 import math
 
 import pytest

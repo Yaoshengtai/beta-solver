@@ -1,3 +1,4 @@
+"""The page build: chapters, embedded data and figures, filled example texts, no Chinese left."""
 import importlib.util
 import json
 import re
@@ -256,3 +257,13 @@ def test_move_sections(markup):
     assert re.findall(r'<h3 id="(move-[a-z]+)"', markup) == ["move-phases", "move-why", "move-cost"]
     for slot in ('data-draw="move"', 'data-draw="twochecks"', 'data-text="convex-facts"', 'data-draw="checker"'):
         assert slot in markup
+
+
+def test_appendix_slots_and_test_report(html):
+    for slot in ('data-draw="format-excerpt"', 'data-draw="tests-table"', 'data-draw="solve-times"', 'data-text="tests-summary"'):
+        assert slot in html
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    data = json.loads(raw)
+    if data["tests"] is not None:  # written by: pytest --report site/test_report.json
+        assert set(data["tests"]["counts"]) == {"passed", "failed", "skipped"}
+        assert all(f["file"].startswith("tests/test_") and f["about"] for f in data["tests"]["files"])

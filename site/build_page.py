@@ -65,6 +65,8 @@ def collect_data() -> dict:
             },
         },
         "results": load_results(),
+        "tests": load_tests(),
+        "files": {"results_kb": round(RESULTS.stat().st_size / 1024) if RESULTS.exists() else None},
         "figures": {
             "legend": legend.legend(),
             "route_example": legend.route_example(),
@@ -97,6 +99,16 @@ def load_results() -> dict:
     if not RESULTS.exists():
         return {"meta": {}, "examples": []}
     return json.loads(RESULTS.read_text(encoding="utf-8"))
+
+
+TESTS = ROOT / "site" / "test_report.json"
+
+
+def load_tests() -> dict | None:
+    """The test report, written by `pytest --report site/test_report.json`; None if not run yet."""
+    if not TESTS.exists():
+        return None
+    return json.loads(TESTS.read_text(encoding="utf-8"))
 
 
 NAMES = {"LH": "left hand", "RH": "right hand", "LF": "left foot", "RF": "right foot"}

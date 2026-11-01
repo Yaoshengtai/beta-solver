@@ -1,0 +1,1089 @@
+{
+ "generated": "2026-11-01",
+ "python": "3.13.18",
+ "pytest": "9.2.0",
+ "seconds": 77.3,
+ "counts": {
+  "passed": 202,
+  "failed": 0,
+  "skipped": 0
+ },
+ "files": [
+  {
+   "file": "tests/test_body.py",
+   "about": "The body model (step 2): attachment points, limb lengths, reach and joints.",
+   "tests": [
+    {
+     "name": "limb lengths match plan",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "arm formula",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "anchors are mirrored and scaled",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "segments add up to limb length",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "reach is a circle",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "foot limit is hip plus flex",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "joints keep segment lengths and bend the right way",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "hanging foot and missing hand",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "two link straightens when out of reach",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "body data is plain",
+     "outcome": "passed",
+     "seconds": 0.0
+    }
+   ]
+  },
+  {
+   "file": "tests/test_build_page.py",
+   "about": "The page build: chapters, embedded data and figures, filled example texts, no Chinese left.",
+   "tests": [
+    {
+     "name": "every chapter present in order",
+     "outcome": "passed",
+     "seconds": 51.273
+    },
+    {
+     "name": "anchors are plain tokens and unique",
+     "outcome": "passed",
+     "seconds": 0.006
+    },
+    {
+     "name": "embedded data parses",
+     "outcome": "passed",
+     "seconds": 0.024
+    },
+    {
+     "name": "json cannot close script",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "no chinese in page",
+     "outcome": "passed",
+     "seconds": 0.005
+    },
+    {
+     "name": "cjk detector catches chinese",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "mathjax pinned",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "preview has no document wrapper",
+     "outcome": "passed",
+     "seconds": 0.036
+    },
+    {
+     "name": "legend embedded and slots present",
+     "outcome": "passed",
+     "seconds": 0.032
+    },
+    {
+     "name": "hold types and route example embedded",
+     "outcome": "passed",
+     "seconds": 0.025
+    },
+    {
+     "name": "climbers embedded",
+     "outcome": "passed",
+     "seconds": 0.024
+    },
+    {
+     "name": "body data embedded",
+     "outcome": "passed",
+     "seconds": 0.027
+    },
+    {
+     "name": "stance overview embedded",
+     "outcome": "passed",
+     "seconds": 0.027
+    },
+    {
+     "name": "reach figure embedded",
+     "outcome": "passed",
+     "seconds": 0.029
+    },
+    {
+     "name": "check sections",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "strength figure embedded",
+     "outcome": "passed",
+     "seconds": 0.035
+    },
+    {
+     "name": "balance figure embedded",
+     "outcome": "passed",
+     "seconds": 0.029
+    },
+    {
+     "name": "tipping figure embedded",
+     "outcome": "passed",
+     "seconds": 0.029
+    },
+    {
+     "name": "barndoor figure embedded",
+     "outcome": "passed",
+     "seconds": 0.03
+    },
+    {
+     "name": "flex figure embedded",
+     "outcome": "passed",
+     "seconds": 0.03
+    },
+    {
+     "name": "full problem and cards",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "solver section embedded",
+     "outcome": "passed",
+     "seconds": 0.03
+    },
+    {
+     "name": "move figure embedded",
+     "outcome": "passed",
+     "seconds": 0.027
+    },
+    {
+     "name": "convex figure embedded",
+     "outcome": "passed",
+     "seconds": 0.023
+    },
+    {
+     "name": "twochecks figure embedded",
+     "outcome": "passed",
+     "seconds": 0.022
+    },
+    {
+     "name": "checker figure embedded",
+     "outcome": "passed",
+     "seconds": 0.024
+    },
+    {
+     "name": "graph figure embedded",
+     "outcome": "passed",
+     "seconds": 0.023
+    },
+    {
+     "name": "dijkstra figure embedded",
+     "outcome": "passed",
+     "seconds": 0.023
+    },
+    {
+     "name": "player embedded",
+     "outcome": "passed",
+     "seconds": 0.023
+    },
+    {
+     "name": "move sections",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "appendix slots and test report",
+     "outcome": "passed",
+     "seconds": 0.025
+    }
+   ]
+  },
+  {
+   "file": "tests/test_examples.py",
+   "about": "The examples: site/results.json must be current and every acceptance check must hold.",
+   "tests": [
+    {
+     "name": "results exist and are current",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "acceptance checks [ex1]",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "acceptance checks [ex2]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "acceptance checks [ex3]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "acceptance checks [ex4]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "acceptance checks [ex5]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "acceptance checks [ex6]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "runs are well formed [ex1]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "runs are well formed [ex2]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "runs are well formed [ex3]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "runs are well formed [ex4]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "runs are well formed [ex5]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "runs are well formed [ex6]",
+     "outcome": "passed",
+     "seconds": 0.001
+    }
+   ]
+  },
+  {
+   "file": "tests/test_export.py",
+   "about": "Export (step 8): pose smoothing and the format of a run.",
+   "tests": [
+    {
+     "name": "smoothing keeps the beta",
+     "outcome": "passed",
+     "seconds": 1.742
+    },
+    {
+     "name": "smoothed frames are valid",
+     "outcome": "passed",
+     "seconds": 0.045
+    },
+    {
+     "name": "four frames per step",
+     "outcome": "passed",
+     "seconds": 0.042
+    },
+    {
+     "name": "blends between frames are valid",
+     "outcome": "passed",
+     "seconds": 0.052
+    },
+    {
+     "name": "cut frames are filled",
+     "outcome": "passed",
+     "seconds": 0.036
+    },
+    {
+     "name": "infeasible run exports its fail record",
+     "outcome": "passed",
+     "seconds": 0.243
+    }
+   ]
+  },
+  {
+   "file": "tests/test_legend.py",
+   "about": "Figure data for the site: each figure's numbers agree with the solver.",
+   "tests": [
+    {
+     "name": "all eight hold types",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "wall size",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "pose segments have body lengths",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "knees point out",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "example forces balance body weight",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "body figures stand on the ground",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "strength figure matches the solver",
+     "outcome": "passed",
+     "seconds": 0.1
+    },
+    {
+     "name": "strength example forces are physical",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "balance figure matches the solver",
+     "outcome": "passed",
+     "seconds": 0.036
+    },
+    {
+     "name": "solver beats the fixed strength example",
+     "outcome": "passed",
+     "seconds": 0.036
+    },
+    {
+     "name": "strength figure torso is balanced",
+     "outcome": "passed",
+     "seconds": 0.076
+    },
+    {
+     "name": "tipping figure follows d over h",
+     "outcome": "passed",
+     "seconds": 0.057
+    },
+    {
+     "name": "barndoor figure",
+     "outcome": "passed",
+     "seconds": 0.047
+    },
+    {
+     "name": "flex figure",
+     "outcome": "passed",
+     "seconds": 0.051
+    },
+    {
+     "name": "result cards cover every outcome",
+     "outcome": "passed",
+     "seconds": 0.045
+    },
+    {
+     "name": "move figure matches the checks",
+     "outcome": "passed",
+     "seconds": 0.165
+    },
+    {
+     "name": "state graph shrinks stage by stage",
+     "outcome": "passed",
+     "seconds": 0.0
+    }
+   ]
+  },
+  {
+   "file": "tests/test_model.py",
+   "about": "Holds, routes and climbers (step 1).",
+   "tests": [
+    {
+     "name": "hold types match plan",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "every hand hold is a convex cone",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "wall size",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "table is plain data in order",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "hold defaults from type",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "sidepull needs left or right",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "footholds are feet only",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "unknown type rejected",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "foot on hand hold uses foothold rules",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "campus route keeps feet off hand holds",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "route roles and dict",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bad routes rejected [kw0]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bad routes rejected [kw1]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bad routes rejected [kw2]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bad routes rejected [kw3]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bad routes rejected [kw4]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "profiles match plan",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "injured ava differs from ava only in crimp",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "strength follows hold type",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "variants change one attribute",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "variant does not touch the original",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "wall distance scales with height",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bad profiles rejected",
+     "outcome": "passed",
+     "seconds": 0.0
+    }
+   ]
+  },
+  {
+   "file": "tests/test_moves.py",
+   "about": "One move (step 4): release and catch checks, swing moves, convexity, cost and candidates.",
+   "tests": [
+    {
+     "name": "move kinds",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "the two checks are state checks with a resting limb",
+     "outcome": "passed",
+     "seconds": 0.012
+    },
+    {
+     "name": "plain checks never decide a move",
+     "outcome": "passed",
+     "seconds": 0.008
+    },
+    {
+     "name": "release can fail while catch passes",
+     "outcome": "passed",
+     "seconds": 0.007
+    },
+    {
+     "name": "cut and place need one check each",
+     "outcome": "passed",
+     "seconds": 0.011
+    },
+    {
+     "name": "swing moves",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "three slides stay below the difficulty",
+     "outcome": "passed",
+     "seconds": 0.053
+    },
+    {
+     "name": "path check refuses swing and failed moves",
+     "outcome": "passed",
+     "seconds": 0.014
+    },
+    {
+     "name": "convexity on random moves",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "a limb in the air neither pushes nor reaches",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "solution vector satisfies its program",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "s3 boundary is traced by the check",
+     "outcome": "passed",
+     "seconds": 0.959
+    },
+    {
+     "name": "release and catch positions share s3",
+     "outcome": "passed",
+     "seconds": 0.014
+    },
+    {
+     "name": "cannot let go means s3 misses d a",
+     "outcome": "passed",
+     "seconds": 0.959
+    },
+    {
+     "name": "crossed hands",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cost terms",
+     "outcome": "passed",
+     "seconds": 0.016
+    },
+    {
+     "name": "crossing penalty follows the climber",
+     "outcome": "passed",
+     "seconds": 0.008
+    },
+    {
+     "name": "failed move has no cost",
+     "outcome": "passed",
+     "seconds": 0.006
+    },
+    {
+     "name": "targets follow the rules",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "checker caches and shares the release check",
+     "outcome": "passed",
+     "seconds": 0.012
+    },
+    {
+     "name": "pruned candidates are really impossible",
+     "outcome": "passed",
+     "seconds": 0.121
+    }
+   ]
+  },
+  {
+   "file": "tests/test_package.py",
+   "about": "The package installs and imports.",
+   "tests": [
+    {
+     "name": "package imports",
+     "outcome": "passed",
+     "seconds": 0.0
+    }
+   ]
+  },
+  {
+   "file": "tests/test_search.py",
+   "about": "The search (step 5): states, edges, two-stage Dijkstra against an exhaustive reference, failure reports.",
+   "tests": [
+    {
+     "name": "options and combinations",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "start states hold with hands on the start",
+     "outcome": "passed",
+     "seconds": 0.079
+    },
+    {
+     "name": "goal needs both hands on top and a state that holds",
+     "outcome": "passed",
+     "seconds": 0.002
+    },
+    {
+     "name": "edges are moves that work with their cost",
+     "outcome": "passed",
+     "seconds": 0.047
+    },
+    {
+     "name": "swing move into a state that does not hold fails",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "three move route gives the expected beta",
+     "outcome": "passed",
+     "seconds": 0.553
+    },
+    {
+     "name": "two stages match the exhaustive reference [climber0]",
+     "outcome": "passed",
+     "seconds": 5.9
+    },
+    {
+     "name": "two stages match the exhaustive reference [climber1]",
+     "outcome": "passed",
+     "seconds": 4.815
+    },
+    {
+     "name": "two stages match the exhaustive reference [climber2]",
+     "outcome": "passed",
+     "seconds": 5.918
+    },
+    {
+     "name": "beta is consistent",
+     "outcome": "passed",
+     "seconds": 1.571
+    },
+    {
+     "name": "infeasible route reports where it got stuck",
+     "outcome": "passed",
+     "seconds": 0.492
+    },
+    {
+     "name": "search limit",
+     "outcome": "passed",
+     "seconds": 0.249
+    }
+   ]
+  },
+  {
+   "file": "tests/test_stance.py",
+   "about": "The state check (step 3): every constraint, the cone program and the cross-check against cvxpy.",
+   "tests": [
+    {
+     "name": "state needs both hands",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "limb sets and no force",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "unknowns follow section 3 0",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "layout size matches plan",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "layout slices do not overlap",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "validate rejects illegal states",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "injured climber rules out crimps without solving",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "check holds a good state",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "reach cones are the discs",
+     "outcome": "passed",
+     "seconds": 0.01
+    },
+    {
+     "name": "drawing polygon is inside the discs",
+     "outcome": "passed",
+     "seconds": 0.005
+    },
+    {
+     "name": "region matches exact reach",
+     "outcome": "passed",
+     "seconds": 0.245
+    },
+    {
+     "name": "hand at 105 percent is out of reach",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "unreachable state fails with reach",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "precheck pair distance",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "region is convex",
+     "outcome": "passed",
+     "seconds": 0.026
+    },
+    {
+     "name": "cone edges match half width [jug]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [crimp]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [sloper]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [pinch]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [sidepull]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [undercling]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [foot_big]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "cone edges match half width [foot_chip]",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "normals describe the same cone",
+     "outcome": "passed",
+     "seconds": 0.007
+    },
+    {
+     "name": "hanging works on jug and sloper only",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "foot on a hand hold uses the foothold cone",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "direction rows act on force variables only",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "strength limit follows the grip",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "strength cones are the balls",
+     "outcome": "passed",
+     "seconds": 0.008
+    },
+    {
+     "name": "effort of the plan example",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "bands read t",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "solver measures fixed forces exactly",
+     "outcome": "passed",
+     "seconds": 0.004
+    },
+    {
+     "name": "solver t is the largest share",
+     "outcome": "passed",
+     "seconds": 0.101
+    },
+    {
+     "name": "solver rejects a force outside the cone",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "program size",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "one hand hang puts the body below the hand",
+     "outcome": "passed",
+     "seconds": 0.006
+    },
+    {
+     "name": "body to the side of one hand cannot balance",
+     "outcome": "passed",
+     "seconds": 0.004
+    },
+    {
+     "name": "two jugs share the weight",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "sidepull or undercling alone cannot balance",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "solution satisfies balance about any point",
+     "outcome": "passed",
+     "seconds": 0.002
+    },
+    {
+     "name": "balance rows ignore the resting limb",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "pull in is d over h [climber0]",
+     "outcome": "passed",
+     "seconds": 0.004
+    },
+    {
+     "name": "pull in is d over h [climber1]",
+     "outcome": "passed",
+     "seconds": 0.004
+    },
+    {
+     "name": "pull in is d over h [climber2]",
+     "outcome": "passed",
+     "seconds": 0.005
+    },
+    {
+     "name": "no feet means no pull in",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "a resting foot does not hold the body off the wall",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "solution does not tip",
+     "outcome": "passed",
+     "seconds": 0.002
+    },
+    {
+     "name": "pull in limit of each hold",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "jug to sloper makes it harder",
+     "outcome": "passed",
+     "seconds": 0.004
+    },
+    {
+     "name": "tipping makes the hands work harder",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "tipping rows shape",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "barn door fails with both feet on one side",
+     "outcome": "passed",
+     "seconds": 0.002
+    },
+    {
+     "name": "grip torque allows a small offset",
+     "outcome": "passed",
+     "seconds": 0.004
+    },
+    {
+     "name": "solution does not swing open",
+     "outcome": "passed",
+     "seconds": 0.002
+    },
+    {
+     "name": "barndoor rows shape",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "flexible climber reaches the high foot stiff one does not",
+     "outcome": "passed",
+     "seconds": 0.006
+    },
+    {
+     "name": "solution keeps feet below the limit",
+     "outcome": "passed",
+     "seconds": 0.006
+    },
+    {
+     "name": "a resting foot must also get there",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "flex rows shape",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "check strength failure names the limb",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "check balance failure",
+     "outcome": "passed",
+     "seconds": 0.001
+    },
+    {
+     "name": "check reach failure from flexibility",
+     "outcome": "passed",
+     "seconds": 0.003
+    },
+    {
+     "name": "no force limb carries nothing but must reach",
+     "outcome": "passed",
+     "seconds": 0.002
+    },
+    {
+     "name": "hand built program matches cvxpy",
+     "outcome": "passed",
+     "seconds": 0.001
+    }
+   ]
+  },
+  {
+   "file": "tests/test_sweep.py",
+   "about": "The height sweep (step 6): the sweep climber and the threshold bisection.",
+   "tests": [
+    {
+     "name": "grid is 19 heights from 150 to 195",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "sweep climber is halfway between cal and ava",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "one switch is bisected to tolerance",
+     "outcome": "passed",
+     "seconds": 0.0
+    },
+    {
+     "name": "every switch is reported",
+     "outcome": "passed",
+     "seconds": 0.0
+    }
+   ]
+  }
+ ]
+}

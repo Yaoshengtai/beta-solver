@@ -161,6 +161,11 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 
 .math-block mjx-container[display="true"] { display: block; max-width: 100%; margin: 0 !important; }
 .math-block mjx-container[display="true"] > svg { max-width: 100%; height: auto; }
 
+pre.code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.test-list { columns: 2 260px; margin: 8px 0 0; padding-left: 1.1em; list-style: none; font-size: 0.85rem; }
+.test-list li { break-inside: avoid; } .test-list .t-failed { color: var(--limit); font-weight: 600; }
+.tbl tr.row-bad td { color: var(--limit); } .tbl tr.row-total td { font-weight: 600; }
+.tbl details summary { cursor: pointer; }
 .limits { padding-left: 1.2em; }
 .limits li { margin: 0 0 0.7em; }
 .limits i { font-style: normal; font-weight: 600; color: var(--muted); }
@@ -791,11 +796,39 @@ __EXAMPLES__
   <header><p class="eyebrow">Appendix</p><h2>Implementation and tests</h2>
   <p class="lede">Data format, test results and how to reproduce everything.</p></header>
   <h3 id="appendix-format">Data format</h3>
-  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <p>All solving happens offline. <code>python -m betasolver.run_all</code> writes every example to one file, <code>site/results.json</code> (<span data-text="results-kb"></span>), and the page only reads it. The file records a fingerprint of the route definitions and the solver code; a test fails when the two no longer match.</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Level</th><th>Fields</th></tr></thead>
+    <tbody>
+      <tr><td>file</td><td><code>meta</code> (version, date, fingerprint, units: metres and body weights), <code>examples</code></td></tr>
+      <tr><td>example</td><td><code>id</code>, <code>title</code>, <code>lesson</code>, <code>text</code> (paragraphs with placeholders such as <code>{A.crux}</code>), <code>route</code>, <code>climbers</code>, <code>expect</code> (pass or fail per climber), <code>runs</code>, <code>checks</code>, <code>seconds</code>; example 6 also <code>sweep</code> (one row per height, the switches and H*)</td></tr>
+      <tr><td>route</td><td><code>wall</code>, <code>holds</code> (id, x, y, type, dir, use, role), <code>start_hands</code>, <code>finish</code>, <code>allow_feet_on_handholds</code></td></tr>
+      <tr><td>run</td><td><code>climber</code>, <code>label</code>, <code>status</code>, <code>crux</code>, <code>total</code>, <code>crux_step</code>, <code>start</code>, <code>fail</code> (step, state, phase, reason, limb, hold), <code>body</code> (lengths for drawing), <code>steps</code>, <code>stats</code> (states expanded, checks run, seconds)</td></tr>
+      <tr><td>step</td><td><code>text</code>, <code>limb</code>, <code>kind</code> (swap, match, cut, place), <code>from</code>, <code>to</code>, <code>swing</code>, <code>t_release</code>, <code>t_catch</code>, <code>t_end</code>, <code>difficulty</code>, <code>cost</code> (term by term), <code>limiting</code>, <code>frames</code></td></tr>
+      <tr><td>frame</td><td>four per step (start, release, catch, end): <code>state</code>, <code>torso</code>, <code>forces</code> (per limb: <code>f</code> in the wall plane, <code>n</code> pull-in for a hand or <code>m</code> push for a foot, <code>tau</code> twist), <code>t</code>, <code>util</code> (share of strength per limb), <code>joints</code> (points for drawing)</td></tr>
+    </tbody>
+  </table></div>
+  <p>The first move of the first example, as stored (long lists shortened):</p>
+  <pre class="code wrap" data-draw="format-excerpt"></pre>
+
   <h3 id="appendix-tests">Test results</h3>
-  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <p data-text="tests-summary"></p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="tests-table"></table></div>
+  <p>Solving time per example, from <code>results.json</code>:</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="solve-times"></table></div>
+
   <h3 id="appendix-reproduce">Reproducing the results</h3>
-  <div class="planned"><span class="chip">Planned · unit 7.2</span></div>
+  <p>From a fresh clone, with Python 3.11 or later:</p>
+  <pre class="code wrap">git clone https://github.com/Yaoshengtai/beta-solver.git
+cd beta-solver
+pip install -e ".[dev,exact]"
+# solve every example: site/results.json
+python -m betasolver.run_all
+# run every test and write the report above
+pytest --report site/test_report.json
+# build the page: docs/index.html
+python site/build_page.py</pre>
+  <p>The solver is deterministic, so <code>run_all</code> reproduces the same betas, numbers and failure reasons; only the timings and the date differ. <code>pytest</code> alone runs the tests without writing a report. <code>cvxpy</code>, installed by the <code>exact</code> extra, is used only to cross-check the hand-built cone program.</p>
 </section>
 
       <nav class="pager" id="pager" aria-label="Chapter navigation"></nav>
@@ -3191,6 +3224,87 @@ var Draw = (function () {
   if (DATA.results) renderExamples(DATA.results);
 
   /* source links */
+  /* ---------- #appendix: data format, test results (unit 7.2) ---------- */
+  function renderAppendix() {
+    var kb = document.querySelector('[data-text="results-kb"]');
+    if (kb && DATA.files && DATA.files.results_kb != null) kb.textContent = DATA.files.results_kb + " KB";
+    var R = DATA.results || {}, ex = (R.examples || [])[0];
+    var pre = document.querySelector('[data-draw="format-excerpt"]');
+    if (pre && ex) {
+      var run = ex.runs.filter(function (r) { return r.status === "ok"; })[0];
+      function shorten(v, depth) {
+        if (Array.isArray(v)) {
+          if (v.length && typeof v[0] === "number") return v;
+          var a = v.slice(0, 1).map(function (x) { return shorten(x, depth + 1); });
+          if (v.length > 1) a.push("… " + (v.length - 1) + " more");
+          return a;
+        }
+        if (v && typeof v === "object") {
+          var o = {};
+          Object.keys(v).forEach(function (k) { o[k] = k === "joints" ? "{…}" : shorten(v[k], depth + 1); });
+          return o;
+        }
+        return v;
+      }
+      var step = shorten(run.steps[0], 0);
+      pre.textContent = '{"examples": [{"id": "' + ex.id + '", "runs": [{"label": "' + run.label + '", "steps": [\n' +
+        JSON.stringify(step, null, 1).replace(/\[\n\s*(-?[\d.]+),\n\s*(-?[\d.]+)\n\s*\]/g, "[$1, $2]") + ",\n…]}]}]}";
+    }
+    var T = DATA.tests, sumEl = document.querySelector('[data-text="tests-summary"]'), tb = document.querySelector('[data-draw="tests-table"]');
+    if (sumEl && T) {
+      var n = T.counts.passed + T.counts.failed + T.counts.skipped;
+      sumEl.textContent = n + " tests in " + T.files.length + " files: " + T.counts.passed + " passed, " + T.counts.failed + " failed" +
+        (T.counts.skipped ? ", " + T.counts.skipped + " skipped" : "") + ", in " + Math.round(T.seconds) + " s (pytest " + T.pytest +
+        ", Python " + T.python + ", " + T.generated + "). Open a file to see its tests.";
+    } else if (sumEl) {
+      sumEl.textContent = "No test report yet: run pytest --report site/test_report.json, then rebuild.";
+    }
+    if (tb && T) {
+      tb.innerHTML = "<thead><tr><th>File</th><th>Tests</th><th>Passed</th><th>Time</th></tr></thead>";
+      var body = document.createElement("tbody");
+      T.files.forEach(function (f) {
+        var tr = document.createElement("tr"), td = document.createElement("td");
+        var d = document.createElement("details"), s = document.createElement("summary");
+        var code = document.createElement("code"); code.textContent = f.file.replace("tests/", "");
+        s.appendChild(code); s.appendChild(document.createTextNode(" " + f.about)); d.appendChild(s);
+        var ul = document.createElement("ul"); ul.className = "test-list";
+        f.tests.forEach(function (t) {
+          var li = document.createElement("li");
+          li.textContent = (t.outcome === "passed" ? "✓ " : t.outcome === "failed" ? "✗ " : "– ") + t.name;
+          li.className = "t-" + t.outcome;
+          ul.appendChild(li);
+        });
+        d.appendChild(ul); td.appendChild(d); tr.appendChild(td);
+        var passed = f.tests.filter(function (t) { return t.outcome === "passed"; }).length;
+        var secs = f.tests.reduce(function (a, t) { return a + t.seconds; }, 0);
+        [String(f.tests.length), String(passed), secs < 0.1 ? "< 0.1 s" : secs.toFixed(1) + " s"].forEach(function (x) {
+          var c = document.createElement("td"); c.textContent = x; tr.appendChild(c);
+        });
+        if (passed < f.tests.length) tr.className = "row-bad";
+        body.appendChild(tr);
+      });
+      tb.appendChild(body);
+    }
+    var st = document.querySelector('[data-draw="solve-times"]');
+    if (st && R.examples) {
+      st.innerHTML = "<thead><tr><th>Example</th><th>Climbers</th><th>Time</th></tr></thead>";
+      var b2 = document.createElement("tbody"), total = 0;
+      R.examples.forEach(function (e, i) {
+        total += e.seconds;
+        var tr = document.createElement("tr");
+        [(i + 1) + ". " + e.title + (e.sweep ? " (with the 19-height sweep)" : ""), String(e.runs.length), e.seconds.toFixed(1) + " s"].forEach(function (x) {
+          var c = document.createElement("td"); c.textContent = x; tr.appendChild(c);
+        });
+        b2.appendChild(tr);
+      });
+      var tr = document.createElement("tr"); tr.className = "row-total";
+      ["All examples", "", total.toFixed(1) + " s"].forEach(function (x) { var c = document.createElement("td"); c.textContent = x; tr.appendChild(c); });
+      b2.appendChild(tr);
+      st.appendChild(b2);
+    }
+  }
+  renderAppendix();
+
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
     a.href = DATA.meta.repo + "/blob/main/" + a.dataset.src;
   });

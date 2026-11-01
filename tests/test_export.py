@@ -1,3 +1,4 @@
+"""Export (step 8): pose smoothing and the format of a run."""
 import json
 
 import pytest

@@ -1,3 +1,4 @@
+"""Holds, routes and climbers (step 1)."""
 import pytest
 
 from betasolver.model import HOLD_TYPES, WALL_H, WALL_W, Hold, Route, hold_types_table

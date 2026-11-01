@@ -1,3 +1,4 @@
+"""The package installs and imports."""
 import betasolver
 
 

@@ -1,3 +1,4 @@
+"""Figure data for the site: each figure's numbers agree with the solver."""
 import importlib.util
 import math
 import sys

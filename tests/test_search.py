@@ -1,3 +1,4 @@
+"""The search (step 5): states, edges, two-stage Dijkstra against an exhaustive reference, failure reports."""
 import pytest
 
 from betasolver.model import AVA, Hold, Route
