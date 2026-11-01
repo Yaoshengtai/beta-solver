@@ -156,3 +156,34 @@ def state_example() -> dict:
         poses.append({"torso": list(torso), "joints": body.joints(torso, ends)})
     return _round({"route": r["id"], "state": state.as_dict(), "holds": r["holds"],
                    "climber": {"key": AVA.key, "H": AVA.H, "head": list(body.head)}, "poses": poses})
+
+
+def reach_figure() -> dict:
+    """Data for the reach figure in #check: one state, its torso region, two starting positions."""
+    from betasolver.model import Route
+    from betasolver.stance import State, centres, reaches_all, torso_region
+
+    r = route_example()
+    route = Route(r["id"], r["title"], r["lesson"],
+                  [Hold(h["id"], h["x"], h["y"], h["type"], h["dir"], h["use"]) for h in r["holds"]],
+                  tuple(r["start_hands"]), r["finish"])
+    state = State("H1", "H2", "F1", "F2")
+    body = make_body(AVA)
+    region = torso_region(body, route, state, sides=128)
+    cx = sum(p[0] for p in region) / len(region)
+    cy = sum(p[1] for p in region) / len(region)
+    good, low = (cx, cy), (cx, cy - 0.42)
+    if not all(reaches_all(body, route, state, good).values()):
+        raise ValueError("the good example must reach every hold")
+    if all(reaches_all(body, route, state, low).values()):
+        raise ValueError("the low example must miss a hold")
+    return _round({
+        "state": state.as_dict(),
+        "holds": r["holds"],
+        "climber": {"key": AVA.key, "H": AVA.H, "head": list(body.head)},
+        "body": body.to_dict(),
+        "centres": {k: list(v) for k, v in centres(body, route, state).items()},
+        "region": [list(p) for p in region],
+        "presets": {"good": list(good), "low": list(low)},
+        "view": {"x0": 0.55, "y0": 0.05, "x1": 2.45, "y1": 2.25},
+    })

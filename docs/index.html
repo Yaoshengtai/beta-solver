@@ -277,6 +277,23 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .sub-h { font-family: var(--font-display); font-size: var(--step-1); font-weight: 600; margin: 28px 0 8px; }
+.reach-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reach-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+.reach-cell svg { touch-action: none; cursor: grab; }
+.reach-cell svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reach-status { margin: 10px 0 0; font-weight: 600; font-size: 0.95rem; }
+.reach-status.ok { color: var(--easy); }
+.reach-status.bad { color: var(--limit); }
+.disc { fill: var(--accent); fill-opacity: 0.07; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.disc.out { stroke: var(--limit); stroke-dasharray: none; stroke-width: 1.6; }
+.region { fill: var(--accent); fill-opacity: 0.28; stroke: var(--accent); stroke-width: 1.4; }
+.reach.out { stroke: var(--limit); opacity: 1; stroke-dasharray: none; stroke-width: 1.6; }
+.miss { stroke: var(--limit); stroke-width: 2; stroke-dasharray: 4 3; }
+.limb-out { stroke: var(--limit); fill: var(--limit); }
+details.impl { margin: 8px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
+details.impl summary { cursor: pointer; font-weight: 600; }
+details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
+@media (max-width: 520px) { .reach-row { grid-template-columns: minmax(0, 1fr); } }
 .pose-row { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .pose-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 .cl-A { --cl: var(--c-A); } .cl-B { --cl: var(--c-B); } .cl-C { --cl: var(--c-C); } .cl-D { --cl: var(--c-D); }
@@ -538,7 +555,22 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
   <p>The effort \(t^\star\), the body position, every limb's force, and the limb that limits \(t^\star\). A failed check gives one reason:</p>
   <ul data-draw="reasons-list"></ul>
   <h3 id="check-reach">Reach</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.1</span><p>Every hold must be within reach of its shoulder or hip. Interactive: drag the body and watch holds fall out of reach.</p></div>
+  <p><b>The idea.</b> Each hold must be within reach of its shoulder or hip. The shoulders and hips move with the body, so this really limits where the body can be.</p>
+  <p><b>The math.</b> For every limb \(k\) on a hold, with hold position \(p_k\), offset \(o_k\) of its shoulder or hip and limb length \(L_k\):</p>
+  <div class="math-block">\[ \big\| p_k - (x + o_k) \big\|_2 \;\le\; L_k, \qquad k \in A \]</div>
+  <p>Seen from the body, each hold must lie inside a circle around its shoulder or hip. Seen from the centre of mass, the positions that reach hold \(k\) form a disc with centre \(p_k - o_k\) and radius \(L_k\); the body can be anywhere in the overlap of the four discs. If they do not overlap, the state is out of reach. An overlap of discs is convex, which the move chapter relies on.</p>
+
+  <figure class="fig" id="fig-reach">
+    <div class="seg" role="group" aria-label="Start from" data-draw="reach-presets"></div>
+    <div class="reach-row" data-draw="reach"></div>
+    <p class="reach-status" data-text="reach-status" aria-live="polite"></p>
+    <figcaption><b>Reach, two ways.</b> Drag the centre of mass in either panel, or focus a panel and use the arrow keys. Body view: circles around the shoulders and hips; a limb that cannot reach its hold turns red. Centre-of-mass view: the disc of body positions that reach each hold, and their overlap, shaded.</figcaption>
+  </figure>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>The solver needs linear constraints, so each disc is replaced by the regular polygon with <span data-text="reach-sides"></span> sides inscribed in it: for each direction \(u_i\), \(u_i^\top (p_k - x - o_k) \le L_k \cos(\pi / n)\). The polygon sits inside the circle, so it can only call a reachable hold unreachable, never the reverse, and by at most <span data-text="reach-loss"></span> of the limb length. Before solving, a pair of holds farther apart than the two limbs plus the distance between their attachment points is ruled out at once. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>reach_rows</code>, <code>torso_region</code>, <code>precheck</code>.</p>
+  </details>
   <h3 id="check-direction">Direction</h3>
   <div class="planned"><span class="chip">Planned · unit 2.2</span><p>Each hold can only push on you within a range of directions.</p></div>
   <h3 id="check-strength">Strength and effort</h3>
@@ -665,7 +697,7 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
   </main>
 </div>
 
-<script type="application/json" id="site-data">{"meta":{"version":"0.0.1","built":"2026-10-31","repo":"https://github.com/Yaoshengtai/beta-solver"},"model":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"name":"jug","dir":90,"alpha":70,"grip":"jug","beta":1.5,"r":0.05,"feet_only":false,"note":"Like a hook: it holds you in almost any direction."},{"name":"crimp","dir":90,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"A thin edge: pull down, within a moderate range."},{"name":"sloper","dir":90,"alpha":15,"grip":"sloper","beta":0.3,"r":0.0,"feet_only":false,"note":"Nothing to hook: the body must hang right below it."},{"name":"pinch","dir":90,"alpha":55,"grip":"pinch","beta":1.0,"r":0.04,"feet_only":false,"note":"Squeezed from both sides, so it holds a wide range."},{"name":"sidepull","dir":null,"alpha":35,"grip":"pinch","beta":0.8,"r":0.03,"feet_only":false,"note":"Faces sideways: another limb has to push the other way."},{"name":"undercling","dir":270,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"Faces down: the hand pulls up, so a foot must push."},{"name":"foot_big","dir":90,"alpha":60,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A big foothold to stand on."},{"name":"foot_chip","dir":90,"alpha":35,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A small chip: the foot must push nearly straight down."}],"foot_on_handhold":"foot_big","climbers":[{"key":"A","name":"Ava","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Short, with strong fingers and flexible hips.","d_wall":0.24},{"key":"B","name":"Ben","H":1.85,"span":1.9,"F":{"jug":1.2,"crimp":0.6,"sloper":0.55,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Tall with a long reach; weaker on crimps, better on slopers, stiff hips.","d_wall":0.2775},{"key":"C","name":"Cal","H":1.7,"span":1.7,"F":{"jug":0.8,"crimp":0.35,"sloper":0.25,"pinch":0.35,"foot":1.5},"flex":0.0,"w_cross":0.15,"blurb":"A beginner: average size, a weaker grip on everything.","d_wall":0.255},{"key":"D","name":"Ava (injured)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.0,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Ava with an injured finger: she cannot pull on crimps at all.","d_wall":0.24}],"variants":[{"key":"A_stiff","name":"Ava (less flexible)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Ava with Ben's hip flexibility. Used in example 4.","d_wall":0.24,"base":"A"},{"key":"A_cross0","name":"Ava (crosses freely)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.0,"blurb":"Ava with no dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"},{"key":"A_cross4","name":"Ava (avoids crossing)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.4,"blurb":"Ava with a strong dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"}],"body":{"shoulder":[0.13,0.26],"hip":[0.095,-0.03],"head":[0.37,0.065],"leg":0.5,"grip_inset":0.03,"shoulder_width_in_span":0.259,"upper_arm":0.186,"thigh":0.245,"d_wall":0.15}},"stance":{"unknowns":[{"name":"x","tex":"x = (x_c,\\ y_c)","size":2,"per":"body","meaning":"Centre of mass on the wall: the body position.","climbing":"Sit low or high, lean left or right."},{"name":"f","tex":"f_k","size":2,"per":"pushing","meaning":"In-wall force from the hold on limb k.","climbing":"How each hand and foot is loaded."},{"name":"N","tex":"N_k \\ge 0","size":1,"per":"pushing hand","meaning":"Pull of hand k toward the wall.","climbing":"Holding yourself in."},{"name":"M","tex":"M_k \\ge 0","size":1,"per":"pushing foot","meaning":"Push of the wall on foot k.","climbing":"Pressing the foot in."},{"name":"tau","tex":"\\tau_k","size":1,"per":"pushing hand","meaning":"Twist of hand k about a vertical axis.","climbing":"Gripping against a barn-door."},{"name":"t","tex":"t","size":1,"per":"body","meaning":"Effort: the largest share of strength any limb uses.","climbing":"How tiring the position is."}],"constraints":[{"n":1,"key":"reach","name":"Reach","section":"check-reach","climbing":"Every hold is within reach of its arm or leg.","limits":"body position"},{"n":2,"key":"direction","name":"Direction","section":"check-direction","climbing":"Each hold can only push you in certain directions.","limits":"direction of the in-wall forces"},{"n":3,"key":"strength","name":"Strength","section":"check-strength","climbing":"No hand or foot goes over its strength.","limits":"size of the forces; defines t"},{"n":4,"key":"inplane","name":"In-plane balance","section":"check-inplane","climbing":"No falling, no sliding sideways, no swinging.","limits":"in-wall forces and body position"},{"n":5,"key":"outofwall","name":"Out-of-wall balance","section":"check-tipping","climbing":"No tipping backwards, no barn-door.","limits":"hand pull, foot push, grip torque"},{"n":6,"key":"flex","name":"Flexibility","section":"check-flex","climbing":"A foot cannot go too far above the hip.","limits":"body position"}],"reasons":{"unusable":"a hold this climber cannot use at all","reach":"cannot reach","strength":"not strong enough","balance":"direction or balance does not work"},"sizes":{"four":17,"one_foot":14,"no_feet":11}},"figures":{"legend":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"type":"jug","use":"both","dir":90},{"type":"crimp","use":"both","dir":90},{"type":"sloper","use":"both","dir":90},{"type":"pinch","use":"both","dir":90},{"type":"sidepull","use":"both","dir":0},{"type":"undercling","use":"both","dir":270},{"type":"foot_big","use":"foot","dir":90},{"type":"foot_chip","use":"foot","dir":90}],"markings":[{"id":"S1","x":0.25,"y":0.25,"type":"jug","dir":90,"role":"start","used":true},{"id":"T1","x":0.75,"y":0.25,"type":"jug","dir":90,"role":"finish","used":true},{"id":"U1","x":1.25,"y":0.25,"type":"jug","dir":90,"role":"normal","used":true},{"id":"N1","x":1.75,"y":0.25,"type":"jug","dir":90,"role":"normal","used":false}],"climber":{"key":"A","H":1.6,"span":1.6,"d_wall":0.24,"head":[0.592,0.104]},"scene":{"x0":0.75,"y0":0.45,"x1":2.85,"y1":3.05,"holds":[{"id":"H1","x":1.15,"y":2.3,"type":"jug","dir":90,"role":"normal"},{"id":"H2","x":1.85,"y":2.05,"type":"crimp","dir":90,"role":"normal"},{"id":"H3","x":1.55,"y":2.75,"type":"sloper","dir":90,"role":"normal"},{"id":"H4","x":2.15,"y":2.55,"type":"pinch","dir":90,"role":"normal"},{"id":"F1","x":1.25,"y":0.75,"type":"foot_big","dir":90,"role":"normal"},{"id":"F2","x":1.75,"y":0.95,"type":"foot_chip","dir":90,"role":"normal"},{"id":"F3","x":1.0,"y":1.2,"type":"foot_big","dir":90,"role":"normal"}],"frame":{"torso":[1.5,1.42],"joints":{"LH":{"shoulder":[1.292,1.836],"elbow":[1.095,2.059],"end":[1.15,2.3]},"RH":{"shoulder":[1.708,1.836],"elbow":[2.005,1.857],"end":[1.85,2.05]},"LF":{"hip":[1.348,1.372],"knee":[1.057,1.109],"end":[1.25,0.75]},"RF":{"hip":[1.652,1.372],"knee":[2.025,1.251],"end":[1.75,0.95]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.32],"n":0.21},"RH":{"f":[-0.1,0.16],"n":0.12},"LF":{"f":[0.07,0.29],"m":0.2},"RF":{"f":[-0.03,0.23],"m":0.13}},"util":{"LH":0.32,"RH":0.71,"LF":0.19,"RF":0.88}},"trail":[[1.42,1.3],[1.47,1.36],[1.5,1.42]]},"climbers":[{"key":"A","name":"Ava"},{"key":"B","name":"Ben"},{"key":"C","name":"Cal"},{"key":"D","name":"Ava (injured)"}],"force_scale":0.3,"util_bands":[0.5,0.8]},"route_example":{"id":"format-demo","title":"Format example","lesson":"A small route that only shows how routes are written down.","wall":{"w":3.0,"h":4.2},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"start_hands":["H1","H2"],"finish":"H6","allow_feet_on_handholds":true},"bodies":[{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92},{"climber":"B","H":1.85,"offsets":{"LH":[-0.241,0.481],"RH":[0.241,0.481],"LF":[-0.176,-0.056],"RF":[0.176,-0.056]},"L":{"LH":0.655,"RH":0.655,"LF":0.925,"RF":0.925},"seg":{"LH":[0.344,0.311],"RH":[0.344,0.311],"LF":[0.453,0.472],"RF":[0.453,0.472]},"head":[0.684,0.12],"d_wall":0.278,"flex":-0.1,"name":"Ben","span":1.9,"stand":{"torso":[0.0,0.971],"joints":{"LH":{"shoulder":[-0.241,1.452],"elbow":[-0.241,1.797],"end":[-0.241,2.107]},"RH":{"shoulder":[0.241,1.452],"elbow":[0.241,1.797],"end":[0.241,2.107]},"LF":{"hip":[-0.176,0.916],"knee":[-0.239,0.467],"end":[-0.304,0.0]},"RF":{"hip":[0.176,0.916],"knee":[0.239,0.467],"end":[0.304,0.0]}}},"reach":2.107,"foot_limit":0.731},{"climber":"C","H":1.7,"offsets":{"LH":[-0.221,0.442],"RH":[0.221,0.442],"LF":[-0.162,-0.051],"RF":[0.162,-0.051]},"L":{"LH":0.579,"RH":0.579,"LF":0.85,"RF":0.85},"seg":{"LH":[0.316,0.263],"RH":[0.316,0.263],"LF":[0.416,0.433],"RF":[0.416,0.433]},"head":[0.629,0.111],"d_wall":0.255,"flex":0.0,"name":"Cal","span":1.7,"stand":{"torso":[0.0,0.893],"joints":{"LH":{"shoulder":[-0.221,1.335],"elbow":[-0.221,1.651],"end":[-0.221,1.914]},"RH":{"shoulder":[0.221,1.335],"elbow":[0.221,1.651],"end":[0.221,1.914]},"LF":{"hip":[-0.162,0.842],"knee":[-0.219,0.429],"end":[-0.28,0.0]},"RF":{"hip":[0.162,0.842],"knee":[0.219,0.429],"end":[0.28,0.0]}}},"reach":1.914,"foot_limit":0.842},{"climber":"D","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava (injured)","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92}],"state_example":{"route":"format-demo","state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"poses":[{"torso":[1.36,0.84],"joints":{"LH":{"shoulder":[1.152,1.256],"elbow":[0.976,1.496],"end":[1.2,1.6]},"RH":{"shoulder":[1.568,1.256],"elbow":[1.857,1.327],"end":[1.75,1.55]},"LF":{"hip":[1.208,0.792],"knee":[0.869,0.595],"end":[1.25,0.45]},"RF":{"hip":[1.512,0.792],"knee":[1.758,1.097],"end":[1.85,0.7]}}},{"torso":[1.52,0.96],"joints":{"LH":{"shoulder":[1.312,1.376],"elbow":[1.02,1.431],"end":[1.2,1.6]},"RH":{"shoulder":[1.728,1.376],"elbow":[1.994,1.51],"end":[1.75,1.55]},"LF":{"hip":[1.368,0.912],"knee":[1.001,0.773],"end":[1.25,0.45]},"RF":{"hip":[1.672,0.912],"knee":[2.033,1.065],"end":[1.85,0.7]}}},{"torso":[1.7,0.76],"joints":{"LH":{"shoulder":[1.492,1.176],"elbow":[1.258,1.36],"end":[1.2,1.6]},"RH":{"shoulder":[1.908,1.176],"elbow":[1.65,1.324],"end":[1.75,1.55]},"LF":{"hip":[1.548,0.712],"knee":[1.182,0.852],"end":[1.25,0.45]},"RF":{"hip":[1.852,0.712],"knee":[1.916,1.099],"end":[1.85,0.7]}}}]}}}</script>
+<script type="application/json" id="site-data">{"meta":{"version":"0.0.1","built":"2026-11-01","repo":"https://github.com/Yaoshengtai/beta-solver"},"model":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"name":"jug","dir":90,"alpha":70,"grip":"jug","beta":1.5,"r":0.05,"feet_only":false,"note":"Like a hook: it holds you in almost any direction."},{"name":"crimp","dir":90,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"A thin edge: pull down, within a moderate range."},{"name":"sloper","dir":90,"alpha":15,"grip":"sloper","beta":0.3,"r":0.0,"feet_only":false,"note":"Nothing to hook: the body must hang right below it."},{"name":"pinch","dir":90,"alpha":55,"grip":"pinch","beta":1.0,"r":0.04,"feet_only":false,"note":"Squeezed from both sides, so it holds a wide range."},{"name":"sidepull","dir":null,"alpha":35,"grip":"pinch","beta":0.8,"r":0.03,"feet_only":false,"note":"Faces sideways: another limb has to push the other way."},{"name":"undercling","dir":270,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"Faces down: the hand pulls up, so a foot must push."},{"name":"foot_big","dir":90,"alpha":60,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A big foothold to stand on."},{"name":"foot_chip","dir":90,"alpha":35,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A small chip: the foot must push nearly straight down."}],"foot_on_handhold":"foot_big","climbers":[{"key":"A","name":"Ava","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Short, with strong fingers and flexible hips.","d_wall":0.24},{"key":"B","name":"Ben","H":1.85,"span":1.9,"F":{"jug":1.2,"crimp":0.6,"sloper":0.55,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Tall with a long reach; weaker on crimps, better on slopers, stiff hips.","d_wall":0.2775},{"key":"C","name":"Cal","H":1.7,"span":1.7,"F":{"jug":0.8,"crimp":0.35,"sloper":0.25,"pinch":0.35,"foot":1.5},"flex":0.0,"w_cross":0.15,"blurb":"A beginner: average size, a weaker grip on everything.","d_wall":0.255},{"key":"D","name":"Ava (injured)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.0,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Ava with an injured finger: she cannot pull on crimps at all.","d_wall":0.24}],"variants":[{"key":"A_stiff","name":"Ava (less flexible)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Ava with Ben's hip flexibility. Used in example 4.","d_wall":0.24,"base":"A"},{"key":"A_cross0","name":"Ava (crosses freely)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.0,"blurb":"Ava with no dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"},{"key":"A_cross4","name":"Ava (avoids crossing)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.4,"blurb":"Ava with a strong dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"}],"body":{"shoulder":[0.13,0.26],"hip":[0.095,-0.03],"head":[0.37,0.065],"leg":0.5,"grip_inset":0.03,"shoulder_width_in_span":0.259,"upper_arm":0.186,"thigh":0.245,"d_wall":0.15}},"stance":{"unknowns":[{"name":"x","tex":"x = (x_c,\\ y_c)","size":2,"per":"body","meaning":"Centre of mass on the wall: the body position.","climbing":"Sit low or high, lean left or right."},{"name":"f","tex":"f_k","size":2,"per":"pushing","meaning":"In-wall force from the hold on limb k.","climbing":"How each hand and foot is loaded."},{"name":"N","tex":"N_k \\ge 0","size":1,"per":"pushing hand","meaning":"Pull of hand k toward the wall.","climbing":"Holding yourself in."},{"name":"M","tex":"M_k \\ge 0","size":1,"per":"pushing foot","meaning":"Push of the wall on foot k.","climbing":"Pressing the foot in."},{"name":"tau","tex":"\\tau_k","size":1,"per":"pushing hand","meaning":"Twist of hand k about a vertical axis.","climbing":"Gripping against a barn-door."},{"name":"t","tex":"t","size":1,"per":"body","meaning":"Effort: the largest share of strength any limb uses.","climbing":"How tiring the position is."}],"constraints":[{"n":1,"key":"reach","name":"Reach","section":"check-reach","climbing":"Every hold is within reach of its arm or leg.","limits":"body position"},{"n":2,"key":"direction","name":"Direction","section":"check-direction","climbing":"Each hold can only push you in certain directions.","limits":"direction of the in-wall forces"},{"n":3,"key":"strength","name":"Strength","section":"check-strength","climbing":"No hand or foot goes over its strength.","limits":"size of the forces; defines t"},{"n":4,"key":"inplane","name":"In-plane balance","section":"check-inplane","climbing":"No falling, no sliding sideways, no swinging.","limits":"in-wall forces and body position"},{"n":5,"key":"outofwall","name":"Out-of-wall balance","section":"check-tipping","climbing":"No tipping backwards, no barn-door.","limits":"hand pull, foot push, grip torque"},{"n":6,"key":"flex","name":"Flexibility","section":"check-flex","climbing":"A foot cannot go too far above the hip.","limits":"body position"}],"reasons":{"unusable":"a hold this climber cannot use at all","reach":"cannot reach","strength":"not strong enough","balance":"direction or balance does not work"},"reach_sides":16,"sizes":{"four":17,"one_foot":14,"no_feet":11}},"figures":{"legend":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"type":"jug","use":"both","dir":90},{"type":"crimp","use":"both","dir":90},{"type":"sloper","use":"both","dir":90},{"type":"pinch","use":"both","dir":90},{"type":"sidepull","use":"both","dir":0},{"type":"undercling","use":"both","dir":270},{"type":"foot_big","use":"foot","dir":90},{"type":"foot_chip","use":"foot","dir":90}],"markings":[{"id":"S1","x":0.25,"y":0.25,"type":"jug","dir":90,"role":"start","used":true},{"id":"T1","x":0.75,"y":0.25,"type":"jug","dir":90,"role":"finish","used":true},{"id":"U1","x":1.25,"y":0.25,"type":"jug","dir":90,"role":"normal","used":true},{"id":"N1","x":1.75,"y":0.25,"type":"jug","dir":90,"role":"normal","used":false}],"climber":{"key":"A","H":1.6,"span":1.6,"d_wall":0.24,"head":[0.592,0.104]},"scene":{"x0":0.75,"y0":0.45,"x1":2.85,"y1":3.05,"holds":[{"id":"H1","x":1.15,"y":2.3,"type":"jug","dir":90,"role":"normal"},{"id":"H2","x":1.85,"y":2.05,"type":"crimp","dir":90,"role":"normal"},{"id":"H3","x":1.55,"y":2.75,"type":"sloper","dir":90,"role":"normal"},{"id":"H4","x":2.15,"y":2.55,"type":"pinch","dir":90,"role":"normal"},{"id":"F1","x":1.25,"y":0.75,"type":"foot_big","dir":90,"role":"normal"},{"id":"F2","x":1.75,"y":0.95,"type":"foot_chip","dir":90,"role":"normal"},{"id":"F3","x":1.0,"y":1.2,"type":"foot_big","dir":90,"role":"normal"}],"frame":{"torso":[1.5,1.42],"joints":{"LH":{"shoulder":[1.292,1.836],"elbow":[1.095,2.059],"end":[1.15,2.3]},"RH":{"shoulder":[1.708,1.836],"elbow":[2.005,1.857],"end":[1.85,2.05]},"LF":{"hip":[1.348,1.372],"knee":[1.057,1.109],"end":[1.25,0.75]},"RF":{"hip":[1.652,1.372],"knee":[2.025,1.251],"end":[1.75,0.95]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.32],"n":0.21},"RH":{"f":[-0.1,0.16],"n":0.12},"LF":{"f":[0.07,0.29],"m":0.2},"RF":{"f":[-0.03,0.23],"m":0.13}},"util":{"LH":0.32,"RH":0.71,"LF":0.19,"RF":0.88}},"trail":[[1.42,1.3],[1.47,1.36],[1.5,1.42]]},"climbers":[{"key":"A","name":"Ava"},{"key":"B","name":"Ben"},{"key":"C","name":"Cal"},{"key":"D","name":"Ava (injured)"}],"force_scale":0.3,"util_bands":[0.5,0.8]},"route_example":{"id":"format-demo","title":"Format example","lesson":"A small route that only shows how routes are written down.","wall":{"w":3.0,"h":4.2},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"start_hands":["H1","H2"],"finish":"H6","allow_feet_on_handholds":true},"bodies":[{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92},{"climber":"B","H":1.85,"offsets":{"LH":[-0.241,0.481],"RH":[0.241,0.481],"LF":[-0.176,-0.056],"RF":[0.176,-0.056]},"L":{"LH":0.655,"RH":0.655,"LF":0.925,"RF":0.925},"seg":{"LH":[0.344,0.311],"RH":[0.344,0.311],"LF":[0.453,0.472],"RF":[0.453,0.472]},"head":[0.684,0.12],"d_wall":0.278,"flex":-0.1,"name":"Ben","span":1.9,"stand":{"torso":[0.0,0.971],"joints":{"LH":{"shoulder":[-0.241,1.452],"elbow":[-0.241,1.797],"end":[-0.241,2.107]},"RH":{"shoulder":[0.241,1.452],"elbow":[0.241,1.797],"end":[0.241,2.107]},"LF":{"hip":[-0.176,0.916],"knee":[-0.239,0.467],"end":[-0.304,0.0]},"RF":{"hip":[0.176,0.916],"knee":[0.239,0.467],"end":[0.304,0.0]}}},"reach":2.107,"foot_limit":0.731},{"climber":"C","H":1.7,"offsets":{"LH":[-0.221,0.442],"RH":[0.221,0.442],"LF":[-0.162,-0.051],"RF":[0.162,-0.051]},"L":{"LH":0.579,"RH":0.579,"LF":0.85,"RF":0.85},"seg":{"LH":[0.316,0.263],"RH":[0.316,0.263],"LF":[0.416,0.433],"RF":[0.416,0.433]},"head":[0.629,0.111],"d_wall":0.255,"flex":0.0,"name":"Cal","span":1.7,"stand":{"torso":[0.0,0.893],"joints":{"LH":{"shoulder":[-0.221,1.335],"elbow":[-0.221,1.651],"end":[-0.221,1.914]},"RH":{"shoulder":[0.221,1.335],"elbow":[0.221,1.651],"end":[0.221,1.914]},"LF":{"hip":[-0.162,0.842],"knee":[-0.219,0.429],"end":[-0.28,0.0]},"RF":{"hip":[0.162,0.842],"knee":[0.219,0.429],"end":[0.28,0.0]}}},"reach":1.914,"foot_limit":0.842},{"climber":"D","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava (injured)","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92}],"state_example":{"route":"format-demo","state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"poses":[{"torso":[1.36,0.84],"joints":{"LH":{"shoulder":[1.152,1.256],"elbow":[0.976,1.496],"end":[1.2,1.6]},"RH":{"shoulder":[1.568,1.256],"elbow":[1.857,1.327],"end":[1.75,1.55]},"LF":{"hip":[1.208,0.792],"knee":[0.869,0.595],"end":[1.25,0.45]},"RF":{"hip":[1.512,0.792],"knee":[1.758,1.097],"end":[1.85,0.7]}}},{"torso":[1.52,0.96],"joints":{"LH":{"shoulder":[1.312,1.376],"elbow":[1.02,1.431],"end":[1.2,1.6]},"RH":{"shoulder":[1.728,1.376],"elbow":[1.994,1.51],"end":[1.75,1.55]},"LF":{"hip":[1.368,0.912],"knee":[1.001,0.773],"end":[1.25,0.45]},"RF":{"hip":[1.672,0.912],"knee":[2.033,1.065],"end":[1.85,0.7]}}},{"torso":[1.7,0.76],"joints":{"LH":{"shoulder":[1.492,1.176],"elbow":[1.258,1.36],"end":[1.2,1.6]},"RH":{"shoulder":[1.908,1.176],"elbow":[1.65,1.324],"end":[1.75,1.55]},"LF":{"hip":[1.548,0.712],"knee":[1.182,0.852],"end":[1.25,0.45]},"RF":{"hip":[1.852,0.712],"knee":[1.916,1.099],"end":[1.85,0.7]}}}]},"reach":{"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"body":{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08},"centres":{"LH":[1.408,1.184],"RH":[1.542,1.134],"LF":[1.402,0.498],"RF":[1.698,0.748]},"region":[[1.287,0.653],[1.289,0.652],[1.315,0.647],[1.341,0.643],[1.368,0.641],[1.395,0.639],[1.421,0.639],[1.448,0.641],[1.475,0.643],[1.501,0.647],[1.527,0.652],[1.553,0.659],[1.579,0.667],[1.604,0.676],[1.629,0.686],[1.653,0.697],[1.677,0.71],[1.699,0.724],[1.722,0.739],[1.743,0.755],[1.764,0.771],[1.784,0.789],[1.803,0.808],[1.821,0.828],[1.837,0.849],[1.853,0.87],[1.868,0.893],[1.882,0.915],[1.895,0.939],[1.906,0.963],[1.916,0.988],[1.925,1.013],[1.933,1.039],[1.94,1.065],[1.944,1.086],[1.925,1.104],[1.894,1.129],[1.863,1.152],[1.83,1.174],[1.796,1.194],[1.762,1.213],[1.726,1.229],[1.69,1.244],[1.653,1.258],[1.615,1.269],[1.577,1.279],[1.539,1.286],[1.5,1.292],[1.461,1.296],[1.422,1.298],[1.382,1.298],[1.343,1.296],[1.304,1.292],[1.265,1.286],[1.227,1.279],[1.189,1.269],[1.151,1.258],[1.114,1.244],[1.078,1.229],[1.049,1.216],[1.044,1.209],[1.022,1.176],[1.002,1.142],[0.997,1.134],[0.997,1.121],[0.999,1.094],[1.001,1.067],[1.005,1.041],[1.01,1.015],[1.017,0.989],[1.025,0.963],[1.034,0.938],[1.044,0.913],[1.055,0.889],[1.068,0.865],[1.082,0.843],[1.097,0.82],[1.113,0.799],[1.129,0.778],[1.147,0.758],[1.166,0.739],[1.186,0.721],[1.207,0.705],[1.228,0.689],[1.251,0.674],[1.273,0.66]],"presets":{"good":[1.44,0.954],"low":[1.44,0.534]},"view":{"x0":0.55,"y0":0.05,"x1":2.45,"y1":2.25}}}}</script>
 <script>
 /* ---------- drawing module: wall, holds, climber, forces ----------
    World coordinates are metres, origin bottom-left, y up. A scene maps them
@@ -674,6 +706,7 @@ var Draw = (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
   var LIMBS = ["LH", "RH", "LF", "RF"];
+  var clipCount = 0;
 
   function el(parent, tag, attrs, cls) {
     var e = document.createElementNS(NS, tag);
@@ -696,6 +729,8 @@ var Draw = (function () {
       svg: svg, k: k, W: W, H: H,
       X: function (x) { return r3(padL + (x - o.x0) * k); },
       Y: function (y) { return r3(padT + (o.y1 - y) * k); },
+      ix: function (px) { return o.x0 + (px - padL) / k; },
+      iy: function (py) { return o.y1 - (py - padT) / k; },
       box: o
     };
     sc.layers = {};
@@ -710,6 +745,16 @@ var Draw = (function () {
     var b = sc.box, g = sc.layers.wall;
     var x0 = Math.max(0, b.x0), x1 = Math.min(w.w, b.x1), y0 = Math.max(0, b.y0), y1 = Math.min(w.h, b.y1);
     el(g, "rect", { x: sc.X(x0), y: sc.Y(y1), width: r3((x1 - x0) * sc.k), height: r3((y1 - y0) * sc.k), rx: 2 }, "w-wall");
+    if (opts.clip) { // keep circles and regions inside the wall
+      if (!sc.clipId) {
+        sc.clipId = "clip" + (++clipCount);
+        var cp = el(el(sc.svg, "defs"), "clipPath", { id: sc.clipId });
+        el(cp, "rect", { x: sc.X(x0), y: sc.Y(y1), width: r3((x1 - x0) * sc.k), height: r3((y1 - y0) * sc.k) });
+      }
+      var id = sc.clipId;
+      sc.layers.trail.setAttribute("clip-path", "url(#" + id + ")");
+      sc.layers.holds.setAttribute("clip-path", "url(#" + id + ")");
+    }
     var step = opts.grid;
     if (step) {
       var d = "";
@@ -833,7 +878,7 @@ var Draw = (function () {
       var j = J[limb];
       if (!j) return;
       var root = j.shoulder || j.hip, mid = j.elbow || j.knee;
-      var uc = opts.util && frame.util ? utilClass(frame.util[limb], bands) : null;
+      var uc = opts.limbClass && opts.limbClass[limb] ? opts.limbClass[limb] : opts.util && frame.util ? utilClass(frame.util[limb], bands) : null;
       var cls = uc || "cl-stroke";
       var pts = [P(root), P(mid), P(j.end)];
       el(g, "path", { d: "M" + pts.map(function (p) { return p.join(" "); }).join("L"), "stroke-width": r3(wLimb) }, "fg-limb " + cls);
@@ -907,6 +952,37 @@ var Draw = (function () {
     });
   }
 
+  /* joints for drawing, mirroring body.py: elbows down and out, knees out.
+     A limb whose hold is out of reach points straight at it at full length. */
+  function twoLink(root, end, a, b, prefer) {
+    var dx = end[0] - root[0], dy = end[1] - root[1], d = Math.hypot(dx, dy);
+    if (d < 1e-9) return [root[0], root[1] - a];
+    var ux = dx / d, uy = dy / d;
+    if (d >= a + b) return [root[0] + ux * a, root[1] + uy * a];
+    var c = Math.max(-1, Math.min(1, (a * a + d * d - b * b) / (2 * a * d))), th = Math.acos(c), best = null, bs = -Infinity;
+    [1, -1].forEach(function (s) {
+      var cs = Math.cos(s * th), sn = Math.sin(s * th), p = [root[0] + a * (ux * cs - uy * sn), root[1] + a * (ux * sn + uy * cs)];
+      var sc = prefer(p); if (sc > bs) { bs = sc; best = p; }
+    });
+    return best;
+  }
+  function pose(body, torso, ends) {
+    var J = {}, out = {};
+    LIMBS.forEach(function (l) {
+      var o = body.offsets[l], root = [torso[0] + o[0], torso[1] + o[1]], end = ends[l];
+      if (!end) return;
+      var side = l[0] === "L" ? -1 : 1, seg = body.seg[l], L = body.L[l];
+      var d = Math.hypot(end[0] - root[0], end[1] - root[1]), tip = end;
+      out[l] = d > L + 1e-9;
+      if (out[l]) tip = [root[0] + (end[0] - root[0]) * L / d, root[1] + (end[1] - root[1]) * L / d];
+      var mid = l[1] === "H"
+        ? twoLink(root, tip, seg[0], seg[1], function (p) { return -p[1] + 0.3 * side * p[0]; })
+        : twoLink(root, tip, seg[0], seg[1], function (p) { return side * p[0]; });
+      J[l] = l[1] === "H" ? { shoulder: root, elbow: mid, end: tip } : { hip: root, knee: mid, end: tip };
+    });
+    return { joints: J, out: out };
+  }
+
   /* sector of directions a hold can push in: centre dir, half-width alpha (degrees), radius in metres */
   function sector(sc, x, y, dir, alpha, radius) {
     var g = sc.layers.trail, cx = sc.X(x), cy = sc.Y(y), R = radius * sc.k;
@@ -920,7 +996,7 @@ var Draw = (function () {
   function chip(w, h) { return el(null, "svg", { viewBox: "0 0 " + w + " " + h, width: w, height: h, "aria-hidden": "true" }); }
 
   return {
-    el: el, scene: scene, wall: wall, hold: hold, sector: sector, figure: figure, forces: forces, com: com,
+    el: el, scene: scene, wall: wall, hold: hold, sector: sector, pose: pose, figure: figure, forces: forces, com: com,
     sideView: sideView, arrowPx: arrowPx, chip: chip, utilClass: utilClass,
     FOOT_ONLY: FOOT_ONLY, LIMBS: LIMBS
   };
@@ -1536,6 +1612,109 @@ var Draw = (function () {
       DATA.model.climbers.filter(function (c) { return c.key === ex.climber.key; })[0].name + ".";
   }
   if (DATA.stance) renderCheckIntro(DATA.stance, DATA.figures.state_example);
+
+  /* ---------- #check: reach (unit 2.1) ---------- */
+  function renderReach(R, sides) {
+    var row = document.querySelector('[data-draw="reach"]');
+    if (!row) return;
+    var n = sides, loss = 1 - Math.cos(Math.PI / n);
+    document.querySelector('[data-text="reach-sides"]').textContent = String(n);
+    document.querySelector('[data-text="reach-loss"]').textContent = (loss * 100).toFixed(1) + "%";
+    var byId = {}, ends = {}, names = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    R.holds.forEach(function (h) { byId[h.id] = h; });
+    Object.keys(R.state).forEach(function (l) { var h = byId[R.state[l]]; if (h) ends[l] = [h.x, h.y]; });
+    var used = {};
+    Object.keys(R.state).forEach(function (l) { if (R.state[l]) used[R.state[l]] = l; });
+    var torso = R.presets.good.slice();
+    var v = R.view, B = R.body;
+    var panels = [];
+    ["Body view", "Centre-of-mass view"].forEach(function (title, i) {
+      var cell = document.createElement("div"); cell.className = "reach-cell";
+      var sc = Draw.scene(cell, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 170, pad: 4, title: title });
+      sc.svg.setAttribute("tabindex", "0");
+      sc.svg.setAttribute("aria-label", title + ": drag or use the arrow keys to move the centre of mass");
+      var cap = document.createElement("span"); cap.textContent = title; cell.appendChild(cap);
+      row.appendChild(cell);
+      panels.push(sc);
+    });
+    function inside(l) { var c = R.centres[l]; return Math.hypot(torso[0] - c[0], torso[1] - c[1]) <= B.L[l] + 1e-9; }
+    function clear(sc) { Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; }); }
+    function draw() {
+      var out = {};
+      Object.keys(ends).forEach(function (l) { out[l] = !inside(l); });
+      // body view
+      var a = panels[0]; clear(a);
+      Draw.wall(a, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      R.holds.forEach(function (h) { if (h.y <= v.y1 && h.y >= v.y0) Draw.hold(a, h, { used: !!used[h.id] }); });
+      var P = Draw.pose(B, torso, ends), cls = {};
+      Object.keys(out).forEach(function (l) { if (out[l]) cls[l] = "limb-out"; });
+      var ga = Draw.el(a.layers.trail, "g", null, "cl-" + R.climber.key);
+      Object.keys(ends).forEach(function (l) {
+        var o = B.offsets[l];
+        Draw.el(ga, "circle", { cx: a.X(torso[0] + o[0]), cy: a.Y(torso[1] + o[1]), r: (B.L[l] * a.k).toFixed(1) }, "reach" + (out[l] ? " out" : ""));
+      });
+      Draw.figure(a, { torso: torso, joints: P.joints }, { key: R.climber.key, head: R.climber.head }, { limbClass: cls });
+      Object.keys(out).forEach(function (l) {
+        if (!out[l]) return;
+        var e = P.joints[l].end;
+        Draw.el(a.layers.over, "line", { x1: a.X(e[0]), y1: a.Y(e[1]), x2: a.X(ends[l][0]), y2: a.Y(ends[l][1]) }, "miss");
+      });
+      Draw.com(a, torso);
+      // centre-of-mass view
+      var b = panels[1]; clear(b);
+      Draw.wall(b, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      Object.keys(ends).forEach(function (l) {
+        var c = R.centres[l];
+        Draw.el(b.layers.trail, "circle", { cx: b.X(c[0]), cy: b.Y(c[1]), r: (B.L[l] * b.k).toFixed(1) }, "disc" + (out[l] ? " out" : ""));
+        Draw.el(b.layers.over, "text", { x: b.X(c[0]), y: b.Y(c[1]) + 4, "text-anchor": "middle" }, "anno").textContent = l;
+      });
+      Draw.el(b.layers.holds, "path", { d: "M" + R.region.map(function (p) { return b.X(p[0]) + " " + b.Y(p[1]); }).join("L") + "Z" }, "region");
+      Draw.com(b, torso);
+      // status
+      var miss = Object.keys(out).filter(function (l) { return out[l]; });
+      var st = document.querySelector('[data-text="reach-status"]');
+      st.className = "reach-status " + (miss.length ? "bad" : "ok");
+      st.textContent = miss.length ? "\u2717 Out of reach: " + miss.map(function (l) { return names[l]; }).join(", ") + "."
+                                   : "\u2713 Every hold is within reach.";
+    }
+    function setFrom(sc, evt) {
+      var pt = sc.svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
+      var q = pt.matrixTransform(sc.svg.getScreenCTM().inverse());
+      torso = [Math.max(v.x0, Math.min(v.x1, sc.ix(q.x))), Math.max(v.y0, Math.min(v.y1, sc.iy(q.y)))];
+      draw();
+    }
+    panels.forEach(function (sc) {
+      var dragging = false;
+      sc.svg.addEventListener("pointerdown", function (e) { dragging = true; sc.svg.setPointerCapture(e.pointerId); setFrom(sc, e); e.preventDefault(); });
+      sc.svg.addEventListener("pointermove", function (e) { if (dragging) setFrom(sc, e); });
+      sc.svg.addEventListener("pointerup", function () { dragging = false; });
+      sc.svg.addEventListener("pointercancel", function () { dragging = false; });
+      sc.svg.addEventListener("keydown", function (e) {
+        var d = { ArrowLeft: [-0.02, 0], ArrowRight: [0.02, 0], ArrowUp: [0, 0.02], ArrowDown: [0, -0.02] }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        torso = [torso[0] + d[0], torso[1] + d[1]];
+        draw();
+      });
+    });
+    var pre = document.querySelector('[data-draw="reach-presets"]'), btns = [];
+    [["good", "A good position"], ["low", "Too low"]].forEach(function (p, i) {
+      var bt = document.createElement("button"); bt.type = "button"; bt.textContent = p[1];
+      bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      bt.addEventListener("click", function () {
+        btns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
+        torso = R.presets[p[0]].slice(); draw();
+      });
+      btns.push(bt); pre.appendChild(bt);
+    });
+    draw();
+  }
+  if (DATA.figures && DATA.figures.reach) renderReach(DATA.figures.reach, DATA.stance.reach_sides);
+
+  /* source links */
+  Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
+    a.href = DATA.meta.repo + "/blob/main/" + a.dataset.src;
+  });
 
   if (DATA.model && DATA.model.climbers) {
     renderClimberCards(DATA.model.climbers);

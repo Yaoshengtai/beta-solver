@@ -103,3 +103,10 @@ def test_stance_overview_embedded(html):
     assert data["stance"]["sizes"]["four"] == 17
     assert len(data["stance"]["constraints"]) == 6
     assert len(data["figures"]["state_example"]["poses"]) == 3
+
+
+def test_reach_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    R = json.loads(raw)["figures"]["reach"]
+    assert len(R["region"]) > 10 and set(R["presets"]) == {"good", "low"}
+    assert 'data-draw="reach"' in html
