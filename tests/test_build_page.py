@@ -217,3 +217,12 @@ def test_graph_figure_embedded(html):
     G = json.loads(raw)["figures"]["graph"]
     assert G["stats"]["states"]["reachable"] <= G["stats"]["states"]["held"]
     assert 'data-draw="graph-funnel"' in html and "Planned · unit 4.1" not in html
+
+
+
+def test_dijkstra_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    D = json.loads(raw)["figures"]["dijkstra"]
+    assert D["status"] == "ok" and D["steps"] and sum(1 for s in D["steps"] if s["crux"]) == 1
+    assert all(a <= b + 1e-9 for a, b in zip(D["stage1"], D["stage1"][1:]))
+    assert 'data-draw="dijkstra-charts"' in html and "Planned · unit 4.2" not in html

@@ -124,3 +124,190 @@ def graph_stats(route: Route, climber: Climber) -> dict:
         "checks": g.checker.solves,
         "seconds": {"states": t1 - t0, "explore": t2 - t1},
     }
+
+
+# ------------------------------------------------------------ two-stage Dijkstra (section 5)
+
+import heapq  # noqa: E402
+from dataclasses import dataclass, field  # noqa: E402
+
+MAX_EXPANSIONS = 200_000
+EPS = 1e-6
+
+
+@dataclass
+class Beta:
+    status: str                      # "ok", "infeasible" or "limit"
+    crux: float | None = None        # B*: the smallest possible largest move cost
+    total: float | None = None       # the smallest total cost among betas with that crux
+    crux_step: int | None = None     # index of the hardest move
+    steps: list = field(default_factory=list)   # (move, MoveResult, cost terms) in order
+    start: State | None = None
+    fail: dict | None = None         # for "infeasible": where and why the search got stuck
+    stats: dict = field(default_factory=dict)
+    trace: dict = field(default_factory=dict)   # expansion order of both stages, for the figure
+
+
+def _path(parent: dict, goal: State) -> list:
+    steps, s = [], goal
+    while parent.get(s) is not None:
+        prev, edge = parent[s]
+        steps.append(edge)
+        s = prev
+    return list(reversed(steps)), s
+
+
+def bottleneck(g: Graph, max_expansions: int = MAX_EXPANSIONS):
+    """Stage 1: the smallest possible largest move cost from any start to any goal.
+
+    A path's label is the largest edge cost on it; states are expanded in
+    order of label. The first goal popped has the optimal label B*.
+    Returns (B*, goal, parents, order, expansions) with B* None if no goal is reachable.
+    """
+    label, parent, order, seen = {}, {}, [], set()
+    heap, n = [], 0
+    for s in g.start_states():
+        label[s], parent[s] = 0.0, None
+        heapq.heappush(heap, (0.0, n, s)); n += 1
+    expanded = 0
+    while heap:
+        lab, _, s = heapq.heappop(heap)
+        if s in seen:
+            continue
+        seen.add(s)
+        order.append((s, lab))
+        if g.is_goal(s):
+            return lab, s, parent, order, expanded
+        expanded += 1
+        if expanded > max_expansions:
+            return "limit", None, parent, order, expanded
+        for move, res, w in g.edges(s):
+            t, new = move.new_state, max(lab, w["total"])
+            if t not in seen and new < label.get(t, float("inf")) - 1e-12:
+                label[t], parent[t] = new, (s, (move, res, w))
+                heapq.heappush(heap, (new, n, t)); n += 1
+    return None, None, parent, order, expanded
+
+
+def cheapest(g: Graph, cap: float, max_expansions: int = MAX_EXPANSIONS):
+    """Stage 2: ordinary Dijkstra on total cost, using only edges with cost <= cap."""
+    dist, parent, order, seen = {}, {}, [], set()
+    heap, n = [], 0
+    for s in g.start_states():
+        dist[s], parent[s] = 0.0, None
+        heapq.heappush(heap, (0.0, n, s)); n += 1
+    expanded = 0
+    while heap:
+        d, _, s = heapq.heappop(heap)
+        if s in seen:
+            continue
+        seen.add(s)
+        order.append((s, d))
+        if g.is_goal(s):
+            return d, s, parent, order, expanded
+        expanded += 1
+        if expanded > max_expansions:
+            return "limit", None, parent, order, expanded
+        for move, res, w in g.edges(s):
+            if w["total"] > cap + EPS:
+                continue
+            t, nd = move.new_state, d + w["total"]
+            if t not in seen and nd < dist.get(t, float("inf")) - 1e-12:
+                dist[t], parent[t] = nd, (s, (move, res, w))
+                heapq.heappush(heap, (nd, n, t)); n += 1
+    return None, None, parent, order, expanded
+
+
+def _stuck(g: Graph, order: list, parent: dict) -> dict:
+    """Where an infeasible search got stuck: the highest state it reached (by its lower hand),
+    and the first failing hand move from there toward a higher hold, with the step-3 diagnosis."""
+    reached = [s for s, _ in order]
+    y = lambda s: min(g.route.hold(s.LH).y, g.route.hold(s.RH).y)
+    top = max(reached, key=lambda s: (y(s), max(g.route.hold(s.LH).y, g.route.hold(s.RH).y)))
+    steps, _ = _path(parent, top)
+    best = None
+    for move, res in g.checker.candidates(top):
+        if move.limb not in HANDS or move.to is None:
+            continue
+        h = g.route.hold(move.to)
+        if h.y <= g.route.hold(top.hold(move.limb)).y:
+            continue
+        if res is None:
+            f = {"phase": "catch", "reason": "reach", "limb": move.limb, "hold": move.to}
+        elif not res.ok:
+            f = dict(res.failure)
+            f.setdefault("limb", move.limb)
+            if f.get("limb") is None:
+                f["limb"] = move.limb
+            if f.get("hold") is None:
+                f["hold"] = move.to
+        else:
+            continue
+        key = (0 if move.to == g.route.finish else 1, h.y)
+        if best is None or key < best[0]:
+            best = (key, f)
+    fail = best[1] if best else {"phase": None, "reason": None, "limb": None, "hold": None}
+    return {"step": len(steps) + 1, "state": top.as_dict(), **fail}
+
+
+def solve(route: Route, climber: Climber, max_expansions: int = MAX_EXPANSIONS) -> Beta:
+    """The best beta: smallest crux first, then smallest total cost (section 5)."""
+    t0 = time.perf_counter()
+    g = Graph(route, climber)
+    b_star, goal1, parent1, order1, exp1 = bottleneck(g, max_expansions)
+    checks1 = g.checker.solves
+    stats = {"expanded_1": exp1, "checks_1": checks1}
+    if b_star == "limit":
+        return Beta("limit", stats={**stats, "seconds": time.perf_counter() - t0})
+    if b_star is None:
+        beta = Beta("infeasible", fail=_stuck(g, order1, parent1))
+        beta.stats = {**stats, "seconds": time.perf_counter() - t0}
+        beta.trace = {"stage1": [(s.as_dict(), lab) for s, lab in order1]}
+        return beta
+    total, goal2, parent2, order2, exp2 = cheapest(g, b_star, max_expansions)
+    steps, start = _path(parent2, goal2)
+    costs = [w["total"] for _, _, w in steps]
+    crux_step = max(range(len(costs)), key=lambda i: costs[i]) if costs else None
+    stats.update({"expanded_2": exp2, "checks_2": g.checker.solves - checks1, "checks": g.checker.solves,
+                  "seconds": time.perf_counter() - t0})
+    return Beta("ok", crux=b_star, total=total, crux_step=crux_step, steps=steps, start=start, stats=stats,
+                trace={"stage1": [(s.as_dict(), lab) for s, lab in order1],
+                       "stage2": [(s.as_dict(), d) for s, d in order2]})
+
+
+def pareto_reference(route: Route, climber: Climber, max_len: int) -> tuple | None:
+    """An exhaustive reference for small routes: over every path of at most max_len moves, the
+    lexicographically smallest (crux, total). For each state and length it keeps every
+    (largest cost, total) pair that no other path beats in both; the lexicographic optimum is
+    always among them. Independent of the Dijkstra code apart from the shared edges."""
+    g = Graph(route, climber)
+    front = {s: {(0.0, 0.0)} for s in g.start_states()}
+    best = None
+
+    def offer(s, pairs):
+        nonlocal best
+        if not g.is_goal(s):
+            return
+        for c, t in pairs:
+            # cruxes within EPS count as equal (as in stage 2); then the smaller total wins
+            if best is None or c < best[0] - EPS or (abs(c - best[0]) <= EPS and t < best[1]):
+                best = (c, t)
+
+    for s, pairs in front.items():
+        offer(s, pairs)
+    layer = front
+    for _ in range(max_len):
+        nxt: dict = {}
+        for s, pairs in layer.items():
+            for move, res, w in g.edges(s):
+                t = move.new_state
+                for c, tot in pairs:
+                    nxt.setdefault(t, set()).add((max(c, w["total"]), tot + w["total"]))
+        layer = {}
+        for t, pairs in nxt.items():
+            keep = {p for p in pairs if not any(q[0] <= p[0] and q[1] <= p[1] and q != p for q in pairs)}
+            layer[t] = keep
+            offer(t, keep)
+        if not layer:
+            break
+    return best

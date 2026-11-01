@@ -832,3 +832,27 @@ def graph_figure() -> dict:
         "hands": len(hand_options(r)), "feet": len(foot_options(r)),
         "stats": stats,
     })
+
+
+@functools.lru_cache(maxsize=1)
+def search_figure() -> dict:
+    """Data for the two-stage Dijkstra section in #search: both stages on the toy route, and the beta."""
+    from betasolver.search import solve
+
+    r = toy_route()
+    b = solve(r, AVA)
+    steps = []
+    for i, (m, res, w) in enumerate(b.steps):
+        steps.append({"n": i + 1, "describe": m.describe(r), "limb": m.limb, "kind": m.kind,
+                      "from": m.frm, "to": m.to, "t_release": res.t_release, "t_catch": res.t_catch,
+                      "difficulty": res.difficulty, "cost": w["total"], "crux": i == b.crux_step})
+    return _round({
+        "route": r.to_dict(),
+        "climber": {"key": AVA.key, "name": AVA.name},
+        "status": b.status, "crux": b.crux, "total": b.total, "crux_step": b.crux_step,
+        "start": b.start.as_dict(), "steps": steps,
+        "stage1": [lab for _, lab in b.trace["stage1"]],
+        "stage2": [d for _, d in b.trace["stage2"]],
+        "stats": b.stats,
+        "full_graph": graph_figure()["stats"]["states"]["reachable"],
+    })
