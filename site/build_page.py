@@ -102,10 +102,13 @@ def load_results() -> dict:
 NAMES = {"LH": "left hand", "RH": "right hand", "LF": "left foot", "RF": "right foot"}
 
 
-def fill(text: str, runs: dict) -> str:
-    """Replace {KEY.field} placeholders with numbers from the runs: crux, steps, total, label, fail."""
+def fill(text: str, runs: dict, sweep: dict | None = None) -> str:
+    """Replace {KEY.field} placeholders with numbers from the runs: crux, steps, total, label, fail;
+    and {sweep.hstar}, the height threshold of the height sweep."""
     def one(m):
         key, f = m.group(1), m.group(2)
+        if key == "sweep" and f == "hstar":
+            return f"{sweep['H_star']:.2f} m"
         r = runs[key]
         if f == "crux":
             return f"{r['crux']:.2f}" if r["crux"] is not None else "none"
@@ -122,7 +125,7 @@ def fill(text: str, runs: dict) -> str:
             return (f"stuck at move {x.get('step')}, {NAMES.get(x.get('limb'), 'a limb')} to {x.get('hold')}, "
                     f"which fails the {x.get('phase')} check: {why}")
         raise KeyError(f)
-    return re.sub(r"\{([A-Za-z_]+)\.([a-z]+)\}", one, text)
+    return re.sub(r"\{([A-Za-z0-9_]+)\.([a-z]+)\}", one, text)
 
 
 def html_escape(t: str) -> str:
@@ -138,12 +141,15 @@ def examples_html(results: dict) -> str:
         if i < len(exs):
             e = exs[i]
             runs = {r["key"]: r for r in e["runs"]}
-            paras = "\n".join(f"  <p>{html_escape(fill(t, runs))}</p>" for t in e["text"])
+            paras = "\n".join(f"  <p>{html_escape(fill(t, runs, e.get('sweep')))}</p>" for t in e["text"])
+            sweep_fig = (f"""  <figure class="fig"><div data-example-sweep="{i}"></div>
+    <figcaption><b>Crux against height.</b> One climber, 19 heights; every length of the body scales with the height. Click a ringed point to watch that height in the player below.</figcaption></figure>\n"""
+                         if e.get("sweep") else "")
             out.append(f"""<section class="chapter" id="ex{n}" data-group="Examples" data-short="{n}. {html_escape(e['title'])}" hidden>
   <header><p class="eyebrow">Example {n}</p><h2>{html_escape(e['title'])}</h2>
   <p class="lede">{html_escape(e['lesson'])}</p></header>
   <div class="tbl-wrap"><table class="tbl" data-example-outcomes="{i}"></table></div>
-  <figure class="fig"><div class="player" data-example-player="{i}"></div>
+{sweep_fig}  <figure class="fig"><div class="player" data-example-player="{i}"></div>
     <figcaption><b>Every climber's beta on this route.</b> Pick a climber, then play or step through the moves.</figcaption></figure>
 {paras}
   <details class="impl"><summary>Acceptance checks</summary><ul data-example-checks="{i}"></ul></details>
