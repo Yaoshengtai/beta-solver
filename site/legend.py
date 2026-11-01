@@ -626,3 +626,73 @@ def solver_figure() -> dict:
         "size": {"variables": P.layout.size, "equalities": len(P.b), "inequalities": len(P.h),
                  "cones": len(P.cones), "cone_sizes": sorted({len(Ak) for Ak, _ in P.cones})},
     }) | {"max_diff": summary(compare())["max_diff"]}
+
+
+# ------------------------------------------------------------ one move: the five phases
+
+def _keyframe(body, route, state, res, rest=None):
+    """A keyframe for the move animation: torso, forces, ends of every limb on a hold, t.
+
+    The body height y_c enters only reach and flexibility, never the forces,
+    so the solver leaves it free. For a natural pose it is drawn a third of
+    the way up the heights that reach and flexibility allow at the solver's
+    x_c: the same forces and t, a valid body position.
+    """
+    from betasolver.stance import torso_region
+
+    if res is None or res.torso is None:
+        return None
+    ends = {l: [route.hold(h).x, route.hold(h).y] for l, h in state.as_dict().items() if h}
+    x = res.torso[0]
+    lo, hi = _y_range(torso_region(body, route, state), x)
+    feet = [y for l, (_, y) in ends.items() if l in ("LF", "RF")]
+    if feet:
+        lo = max(lo, max(feet) - body.foot_limit((0.0, 0.0)))
+    torso = (x, lo + 0.35 * (hi - lo)) if hi > lo else tuple(res.torso)
+    return {"torso": list(torso), "forces": res.forces, "t": res.t, "ok": res.ok, "ends": ends,
+            "rest": rest, "joints": body.joints(torso, {l: tuple(v) for l, v in ends.items()})}
+
+
+def move_figure() -> dict:
+    """Data for the move animation in #move: two right-hand moves for Ava, one that works and one
+    whose release check fails although its catch check passes."""
+    from betasolver.moves import Move, evaluate
+    from betasolver.stance import State
+
+    body = make_body(AVA)
+    cases = [
+        ("works", "Right hand up to a higher jug.",
+         [Hold("H1", 1.25, 2.05, "jug"), Hold("H2", 1.75, 2.00, "jug"), Hold("H3", 1.85, 2.45, "jug"),
+          Hold("F1", 1.30, 0.90, "foot_big"), Hold("F2", 1.75, 1.00, "foot_big")]),
+        ("release", "Left hand laybacks on a sidepull; the right hand leaves a far jug.",
+         [Hold("H1", 1.29, 2.27, "sidepull", dir=0), Hold("H2", 2.02, 1.67, "jug"), Hold("H3", 1.41, 2.35, "jug"),
+          Hold("F1", 1.10, 0.93, "foot_big"), Hold("F2", 1.43, 0.74, "foot_big")]),
+    ]
+    out = []
+    for key, text, holds in cases:
+        r = _route("move", holds + [Hold("T", 1.5, 3.6, "jug")], ("H1", "H2"))
+        m = Move(State("H1", "H2", "F1", "F2"), "RH", "H3")
+        e = evaluate(body, r, m)
+        if (key == "works") != e.ok or (key == "release" and (e.release.ok or not e.catch.ok)):
+            raise ValueError(f"move example {key} does not behave as intended")
+        out.append({
+            "key": key, "text": text, "limb": m.limb, "from": m.frm, "to": m.to, "kind": m.kind,
+            "describe": m.describe(r),
+            "holds": [{**h, "role": "normal"} for h in r.to_dict()["holds"] if h["id"] != "T"],
+            "frames": {
+                "start": _keyframe(body, r, m.state, e.start),
+                "release": _keyframe(body, r, m.state, e.release, m.limb),
+                "catch": _keyframe(body, r, m.new_state, e.catch, m.limb),
+                "end": _keyframe(body, r, m.new_state, e.end),
+            },
+            "t_release": e.t_release, "t_catch": e.t_catch,
+            "release_ok": e.release.ok, "catch_ok": e.catch.ok,
+            "ok": e.ok, "difficulty": e.difficulty, "failure": e.failure,
+        })
+    return _round({
+        "climber": {"key": AVA.key, "name": AVA.name, "head": list(body.head)},
+        "body": body.to_dict(),
+        "moves": out,
+        "force_scale": 0.3,
+        "view": {"x0": 0.8, "y0": 0.5, "x1": 2.4, "y1": 2.75},
+    })

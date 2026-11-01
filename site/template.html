@@ -348,6 +348,14 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .chart-hit { fill: transparent; }
 .chart-pt:hover .chart-dot, .chart-pt:focus .chart-dot { fill: var(--accent); }
 .chart-svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+.phase-strip { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.phase-strip li { border: 1px solid var(--line); border-radius: 6px; padding: 6px 6px 5px; font-size: 0.78rem; line-height: 1.3; background: var(--bg); color: var(--muted); cursor: pointer; }
+.phase-strip li b { display: block; color: var(--ink); font-size: 0.82rem; }
+.phase-strip li.now { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.phase-strip li.bad { border-color: var(--limit); }
+.phase-strip li .tv { font-variant-numeric: tabular-nums; }
+.move-ctl { margin-top: 10px; }
+@media (max-width: 520px) { .phase-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .bal-row { grid-template-columns: minmax(0, 1fr); } .bal-cell svg { max-width: 230px; } }
 details.impl { margin: 8px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
 details.impl summary { cursor: pointer; font-weight: 600; }
@@ -727,7 +735,36 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p class="lede">A move changes one limb's hold while the body slides continuously. Two state checks are enough to decide it.</p>
   </header>
   <h3 id="move-phases">Five phases of a move</h3>
-  <div class="planned"><span class="chip">Planned · unit 3.1</span><p>Unload, let go, travel, touch, load. Animated, with the release check and the catch check.</p></div>
+  <p>A <b>state</b> is which hold each limb is on; a <b>body position</b> is where the centre of mass is. A move changes one limb's hold, from state \(\sigma\) to \(\sigma'\), while the body slides. Say the right hand goes from A to B:</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Phase</th><th>What happens</th><th>Body</th><th>Holds on</th></tr></thead>
+    <tbody>
+      <tr><td>1 Unload</td><td>the force on A drops to zero</td><td>\(x_0 \to x_1\)</td><td>\(\sigma\), four limbs</td></tr>
+      <tr><td>2 Let go</td><td>A carries nothing, so the hand can leave</td><td>\(x_1\)</td><td>\(\sigma\) hands over to three limbs</td></tr>
+      <tr><td>3 Travel</td><td>the hand moves to B while the body slides</td><td>\(x_1 \to x_2\)</td><td>three limbs</td></tr>
+      <tr><td>4 Touch</td><td>the hand reaches B, still carrying nothing</td><td>\(x_2\)</td><td>three limbs hand over to \(\sigma'\)</td></tr>
+      <tr><td>5 Load</td><td>the force on B rises</td><td>\(x_2 \to x_3\)</td><td>\(\sigma'\), four limbs</td></tr>
+    </tbody>
+  </table></div>
+  <p>The two handovers are where the move can fail, and each is one state check with the moving limb resting:</p>
+  <ul>
+    <li><b>Release check</b> <code>check(σ, no_force=k)</code>: can the other three hold the body while the hand only touches A? It gives \(x_1\) and \(t_{\text{release}}\).</li>
+    <li><b>Catch check</b> <code>check(σ′, no_force=k)</code>: can they hold it while the hand only touches B? It gives \(x_2\) and \(t_{\text{catch}}\).</li>
+  </ul>
+  <p>The move works if both are at most 1, and its difficulty is \(\max(t_{\text{release}}, t_{\text{catch}})\). Plain checks of \(\sigma\) and \(\sigma'\) give \(x_0\) and \(x_3\) for the animation only. A foot coming off needs only the release check, a foot going on only the catch check.</p>
+
+  <figure class="fig" id="fig-move">
+    <div class="seg" role="group" aria-label="Move" data-draw="move-switch"></div>
+    <div class="fig-main" data-draw="move"></div>
+    <ol class="phase-strip" data-draw="move-phases"></ol>
+    <div class="seg move-ctl" role="group" aria-label="Playback" data-draw="move-controls"></div>
+    <p class="t-read" data-text="move-status" aria-live="polite"></p>
+    <figcaption><b>A move in five phases.</b> Arrows: hold forces; the moving hand's arrow shrinks to zero before it lets go and grows from zero after it touches. Dashed arm: in the air. Faint line: the path \(x_0 \to x_1 \to x_2 \to x_3\) of the centre of mass. All positions and forces at the keyframes come from the four state checks; between them the page interpolates.</figcaption>
+  </figure>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p><code>Move</code> holds the state, the moving limb and the new hold (or none for a foot coming off) and knows its kind: swap, match, cut or place. <code>evaluate</code> runs the start, release, catch and end checks and reports the difficulty, or which check fails first and why. Code: <a data-src="src/betasolver/moves.py">moves.py</a>.</p>
+  </details>
   <h3 id="move-convex">Why the feasible region is convex</h3>
   <div class="planned"><span class="chip">Planned · unit 3.2</span><p>Averaging two ways of holding a state gives another valid way.</p></div>
   <h3 id="move-twochecks">Why two checks are enough</h3>
@@ -2378,6 +2415,148 @@ var Draw = (function () {
     });
   }
   if (DATA.figures && DATA.figures.solver) renderSolver(DATA.figures.solver);
+
+  /* ---------- #move: five phases (unit 3.1) ---------- */
+  function renderMove(F) {
+    var slot = document.querySelector('[data-draw="move"]');
+    if (!slot) return;
+    var v = F.view, C = F.climber, B = F.body, s = F.force_scale;
+    var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    var PH = [["Unload", 1.0], ["Let go", 0.45], ["Travel", 1.2], ["Touch", 0.45], ["Load", 1.0]];
+    var TOTAL = PH.reduce(function (a, p) { return a + p[1]; }, 0), HOLD = 0.9;
+    var sc = Draw.scene(slot, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 190, pad: 4, title: "A move, animated" });
+    var strip = document.querySelector('[data-draw="move-phases"]');
+    var status = document.querySelector('[data-text="move-status"]');
+    var cur = null, clock = 0, playing = false, last = null;
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function lerp(a, b, u) { return a + (b - a) * u; }
+    function lerp2(a, b, u) { return [lerp(a[0], b[0], u), lerp(a[1], b[1], u)]; }
+    function ease(u) { return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; }
+    function forcesAt(Fa, Fb, u) {
+      var out = {};
+      Draw.LIMBS.forEach(function (l) {
+        var a = Fa && Fa[l] ? Fa[l].f : null, b = Fb && Fb[l] ? Fb[l].f : null;
+        if (!a && !b) return;
+        a = a || [0, 0]; b = b || [0, 0];
+        out[l] = { f: lerp2(a, b, u) };
+      });
+      return out;
+    }
+    function phaseAt(t) {
+      var acc = 0;
+      for (var i = 0; i < PH.length; i++) { if (t < acc + PH[i][1] || i === PH.length - 1) return [i, Math.min(1, (t - acc) / PH[i][1])]; acc += PH[i][1]; }
+    }
+    function frameAt(M, t) {
+      var K = M.frames, l = M.limb, A = K.start.ends[l], Bp = K.end.ends[l];
+      var p = phaseAt(t), i = p[0], u = ease(p[1]);
+      var x0 = K.start.torso, x1 = K.release.torso, x2 = K.catch.torso, x3 = K.end.torso;
+      var ends = {}, torso, forces, air = false;
+      Object.keys(K.start.ends).forEach(function (k) { if (k !== l) ends[k] = K.start.ends[k]; });
+      if (i === 0) { torso = lerp2(x0, x1, u); forces = forcesAt(K.start.forces, K.release.forces, u); ends[l] = A; }
+      else if (i === 1) { torso = x1; forces = forcesAt(K.release.forces, K.release.forces, 0); ends[l] = A; air = u > 0.5; }
+      else if (i === 2) {
+        torso = lerp2(x1, x2, u); forces = forcesAt(K.release.forces, K.catch.forces, u); air = true;
+        var m = lerp2(A, Bp, u), dx = Bp[0] - A[0], dy = Bp[1] - A[1], L = Math.hypot(dx, dy) || 1, bump = 0.12 * Math.sin(Math.PI * u);
+        ends[l] = [m[0] - dy / L * bump * (dx >= 0 ? -1 : 1), m[1] + Math.abs(dx / L) * bump + (dx === 0 ? bump : 0)];
+      }
+      else if (i === 3) { torso = x2; forces = forcesAt(K.catch.forces, K.catch.forces, 0); ends[l] = Bp; air = u < 0.5; }
+      else { torso = lerp2(x2, x3, u); forces = forcesAt(K.catch.forces, K.end.forces, u); ends[l] = Bp; }
+      return { torso: torso, ends: ends, forces: forces, air: air, phase: i };
+    }
+    function draw(M, fr) {
+      Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      M.holds.forEach(function (h) { Draw.hold(sc, h, { used: true, label: h.id === M.from || h.id === M.to }); });
+      var K = M.frames, pts = [K.start, K.release, K.catch, K.end].filter(Boolean).map(function (k) { return k.torso; });
+      Draw.com(sc, fr.torso, pts.concat([fr.torso]).slice(0, pts.length));
+      var P = Draw.pose(B, fr.torso, fr.ends), cls = {};
+      if (fr.air) cls[M.limb] = "limb-rest";
+      if (fr.bad) cls[M.limb] = "limb-out";
+      Draw.figure(sc, { torso: fr.torso, joints: P.joints }, { key: C.key, head: C.head }, { limbClass: cls });
+      Draw.forces(sc, { joints: P.joints, forces: fr.forces }, s);
+      Array.prototype.forEach.call(strip.children, function (li, j) { li.classList.toggle("now", j === fr.phase); });
+    }
+    function tv(x) { return x == null ? "–" : x.toFixed(2); }
+    function select(M) {
+      cur = M; clock = 0;
+      strip.textContent = "";
+      var info = [
+        "x₀ → x₁",
+        M.release_ok ? "release t = " + tv(M.t_release) : "release fails",
+        "x₁ → x₂",
+        M.catch_ok ? "catch t = " + tv(M.t_catch) : "catch fails",
+        "x₂ → x₃"
+      ];
+      PH.forEach(function (p, j) {
+        var li = document.createElement("li");
+        var b = document.createElement("b"); b.textContent = (j + 1) + " " + p[0]; li.appendChild(b);
+        var sp = document.createElement("span"); sp.className = "tv"; sp.textContent = info[j]; li.appendChild(sp);
+        if ((j === 1 && !M.release_ok) || (j === 3 && !M.catch_ok)) li.classList.add("bad");
+        li.addEventListener("click", function () { if (!M.ok) return; setPlaying(false); clock = PH.slice(0, j).reduce(function (a, q) { return a + q[1]; }, 0) + PH[j][1] * 0.6; draw(M, frameAt(M, clock)); });
+        strip.appendChild(li);
+      });
+      status.textContent = "";
+      var b2 = document.createElement("b");
+      if (M.ok) {
+        b2.className = "easy"; b2.textContent = "✓ " + M.describe + ": the move works";
+        status.appendChild(b2);
+        status.appendChild(document.createTextNode(". Release t = " + tv(M.t_release) + ", catch t = " + tv(M.t_catch) + ", difficulty " + tv(M.difficulty) + "."));
+        draw(M, frameAt(M, 0));
+      } else {
+        b2.className = "fail"; b2.textContent = "✗ " + M.describe + ": the release check fails";
+        status.appendChild(b2);
+        status.appendChild(document.createTextNode(". With the " + NAMES[M.limb] + " resting on " + M.from + ", no body position balances on the other three (" +
+          (DATA.stance.reasons[M.failure.reason] || M.failure.reason) + "), although the catch check would pass (t = " + tv(M.t_catch) +
+          "). Both handovers have to work: here the feet must move first."));
+        var K = M.frames;
+        draw(M, { torso: K.start.torso, ends: K.start.ends, forces: K.start.forces, air: false, bad: true, phase: 1 });
+      }
+      controls.style.display = M.ok ? "" : "none";
+      setPlaying(M.ok && !reduce);
+    }
+    function tick(ts) {
+      if (!playing || !cur) return;
+      if (last != null) clock += (ts - last) / 1000;
+      last = ts;
+      if (clock > TOTAL + HOLD) clock = 0;
+      draw(cur, frameAt(cur, Math.min(clock, TOTAL - 1e-6)));
+      requestAnimationFrame(tick);
+    }
+    var controls = document.querySelector('[data-draw="move-controls"]');
+    var playBtn = document.createElement("button"); playBtn.type = "button";
+    var stepBtn = document.createElement("button"); stepBtn.type = "button"; stepBtn.textContent = "Next phase";
+    function setPlaying(on) {
+      playing = on; last = null; playBtn.textContent = on ? "Pause" : "Play";
+      playBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) requestAnimationFrame(tick);
+    }
+    playBtn.addEventListener("click", function () { setPlaying(!playing); });
+    stepBtn.addEventListener("click", function () {
+      if (!cur || !cur.ok) return;
+      setPlaying(false);
+      var acc = 0, target = 0;
+      for (var j = 0; j < PH.length; j++) { acc += PH[j][1]; if (acc > clock + 1e-6) { target = acc; break; } }
+      clock = target >= TOTAL ? 0 : target;
+      draw(cur, frameAt(cur, Math.min(clock, TOTAL - 1e-6)));
+    });
+    controls.appendChild(playBtn); controls.appendChild(stepBtn);
+
+    var sw = document.querySelector('[data-draw="move-switch"]'), btns = [];
+    F.moves.forEach(function (M, i) {
+      var bt = document.createElement("button"); bt.type = "button";
+      bt.textContent = M.ok ? "A move that works" : "Release fails";
+      bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      bt.title = M.text;
+      bt.addEventListener("click", function () {
+        btns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
+        select(M);
+      });
+      btns.push(bt); sw.appendChild(bt);
+    });
+    select(F.moves[0]);
+  }
+  if (DATA.figures && DATA.figures.move) renderMove(DATA.figures.move);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

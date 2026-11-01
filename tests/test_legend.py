@@ -152,3 +152,21 @@ def test_result_cards_cover_every_outcome():
     assert cards[0]["result"]["ok"] and cards[0]["result"]["t"] <= 1
     assert all(c["result"]["reason"] == c["key"] for c in cards[1:])
     assert cards[1]["result"]["t"] > 1
+
+
+
+def test_move_figure_matches_the_checks():
+    from betasolver.body import make_body
+    from betasolver.model import AVA
+    from betasolver.stance import State, check
+    M = legend.move_figure()
+    works = M["moves"][0]
+    r = legend._route("move", [legend.Hold(h["id"], h["x"], h["y"], h["type"], h["dir"], h["use"]) for h in works["holds"]]
+                      + [legend.Hold("T", 1.5, 3.6, "jug")], ("H1", "H2"))
+    b = make_body(AVA)
+    assert abs(works["t_release"] - check(b, r, State("H1", "H2", "F1", "F2"), no_force="RH").t) < TOL
+    assert abs(works["t_catch"] - check(b, r, State("H1", "H3", "F1", "F2"), no_force="RH").t) < TOL
+    assert abs(works["frames"]["release"]["t"] - works["t_release"]) < TOL
+    assert abs(works["frames"]["catch"]["t"] - works["t_catch"]) < TOL
+    # the resting hand carries nothing in the two handover keyframes
+    assert "RH" not in works["frames"]["release"]["forces"] and "RH" not in works["frames"]["catch"]["forces"]
