@@ -70,15 +70,15 @@ EXAMPLES: list = [
             ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"), ("C", 1.25, 2.25, "crimp"),
             ("J1", 1.55, 2.60, "jug"), ("J2", 1.45, 3.05, "jug"), ("T", 1.55, 3.45, "jug"),
             ("F1", 1.30, 0.50, "foot_big"), ("F2", 1.70, 0.50, "foot_big"),
-            ("F3", 1.25, 1.75, "foot_big"), ("F4", 1.75, 1.80, "foot_big")], feet_on_hands=False),
+            ("F3", 1.25, 1.75, "foot_big"), ("F4", 1.75, 1.80, "foot_big")]),
         ("B", "A", "C", "D"),
         {"B": "ok", "A": "ok", "C": "fail", "D": "fail"},
         (
             "Between the start jugs and the next jug J1 there is a long gap. The only thing in it is a small crimp, "
-            "C, off to the side, and there are no footholds between the floor and the high ones.",
+            "C, off to the side, and apart from the start jugs there are no footholds between the floor and the high ones.",
             "{B.label} is tall enough to reach J1 straight from the start, with the feet still low (crux {B.crux}). "
-            "{A.label} is not: she pulls onto the crimp with both hands, steps her feet up to the high footholds, and "
-            "reaches J1 from there. It works, but at her limit (crux {A.crux}).",
+            "{A.label} is not: she pulls onto the crimp with both hands, steps her feet up onto a start jug and a high foothold, and "
+            "reaches J1 from there (crux {A.crux}).",
             "{C.label} gets a hand onto the crimp but is {C.fail}. With one hand on a crimp and both feet to one side, "
             "the body needs a little grip twist to stay square, and a weak grip on a small edge cannot give it: a barn-door.",
             "{D.label} cannot use the crimp at all ({D.fail}), and without it J1 is out of reach.",
@@ -98,8 +98,7 @@ EXAMPLES: list = [
             ("C1", 1.12, 2.05, "crimp"), ("C2", 1.12, 2.55, "crimp"), ("C3", 1.12, 3.05, "crimp"),
             ("J1", 2.40, 2.70, "jug"), ("J2", 2.10, 3.30, "jug"), ("T", 1.50, 3.50, "jug"),
             ("F1", 1.19, 0.50, "foot_big"), ("F2", 1.19, 1.05, "foot_big"), ("F3", 1.19, 1.55, "foot_big"),
-            ("F4", 1.19, 2.00, "foot_big"), ("R1", 2.15, 1.00, "foot_big"), ("R2", 2.25, 1.70, "foot_big")],
-            feet_on_hands=False),
+            ("F4", 1.19, 2.00, "foot_big"), ("R1", 2.15, 1.00, "foot_big"), ("R2", 2.25, 1.70, "foot_big")]),
         ("A", "B", "C", "D"),
         {"A": "ok", "B": "ok", "C": "fail", "D": "fail"},
         (
@@ -129,7 +128,7 @@ EXAMPLES: list = [
             ("L1", 1.30, 1.90, "sidepull", 0.0), ("L2", 1.33, 2.35, "sidepull", 0.0),
             ("L3", 1.30, 2.80, "sidepull", 0.0), ("L4", 1.33, 3.25, "sidepull", 0.0), ("T", 1.55, 3.70, "jug"),
             ("F1", 1.36, 0.55, "foot_big"), ("F2", 1.41, 1.00, "foot_big"), ("F3", 1.36, 1.45, "foot_big"),
-            ("F4", 1.41, 1.90, "foot_big"), ("F5", 1.36, 2.35, "foot_big")], feet_on_hands=False),
+            ("F4", 1.41, 1.90, "foot_big"), ("F5", 1.36, 2.35, "foot_big")]),
         ("A", "B", "C"),
         {"A": "ok", "B": "ok", "C": "fail"},
         (
@@ -147,6 +146,35 @@ EXAMPLES: list = [
             ("Cal is stuck with both hands on L2 and his feet low",
              lambda R: R["C"]["fail"]["state"]["LH"] == R["C"]["fail"]["state"]["RH"] == "L2"
              and all(R["C"]["fail"]["state"][f] in ("F1", "F2", None) for f in ("LF", "RF"))),
+        ),
+    ),
+    Example(
+        "ex4", "Knees Up",
+        "One high foothold: flexible hips decide, not height.",
+        _route("ex4", "Knees Up", [
+            ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"),
+            ("U1", 1.40, 2.15, "undercling"), ("U2", 1.62, 2.20, "undercling"),
+            ("J1", 1.50, 3.05, "jug"), ("T", 1.50, 3.50, "jug"),
+            ("F1", 1.35, 0.45, "foot_big"), ("F2", 1.65, 0.45, "foot_big"), ("F3", 1.30, 1.20, "foot_big")]),
+        ("A", "B", "A_stiff", "B_flex"),
+        {"A": "ok", "B": "fail", "A_stiff": "fail", "B_flex": "ok"},
+        (
+            "Above the start jugs there are only two underclings, and then J1, 0.85 m higher. The footholds are low, "
+            "except F3, just 25 cm below the start jugs. To reach J1 the feet have to come up, first onto "
+            "F3 and then onto the start jugs, while the hands pull up on the underclings.",
+            "{A.label} starts with a foot on F3, a foot near hip height. Her flexible hips allow that. From there she "
+            "steps onto the jugs and stands up into J1 ({A.steps} moves, crux {A.crux}).",
+            "{B.label} is {B.fail}. He is much taller, but his stiff hips will not let a foot go anywhere near F3 "
+            "or the start jugs, and with his feet that low even his reach falls short.",
+            "{A_stiff.label} has Ava's body with Ben's hips. She is {A_stiff.fail}.",
+            "{B_flex.label} has Ben's body with Ava's hips, and gets up ({B_flex.steps} moves, crux {B_flex.crux}). "
+            "So it is the hips, not the height.",
+        ),
+        (
+            ("Ava and Ben (flexible) start with a foot on F3",
+             lambda R: all("F3" in (R[k]["start"]["LF"], R[k]["start"]["RF"]) for k in ("A", "B_flex"))),
+            ("Both stiff climbers are stuck with both feet on the floor footholds",
+             lambda R: all(R[k]["fail"]["state"][f] in ("F1", "F2") for k in ("B", "A_stiff") for f in ("LF", "RF"))),
         ),
     ),
 ]

@@ -90,7 +90,7 @@ def test_climbers_embedded(html):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
     data = json.loads(raw)
     assert [c["name"] for c in data["model"]["climbers"]] == ["Ava", "Ben", "Cal", "Ava (injured)"]
-    assert {v["key"]: v["base"] for v in data["model"]["variants"]} == {"A_stiff": "A", "A_cross0": "A", "A_cross4": "A"}
+    assert {v["key"]: v["base"] for v in data["model"]["variants"]} == {"A_stiff": "A", "B_flex": "B", "A_cross0": "A", "A_cross4": "A"}
     assert 'data-draw="climber-cards"' in html
 
 

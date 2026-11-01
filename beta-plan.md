@@ -524,7 +524,9 @@ w(\sigma \to \sigma') = \max\big(t_{\text{松手}},\ t_{\text{出手}}\big) + c_
 
 数量：用户同意 5–6 个即可，定为 5 条设计线路加身高门槛扫描，共 6 个；每条线路取一个名字。
 
-已完成：算例 1“Halfway House”（原名 The intermediate crimp）——Ben 直接够到（crux 0.65），Ava 必须借中间 crimp 把脚抬高（crux 0.91，接近极限），Cal 在 crimp 上开门失败，伤员 Ava 用不了 crimp 失败。算例 2“Fork in the Road”——左边一列 crimp（脚点都偏在右侧，需要握持力矩保持不开门），右边两个相距很远的 jug：Ava 走 crimp（crux 0.48），Ben 走 jug（crux 0.75），Cal 在 crimp 上开门，伤员 Ava 用不了 crimp、也够不到两个 jug 之间的距离。通过者 crux 下限改为 0.45。算例 3“Lean on Me”（替换了用户认为太离谱的 One-Arm Bandit）——一条往右拉手的 sidepull flake，脚点几乎在正下方、偏右几厘米：Ava 完成，Ben 也能完成但离墙更远、要拉得更紧，所以步数更多，Cal 握力弱，抬任何一只脚都会开门，脚抬不上去。伤员 Ava 与 Ava 完全一样（sidepull 按 pinch 算），没有区别，所以不放进本例。下表原计划保留作参考。
+已完成：算例 1“Halfway House”（原名 The intermediate crimp）——Ben 直接够到（crux 0.65），Ava 必须借中间 crimp 把脚抬高（crux 0.91，接近极限），Cal 在 crimp 上开门失败，伤员 Ava 用不了 crimp 失败。算例 2“Fork in the Road”——左边一列 crimp（脚点都偏在右侧，需要握持力矩保持不开门），右边两个相距很远的 jug：Ava 走 crimp（crux 0.48），Ben 走 jug（crux 0.75），Cal 在 crimp 上开门，伤员 Ava 用不了 crimp、也够不到两个 jug 之间的距离。通过者 crux 下限改为 0.45。算例 3“Lean on Me”（替换了用户认为太离谱的 One-Arm Bandit）——一条往右拉手的 sidepull flake，脚点几乎在正下方、偏右几厘米：Ava 完成，Ben 也能完成但离墙更远、要拉得更紧，所以步数更多，Cal 握力弱，抬任何一只脚都会开门，脚抬不上去。伤员 Ava 与 Ava 完全一样（sidepull 按 pinch 算），没有区别，所以不放进本例。算例 4“Knees Up”——起步 jug 之上只有两个 undercling，再往上 0.85 m 才是 J1；脚点除了地面的 F1/F2，只有起步 jug 下方 25 cm 的 F3。要够到 J1，脚必须先上 F3、再上起步 jug，这需要把脚抬到接近髋部的高度：Ava（柔韧 +0.08）和“Ben（柔韧）”（Ben 的身体、Ava 的髋）都能完成；Ben 和“Ava（柔韧差）”（柔韧 −0.10）脚上不去，够不到 J1。阈值约在 −0.08 到 −0.04 之间，F3 高度在 1.15–1.25 m 内结论不变。（曾做过“Monkey Bars”：一串 jug、脚点只到膝盖、脚只能悬空；用户指出 jug 可以踩，允许踩手点后人人都能轻松完成，因此作废。）
+
+**踩手点规则（2026-11-01 改）**：所有算例都允许脚踩手点（`allow_feet_on_handholds = True`，与岩馆常规一致）。算例 1–3 原先禁止，改为允许后通过/失败结果不变，只是步数和 crux 有小变化（算例 1 Ava 的 crux 从 0.91 降到 0.71）。下表原计划保留作参考。
 
 每个算例是一条 6–14 个点的手工线路，专门放大一个知识点；对比时尽量只改一个属性。每个算例都有一条可自动检查的**验收断言**，不满足就调整线路几何，而不改模型。文件：`routes.py`（线路）、`run_all.py`（求解 + 断言）。
 
