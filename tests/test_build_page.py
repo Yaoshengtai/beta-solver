@@ -124,7 +124,7 @@ def test_check_sections(markup):
     ids = re.findall(r'<h3 id="(check-[a-z]+)"', markup)
     assert ids == ["check-unknowns", "check-reach", "check-direction", "check-strength", "check-balance",
                    "check-problem", "check-solve"]
-    for slot in ('data-draw="reach"', 'data-math="flex-row"', 'data-draw="flex-table"', 'data-draw="balance"',
+    for slot in ('data-draw="reach"', 'data-math="flex-row"', 'data-draw="balance"',
                  'data-text="tip-facts"', 'data-text="door-facts"', 'data-math="full-problem"', 'data-draw="result-cards"'):
         assert slot in markup
 
@@ -267,3 +267,8 @@ def test_appendix_slots_and_test_report(html):
     if data["tests"] is not None:  # written by: pytest --report site/test_report.json
         assert set(data["tests"]["counts"]) == {"passed", "failed", "skipped"}
         assert all(f["file"].startswith("tests/test_") and f["about"] for f in data["tests"]["files"])
+
+
+def test_players_offer_compare_mode(html):
+    # the example players build a "Compare two" view: two walls, one clock (step 9)
+    assert '"Compare two"' in html and "player-compare" in html

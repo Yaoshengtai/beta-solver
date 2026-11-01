@@ -34,4 +34,4 @@ The `exact` extra (cvxpy) is only for the cross-check: the tests and the site bu
 
 ## Status
 
-Under construction, one unit at a time. Each accepted unit is tagged `unit-X.Y`.
+Version 1.0: all units of the plan are done. The site has six examples (five designed routes and a height sweep), a chapter on what the model cannot see, and an appendix with the data format, the test report and the commands to reproduce everything. Each accepted unit is tagged `unit-X.Y`; the release is tagged `v1.0`.

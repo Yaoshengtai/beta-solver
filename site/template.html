@@ -21,13 +21,16 @@
   --limit: #c23b30;
 
   /* figures */
-  --wall: #e9e4dc;
-  --wall-edge: #c9c1b4;
-  --wall-grid: #d9d2c6;
-  --hold: #7a6f62;
-  --hold-foot: #a39887;
-  --hold-edge: #3b342c;
-  --hold-pocket: #2b2520;
+  --wall: #e6dfd3;
+  --wall-hi: #f3eee6;
+  --wall-edge: #cbbfae;
+  --wall-grid: #ddd4c6;
+  --wall-bolt: #b9ad9b;
+  --hold: #4d6b78;
+  --hold-hi: #7d9aa6;
+  --hold-foot: #8ea2ab;
+  --hold-edge: #22343c;
+  --hold-pocket: #15232a;
   --force: #15191e;
   --c-A: #2563b0;
   --c-B: #c8611a;
@@ -53,8 +56,8 @@
     --bg: #121519; --panel: #181c21; --surface: #1d2228; --ink: #e6e9ed; --muted: #9aa4b0;
     --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
     --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
-    --wall: #2a2723; --wall-edge: #45403a; --wall-grid: #36322d;
-    --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --hold-pocket: #14120f; --force: #e6e9ed;
+    --wall: #2b2824; --wall-hi: #35312c; --wall-edge: #48423b; --wall-grid: #38342e; --wall-bolt: #4d4740;
+    --hold: #8fb0bd; --hold-hi: #c3d8e0; --hold-foot: #66808b; --hold-edge: #e8f0f3; --hold-pocket: #0f1a1f; --force: #e6e9ed;
     --c-A: #6ea8ec; --c-B: #f0904e; --c-C: #b590e6; --c-D: #ec7aa9; --c-S: #4cc3bb;
     color-scheme: dark;
   }
@@ -63,8 +66,8 @@
   --bg: #121519; --panel: #181c21; --surface: #1d2228; --ink: #e6e9ed; --muted: #9aa4b0;
   --line: #2c333b; --accent: #6cb8d6; --accent-soft: #1a3440;
   --easy: #5cc08a; --hard: #e2b33f; --limit: #ee6b5f;
-  --wall: #2a2723; --wall-edge: #45403a; --wall-grid: #36322d;
-  --hold: #b5a998; --hold-foot: #8c8273; --hold-edge: #efe8dd; --hold-pocket: #14120f; --force: #e6e9ed;
+  --wall: #2b2824; --wall-hi: #35312c; --wall-edge: #48423b; --wall-grid: #38342e; --wall-bolt: #4d4740;
+  --hold: #8fb0bd; --hold-hi: #c3d8e0; --hold-foot: #66808b; --hold-edge: #e8f0f3; --hold-pocket: #0f1a1f; --force: #e6e9ed;
   --c-A: #6ea8ec; --c-B: #f0904e; --c-C: #b590e6; --c-D: #ec7aa9; --c-S: #4cc3bb;
   color-scheme: dark;
 }
@@ -166,6 +169,10 @@ pre.code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .test-list li { break-inside: avoid; } .test-list .t-failed { color: var(--limit); font-weight: 600; }
 .tbl tr.row-bad td { color: var(--limit); } .tbl tr.row-total td { font-weight: 600; }
 .tbl details summary { cursor: pointer; }
+.stuck-on { fill: none; stroke-width: 2.5; }
+.stuck-limbs { fill: var(--ink); font: 600 10px var(--font-body); paint-order: stroke; stroke: var(--wall); stroke-width: 3px; }
+.stuck-line { stroke: var(--limit); stroke-width: 2; stroke-dasharray: 5 4; }
+.stuck-target { fill: none; stroke: var(--limit); stroke-width: 2.5; stroke-dasharray: 4 3; }
 .limits { padding-left: 1.2em; }
 .limits li { margin: 0 0 0.7em; }
 .limits i { font-style: normal; font-weight: 600; color: var(--muted); }
@@ -221,7 +228,12 @@ pre.code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* SVG marks: every colour is a CSS variable so both themes work */
 .w-wall { fill: var(--wall); stroke: var(--wall-edge); stroke-width: 1.5; }
+.w-stop-hi { stop-color: var(--wall-hi); } .w-stop-lo { stop-color: var(--wall); }
+.w-bolt { fill: var(--wall-bolt); }
 .w-grid { stroke: var(--wall-grid); stroke-width: 1; fill: none; }
+.hold { filter: drop-shadow(0 1.2px 1.2px rgba(20, 16, 10, 0.35)); }
+.h-gloss { fill: var(--hold-hi); opacity: 0.55; pointer-events: none; }
+.hold.unused .h-gloss { display: none; }
 .w-axis { fill: var(--muted); font: 11px var(--font-body); }
 .h-shape { fill: var(--hold); stroke: var(--hold-edge); stroke-width: 1; }
 .h-shape.foot { fill: var(--hold-foot); }
@@ -229,17 +241,18 @@ pre.code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .h-dir { stroke: var(--hold-edge); fill: var(--hold-edge); stroke-width: 1.6; }
 .hold.used .h-shape { stroke-width: 2.6; }
 .hold.unused { opacity: 0.35; }
-.h-label { fill: var(--ink); font: 600 11px var(--font-body); }
-.h-role { fill: var(--accent); font: 700 11px var(--font-body); letter-spacing: 0.04em; }
+.h-label { fill: var(--ink); font: 600 10.5px var(--font-body); paint-order: stroke; stroke: var(--wall); stroke-width: 3px; stroke-linejoin: round; }
+.h-role { fill: var(--accent); font: 700 10.5px var(--font-body); letter-spacing: 0.04em; paint-order: stroke; stroke: var(--wall); stroke-width: 3px; stroke-linejoin: round; }
 .fg-limb { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .fg-joint { stroke: none; }
-.fg-head { fill: var(--surface); stroke-width: 2.4; }
+.fg-head { fill: var(--surface); fill: color-mix(in srgb, var(--cl, var(--ink)) 14%, var(--surface)); stroke-width: 2.4; }
+.fg-halo { fill: none; stroke: var(--wall-hi); stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
 .fg-torso { stroke-width: 2.4; stroke-linejoin: round; }
 .u-easy { stroke: var(--easy); fill: var(--easy); }
 .u-mid { stroke: var(--hard); fill: var(--hard); }
 .u-hard { stroke: var(--limit); fill: var(--limit); }
 svg .fg-limb { fill: none; }
-.force { stroke: var(--force); fill: var(--force); stroke-width: 1.8; }
+.force { stroke: var(--force); fill: var(--force); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .com { stroke: var(--ink); stroke-width: 2; fill: none; }
 .trail { stroke: var(--ink); stroke-width: 1.4; fill: none; stroke-dasharray: 3 3; opacity: 0.45; }
 .trail-dot { fill: var(--ink); opacity: 0.45; }
@@ -389,6 +402,9 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .player { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; outline: none; }
 .player:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
 .player-canvas svg { width: 100%; height: auto; }
+.player-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-content: start; }
+.player-compare[hidden], .player-canvas[hidden], .player-side [hidden] { display: none; }
+.cmp-cell select { width: 100%; margin-bottom: 6px; font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
 .player-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .player-side .seg { margin: 0; flex-wrap: wrap; }
 .player-prog { width: 100%; accent-color: var(--accent); }
@@ -498,42 +514,42 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Introduction</p>
     <h2>Can a beta be computed?</h2>
-    <p class="lede">A beta is the sequence of moves that gets a climber up a route: which hold each hand and foot goes to, and in what order. Climbers work it out by trying. This site works it out by optimization.</p>
+    <p class="lede">A beta is the sequence of moves that gets a climber up a route. Climbers find it by trying; this site finds it by optimization.</p>
   </header>
 
-  <p>Two climbers on the same route often end up with different betas. A tall climber skips a hold that a short climber needs; someone with weak fingers avoids the crimps; someone flexible steps onto a high foot that someone else cannot reach. The aim here is to build a model simple enough to explain in a few chapters, but faithful enough that these differences come out of the math on their own.</p>
+  <p>Two climbers rarely climb a route the same way. The tall one skips a hold the short one needs; weak fingers avoid the crimps; flexible hips reach a high foot. The goal is a model simple enough to explain in a few chapters, yet faithful enough that these differences fall out of the math.</p>
 
   <h3 id="intro-questions">Three questions</h3>
   <ul>
-    <li><strong>How is it modeled?</strong> One chapter per modeling step, from holds and bodies up to the search.</li>
-    <li><strong>What do the results look like?</strong> One page per example: a figure climbs the route step by step, with the force on every contact, the effort of every move and the crux marked.</li>
-    <li><strong>Why does the beta differ between climbers?</strong> Switch climbers, compare two side by side, and see how the crux changes with height.</li>
+    <li><strong>How is it modeled?</strong> One chapter per step, from holds and bodies to the search.</li>
+    <li><strong>What does a result look like?</strong> One page per example: a figure climbs the route, showing every force and the effort of every move.</li>
+    <li><strong>Why do betas differ?</strong> Switch climbers, compare two side by side, and watch the crux change with height.</li>
   </ul>
 
   <h3 id="intro-approach">The approach in one picture</h3>
   <ol class="pipeline">
-    <li><b>States</b><span>Which hold each hand and foot is on. These are the nodes of a graph.</span></li>
-    <li><b>State check</b><span>A small convex program: can the climber hold still here, and how hard is the most loaded limb working?</span></li>
-    <li><b>Search</b><span>A shortest-path search over moves between states, scored by those efforts.</span></li>
+    <li><b>States</b><span>Which hold each hand and foot is on: the nodes of a graph.</span></li>
+    <li><b>State check</b><span>A small convex program: can the climber hold still, and how hard does the busiest limb work?</span></li>
+    <li><b>Search</b><span>A shortest path through the graph, moving one limb at a time.</span></li>
   </ol>
-  <p>The best beta is the one whose hardest move, the crux, is as easy as possible. Among all betas with that crux, it is the one with the lowest total cost. Writing \(w(e)\) for the cost of a move \(e\) and \(\mathcal{P}\) for all move sequences from the start to the top:</p>
+  <p>The best beta makes its hardest move, the <b>crux</b>, as easy as possible, and among those has the lowest total cost. With \(w(e)\) the cost of move \(e\) and \(\mathcal{P}\) all move sequences from start to top:</p>
   <div class="math-block">\[
     \text{beta}^\star \;=\; \operatorname*{lex\,min}_{P \in \mathcal{P}} \Big(\, \max_{e \in P} w(e),\;\; \sum_{e \in P} w(e) \Big)
   \]</div>
-  <p>Each move cost is built from the effort \(t\) of the state checks it passes through. A state with \(t \le 1\) can be held; \(t > 1\) means some limb would need more force than it has.</p>
+  <p>A move's cost comes from the effort \(t\) of the checks it passes: \(t \le 1\) can be held, \(t > 1\) means some limb lacks the strength.</p>
 
   <h3 id="intro-reading">How to read this site</h3>
-  <p>The model chapters each follow the same pattern: the idea in climbing terms, the math, an interactive figure, how it is implemented, and the tests that check it. If you only want results, skip to the examples; each one links back to the constraint that decides it. All numbers on these pages come from the Python solver and its tests, not from hand-written text.</p>
+  <p>Each model chapter gives the idea, the math, an interactive figure and the tests behind it. For results only, jump to the examples. Every number on these pages is computed by the Python solver.</p>
 </section>
 
 <section class="chapter" id="data" data-group="The model" data-short="Holds, routes and climbers" hidden>
   <header>
     <p class="eyebrow">Step 1</p>
     <h2>Holds, routes and climbers</h2>
-    <p class="lede">The inputs: holds, routes, and the four climbers who try them.</p>
+    <p class="lede">The inputs: holds, routes and four climbers.</p>
   </header>
   <h3 id="data-holds">Holds</h3>
-  <p><span data-text="wall-size"></span> Lengths are in metres, forces in body weights. A hold is a point with a type, and the type decides three things: the directions it can push a limb in (the shaded sector), which strength limit applies, and for hands how well it holds you in to the wall (\(\beta\)) and resists twisting (\(r\)).</p>
+  <p><span data-text="wall-size"></span> Lengths are in metres, forces in body weights. A hold is a point with a type. The type sets the directions it can push a limb (the shaded sector), which strength limit applies, and, for hands, how well it holds you in to the wall (\(\beta\)) and resists twisting (\(r\)).</p>
   <figure class="fig" id="fig-holds">
     <div class="hold-grid" data-draw="hold-types"></div>
   </figure>
@@ -541,18 +557,18 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <p>A sidepull counts as a pinch and an undercling as a crimp. A foot on a hand hold counts as a <code data-text="foot-on-handhold"></code>.</p>
 
   <h3 id="data-routes">Routes</h3>
-  <p>A route is its holds, the two start holds, and the top hold, which both hands must reach. A campus route also bars feet from hand holds.</p>
+  <p>A route lists its holds, two start holds and a top hold that both hands must reach. Feet may use hand holds unless the route says otherwise.</p>
   <figure class="fig" id="fig-route">
     <div class="fig-stack">
       <div class="fig-main" data-draw="route-example"></div>
       <pre class="code" data-draw="route-json"></pre>
     </div>
-    <figcaption><b>A route and how it is written.</b> <span data-text="route-lesson"></span></figcaption>
+    <figcaption><b>A small route and its file.</b><span data-text="route-lesson" hidden></span></figcaption>
   </figure>
 
   <h3 id="data-climbers">Climbers</h3>
   <div class="cards" data-draw="climber-cards"></div>
-  <p><b>Strength</b> is in body weights: <span data-text="strength-example"></span> Weight itself therefore never matters. <b>flex</b> is how far a foot can go above the hip, as a fraction of height. <b>Crossing penalty</b> is a small style cost for crossing the hands. Some examples use variants that change one attribute:</p>
+  <p><b>Strength</b> is in body weights: <span data-text="strength-example"></span> So weight itself never matters. <b>Flexibility</b> is how far a foot can go above the hip, as a fraction of height. The <b>crossing penalty</b> is a small style cost for crossing hands. Some examples change one attribute:</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="variant-table"></table></div>
 
   <h3 id="data-figures">Reading the figures</h3>
@@ -561,7 +577,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-main" data-draw="climber"></div>
       <div class="fig-key" data-draw="climber-key"></div>
     </div>
-    <figcaption><b>The climber.</b> Limbs coloured by the share of strength used, arrows for the forces from the holds, and a side view inset. Example values.</figcaption>
+    <figcaption><b>The climber.</b> Limb colour is the share of strength in use; arrows are forces from the holds; the inset is a side view.</figcaption>
   </figure>
 </section>
 
@@ -569,51 +585,50 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Step 2</p>
     <h2>The body model</h2>
-    <p class="lede">A torso that slides but does not turn, with four limbs of fixed greatest length.</p>
+    <p class="lede">A torso that slides but never turns, and four limbs with a greatest length.</p>
   </header>
   <h3 id="body-anchors">Shoulders, hips and limbs</h3>
-  <p>The body is a point \(x = (x_c, y_c)\), the centre of mass, with <span data-text="anchors-text"></span> An arm reaches from the shoulder to the middle of the palm; a leg is half the height. A foot can go at most \(\text{flex}\cdot H\) above the hip.</p>
+  <p>The body is its centre of mass \(x = (x_c, y_c)\), with <span data-text="anchors-text"></span> An arm reaches from shoulder to palm; a leg is half the height. A foot can rise at most \(\text{flex}\cdot H\) above the hip.</p>
   <div class="math-block" data-math="limb-lengths"></div>
   <div class="math-block" data-math="foot-limit"></div>
   <div class="tbl-wrap"><table class="tbl" data-draw="length-table"></table></div>
   <figure class="fig" id="fig-scale">
     <div class="fig-main" data-draw="to-scale"></div>
-    <figcaption><b>To scale,</b> arms up at full length. <span data-text="same-body"></span></figcaption>
+    <figcaption><b>To scale,</b> arms at full stretch. <span data-text="same-body"></span></figcaption>
   </figure>
-  <p><b>Left out:</b> the torso never turns; limbs fold completely; the body stays <span data-text="d-wall"></span>; elbows and knees are drawn only; moves are static, no dynos. All of it is collected in <a href="#limits">What the model cannot see</a>.</p>
+  <p><b>Left out:</b> turning the torso, joint limits (limbs fold completely), dynamic moves, and moving the hips in: they stay <span data-text="d-wall"></span>. More in <a href="#limits">What the model cannot see</a>.</p>
 </section>
 
 <section class="chapter" id="check" data-group="The model" data-short="Checking a state" hidden>
   <header>
     <p class="eyebrow">Step 3</p>
     <h2>Checking a state</h2>
-    <p class="lede">With every limb on a fixed hold, can the climber hold still, and how hard is the most loaded limb working?</p>
+    <p class="lede">With each limb on a given hold, can the climber hold still, and how hard does the busiest limb work?</p>
   </header>
   <h3 id="check-unknowns">The question</h3>
-  <p>A <b>state</b> says which hold each limb is on; a foot may hang. The holds do not fix the body, so the check looks for a body position and forces that satisfy six constraints, and among those the smallest <b>effort</b> \(t\), the largest share of strength any limb uses. The state holds if \(t \le 1\).</p>
+  <p>A <b>state</b> says which hold each limb is on; a foot may hang. The holds do not fix the body, so the check searches over body positions and forces that meet six constraints, for the smallest <b>effort</b> \(t\): the largest share of strength any limb uses. The state holds if \(t \le 1\).</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="unknowns-table"></table></div>
   <div class="tbl-wrap"><table class="tbl" data-draw="constraints-table"></table></div>
-  <p>\(A\) is the set of limbs on a hold and \(A_F\) those that push; during a move one limb rests on its hold without force (<code>no_force</code>). \(\Sigma_H\) and \(\Sigma_F\) sum over pushing hands and feet. A failed check gives one reason:</p>
+  <p>During a move one limb touches its hold without pushing (<code>no_force</code>); \(\Sigma_H\) and \(\Sigma_F\) sum over the hands and feet that push. A failed check reports one reason:</p>
   <ul data-draw="reasons-list"></ul>
 
   <h3 id="check-reach">Reach and flexibility</h3>
-  <p>Each hold must be within reach of its shoulder or hip, and a foot cannot be too far above the hip. Both limit where the body can be:</p>
+  <p>Each hold must be within reach of its shoulder or hip, and no foot may be too far above the hip:</p>
   <div class="math-block">\[ \| p_k - (x + o_k) \|_2 \le L_k \]</div>
   <div class="math-block" data-math="flex-row"></div>
   <figure class="fig" id="fig-reach">
     <div class="seg" role="group" aria-label="Start from" data-draw="reach-presets"></div>
     <div class="reach-row" data-draw="reach"></div>
     <p class="reach-status" data-text="reach-status" aria-live="polite"></p>
-    <figcaption><b>Reach.</b> Drag the centre of mass. Left: reach circles on the body. Right: one disc of body positions per hold; the body must be in their overlap, which is convex.</figcaption>
+    <figcaption><b>Reach.</b> Drag the centre of mass. Left: each limb's reach. Right: for each hold, the body positions that reach it; the body must lie in their overlap, a convex set.</figcaption>
   </figure>
-  <div class="tbl-wrap"><table class="tbl" data-draw="flex-table"></table></div>
 
   <h3 id="check-direction">Direction</h3>
-  <p>A hold pushes a limb only within its sector (the shaded sectors in <a href="#data-holds">Holds</a>): the force \(f_k\) from the hold is at most \(\alpha_k\) from its direction \(d_k\). Hanging straight down works on a jug or a sloper; a sidepull or undercling needs another limb pushing back.</p>
+  <p>A hold pushes only within its sector (see <a href="#data-holds">Holds</a>): the force \(f_k\) stays within \(\alpha_k\) of the direction \(d_k\). Hanging straight down works on a jug; a sidepull or undercling needs another limb pushing back.</p>
   <div class="math-block">\[ d_k^\top f_k \ge \|f_k\|_2 \cos\alpha_k \]</div>
 
   <h3 id="check-strength">Strength and effort</h3>
-  <p>No limb may exceed its limit \(F_k\) on its hold, counting the in-wall force and the pull toward the wall (\(N_k\), hands) or push from it (\(M_k\), feet):</p>
+  <p>No limb may exceed its strength \(F_k\) on its hold, counting both the force in the wall plane and the pull in (\(N_k\), hands) or push out (\(M_k\), feet):</p>
   <div class="math-block">\[ \begin{aligned} \|(f_k, N_k)\|_2 &\le t\, F_k && \text{hands} \\ \|(f_k, M_k)\|_2 &\le t\, F_{\text{foot}} && \text{feet} \end{aligned} \]</div>
   <p data-text="effort-example"></p>
   <div class="tbl-wrap"><table class="tbl" data-draw="effort-table"></table></div>
@@ -623,26 +638,26 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-main" data-draw="strength"></div>
       <div class="fig-key" data-draw="strength-bars"></div>
     </div>
-    <figcaption><b>Same holds and forces, three climbers.</b> Dashed circle: the limit; filled disc: the total force, so the ratio of radii is the share used. The forces here are fixed examples.</figcaption>
+    <figcaption><b>Same holds, same forces, three climbers.</b> Dashed circle: the limit. Filled disc: the force, so its size relative to the circle is the share used.</figcaption>
   </figure>
 
   <h3 id="check-balance">Balance</h3>
-  <p>The forces from the holds must cancel gravity, \((0, -1)\) at the centre of mass, which stands a distance \(d\) out from the wall. A rigid body needs six equations: three in the wall plane (no falling, sliding or swinging) and three out of it (no moving off the wall, tipping back, or swinging open like a door). Moments are taken about the wall origin, so all are linear.</p>
+  <p>The hold forces must cancel gravity, which acts at the centre of mass a distance \(d\) out from the wall. That is six linear equations: three in the wall plane (no falling, sliding or turning) and three out of it (no coming off, tipping back or swinging open like a door).</p>
   <div class="math-block">\[ \begin{aligned} & \textstyle\sum f_k = (0,\ 1), \qquad \sum \big(p_{k,x} f_{k,y} - p_{k,y} f_{k,x}\big) = x_c \\ & \Sigma_F M_k = \Sigma_H N_k, \qquad \Sigma_H\, p_{k,y} N_k - \Sigma_F\, p_{k,y} M_k = d \\ & \Sigma_H\, p_{k,x} N_k - \Sigma_F\, p_{k,x} M_k + \Sigma_H\, \tau_k = 0 \\ & N_k \le \beta_k\, d_k^\top f_k, \qquad |\tau_k| \le r_k F_k \end{aligned} \]</div>
-  <p>\(\tau_k\) is how hard a hand twists on its hold. With no foot pushing, the body hangs flat against the wall: \(d = 0\). Three consequences:</p>
+  <p>\(\tau_k\) is how hard a hand twists on its hold. With no foot pushing, the body hangs flat: \(d = 0\). Three consequences:</p>
   <ul>
-    <li><b>Hanging from one hand,</b> the centre of mass must be right below it.</li>
-    <li><b>Feet up high, hands work harder.</b> With one hand and one foot a height \(h\) apart, the hand must pull in \(N = d/h\). <span data-text="tip-facts"></span></li>
+    <li><b>On one hand,</b> the centre of mass hangs right below it.</li>
+    <li><b>High feet, harder hands.</b> With one hand and one foot a height \(h\) apart, the hand must pull in \(N = d/h\). <span data-text="tip-facts"></span></li>
     <li><b>Barn-door.</b> With one hand and two feet, the hand must sit between the feet, give or take what the grip can twist. <span data-text="door-facts"></span></li>
   </ul>
   <figure class="fig" id="fig-balance">
     <div class="bal-row" data-draw="balance"></div>
-    <figcaption><b>Three cases, solved by the check.</b> Solid arrows: hold forces. Dashed: gravity. Grey arm: touching only. Right: the forces drawn head to tail close up.</figcaption>
+    <figcaption><b>Three cases, solved by the check.</b> Solid arrows: hold forces; dashed: gravity; grey arm: touching only. Right: the forces head to tail form a closed loop.</figcaption>
   </figure>
 
   <h3 id="check-problem">The whole problem</h3>
   <div class="math-block" data-math="full-problem"></div>
-  <p>The objective is linear, reach and strength are second-order cones, direction is a convex cone and the rest is linear: a convex <b>second-order cone program</b>. So \(t^\star\) is unique, and for any bound on \(t\) the workable body positions form a convex set, which step 4 relies on. When it fails: a solution with \(t^\star > 1\) means <b>not strong enough</b>; no solution even with only reach and flexibility means <b>cannot reach</b>; otherwise <b>direction or balance</b> does not work.</p>
+  <p>Reach and strength are second-order cones; direction (two half-planes in the wall plane) and everything else are linear: a convex <b>second-order cone program</b>. So \(t^\star\) is unique, and for any bound on \(t\) the workable body positions form a convex set, which step 4 relies on. One example per outcome:</p>
   <div class="cards" data-draw="result-cards"></div>
 
   <h3 id="check-solve">Solving it</h3>
@@ -654,38 +669,38 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Step 4</p>
     <h2>One move</h2>
-    <p class="lede">A move changes one limb's hold while the body slides. Two state checks decide it.</p>
+    <p class="lede">One limb changes hold while the body slides. Two state checks decide whether it works.</p>
   </header>
   <h3 id="move-phases">Five phases, two checks</h3>
-  <p>Say the right hand goes from hold A to hold B, from state \(\sigma\) to \(\sigma'\). The hand <b>unloads</b> A, <b>lets go</b>, <b>travels</b> while the body slides, <b>touches</b> B, and <b>loads</b> it. It can only fail at the two handovers, each a state check with the moving hand resting:</p>
+  <p>Say the right hand moves from hold A to hold B, taking state \(\sigma\) to \(\sigma'\). It <b>unloads</b> A, <b>lets go</b>, <b>travels</b> while the body slides, <b>touches</b> B and <b>loads</b> it. It can only fail at the two handovers, each a state check with the hand resting on its hold:</p>
   <ul>
-    <li><b>Release check</b> <code>check(σ, no_force=k)</code>: can the other three hold the body while the hand only touches A?</li>
-    <li><b>Catch check</b> <code>check(σ′, no_force=k)</code>: can they hold it while the hand only touches B?</li>
+    <li><b>Release check</b> <code>check(σ, no_force=k)</code>: can the other three limbs hold the body while the hand just touches A?</li>
+    <li><b>Catch check</b> <code>check(σ′, no_force=k)</code>: can they hold it while the hand just touches B?</li>
   </ul>
-  <p>The move works if both give \(t \le 1\); its difficulty is \(\max(t_{\text{release}}, t_{\text{catch}})\). A foot coming off needs only the release check, a foot going on only the catch check.</p>
+  <p>The move works if both give \(t \le 1\), and its difficulty is \(\max(t_{\text{release}}, t_{\text{catch}})\). Taking a foot off needs only the release check; putting one on, only the catch check.</p>
   <figure class="fig" id="fig-move">
     <div class="seg" role="group" aria-label="Move" data-draw="move-switch"></div>
     <div class="fig-main" data-draw="move"></div>
     <ol class="phase-strip" data-draw="move-phases"></ol>
     <div class="seg move-ctl" role="group" aria-label="Playback" data-draw="move-controls"></div>
     <p class="t-read" data-text="move-status" aria-live="polite"></p>
-    <figcaption><b>A move in five phases.</b> The moving hand's force shrinks to zero before it lets go; the dashed arm is in the air; the faint line is the path of the centre of mass. Keyframes come from the checks.</figcaption>
+    <figcaption><b>A move in five phases.</b> The hand's force fades to zero before it lets go; the dashed arm is in the air; the faint line traces the centre of mass.</figcaption>
   </figure>
 
   <h3 id="move-why">Why two checks are enough</h3>
-  <p>In one state, the average of two valid solutions is valid again: discs and sectors have no dents, the size of an average is at most the average of sizes, and the rest is linear. So the body can slide in a straight line between two valid positions, forces blending, with \(t\) never above the larger end.</p>
-  <p>Now let \(S_3\) be the body positions where the other three limbs hold the body with \(t \le 1\), and \(D_A\), \(D_B\) where the hand reaches A or B. The release check lands in \(S_3 \cap D_A\), the catch check in \(S_3 \cap D_B\), and in between the hand touches nothing, so the straight slide inside \(S_3\) connects them. Every way of making the move passes both handovers, so the difficulty is exactly \(\max(t_{\text{release}}, t_{\text{catch}})\).</p>
+  <p>Within one state the check is convex, so the average of two valid solutions is valid too. The body can therefore slide in a straight line between two valid positions, its forces blending, with \(t\) never above the larger end.</p>
+  <p>Let \(S_3\) be the body positions where the other three limbs hold on with \(t \le 1\), and \(D_A\), \(D_B\) those from which the hand reaches A or B. The release check lands in \(S_3 \cap D_A\), the catch check in \(S_3 \cap D_B\), and a straight slide inside \(S_3\) joins them while the hand is in the air. Any way of making the move passes both handovers, so its difficulty is exactly \(\max(t_{\text{release}}, t_{\text{catch}})\).</p>
   <figure class="fig" id="fig-twochecks">
     <div class="tip-row" data-draw="twochecks"></div>
-    <figcaption><b>The two moves above, in body-position space.</b> Shaded: \(S_3\), traced by the check. Dashed: \(D_A\), \(D_B\). Right: the layback holds the body too far left to stay on A.</figcaption>
+    <figcaption><b>The two moves above, as body positions.</b> Shaded: \(S_3\). Dashed: \(D_A\) and \(D_B\). Right: the layback keeps the body too far left to stay on A.</figcaption>
   </figure>
-  <p><span data-text="convex-facts"></span> <b>Exception:</b> taking off the last foot or putting on the first swings the body in or out (\(d\) jumps between 0 and its full value), so those <b>swing moves</b> also need their start and end states to hold.</p>
+  <p><span data-text="convex-facts"></span> <b>Exception:</b> taking off the last foot, or putting on the first, swings the body in or out (\(d\) jumps between 0 and its full value). These <b>swing moves</b> must also hold at their start and end.</p>
 
   <h3 id="move-cost">Cost and candidates</h3>
   <p>A move that works costs its difficulty plus small style terms:</p>
   <div class="math-block">\[ \begin{aligned} w = {} & \max(t_{\text{release}}, t_{\text{catch}}) + c_0 + \lambda_d\, \|p_B - p_A\|_2 \\ & + w_{\text{cross}}\,[\text{enters crossed hands}] + c_{\text{cut}}\,[\text{a foot comes off}] \end{aligned} \]</div>
   <div class="tbl-wrap"><table class="tbl" data-draw="cost-table"></table></div>
-  <p>Moves are swaps, matches, cuts (foot off) and places (foot on). Two hands may share a hold, as may two feet; a hand and a foot only if feet may use it; hands never hang. Candidates that fail a cheap reach test are dropped before any full check.</p>
+  <p>A move is a swap, a match, a cut (foot off) or a place (foot on). Two hands may share a hold, as may two feet, or a hand and a foot if feet may use it; hands never hang. A cheap reach test discards hopeless candidates before any check.</p>
   <figure class="fig" id="fig-checker">
     <div class="seg" role="group" aria-label="Start state" data-draw="checker-presets"></div>
     <div class="seg" role="group" aria-label="Moving limb" data-draw="checker-limbs"></div>
@@ -694,7 +709,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-key" data-draw="checker-detail"></div>
     </div>
     <div class="cand-list" data-draw="checker-list"></div>
-    <figcaption><b>Every move from one state.</b> Pick a state and a limb: green works, red fails a check, grey was ruled out. Click one for its cost.</figcaption>
+    <figcaption><b>Every move from one state.</b> Pick a state and a limb. Green works, red fails a check, grey was ruled out early. Click a move for its cost.</figcaption>
   </figure>
 </section>
 
@@ -702,16 +717,16 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Step 5</p>
     <h2>Finding the best beta</h2>
-    <p class="lede">A two-stage Dijkstra search: first make the crux as easy as possible, then make the rest as cheap as possible.</p>
+    <p class="lede">Two Dijkstra searches: the first makes the crux as easy as possible, the second makes the rest cheap.</p>
   </header>
   <h3 id="search-graph">The state graph</h3>
-  <p>The search walks a graph. <b>Nodes</b> are states, <b>edges</b> are moves that work (step 4), weighted by their cost \(w\). <b>Start</b>: both hands on the start holds, the feet in every combination that holds, hanging included. <b>Goal</b>: both hands on the top hold, in a state that holds. Edges are built lazily, only when the search reaches their start state, and every state check is cached.</p>
+  <p><b>Nodes</b> are states and <b>edges</b> are moves that work, weighted by their cost \(w\). The <b>start</b> is both hands on the start holds with the feet anywhere that holds, or hanging; the <b>goal</b> is both hands on the top. Edges are built only when the search reaches them, and every state check is cached.</p>
   <figure class="fig" id="fig-graph">
     <div class="fig-row">
       <div class="fig-main" data-draw="toy-route"></div>
       <div class="fig-key" data-draw="graph-funnel"></div>
     </div>
-    <figcaption><b>How the state graph of a small route shrinks</b>, for <span data-text="graph-climber"></span>. Every combination of holds, then the prechecks (unusable holds, holds too far apart), then reach and flexibility alone, then the states that can be held, then those reachable from a start by moves that work, and of those the ones from which the top can still be reached.</figcaption>
+    <figcaption><b>How the state graph of a small route shrinks</b>, for <span data-text="graph-climber"></span>: from every combination of holds, through cheap prechecks, reach, holding still, and reachability from the start, to the states that can still reach the top.</figcaption>
   </figure>
   <p data-text="graph-moves"></p>
   <div class="fig-main" data-draw="graph-moves-bar"></div>
@@ -720,41 +735,40 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p data-text="graph-impl"></p>
   </details>
   <h3 id="search-dijkstra">Two-stage Dijkstra</h3>
-  <p>The best beta makes the hardest move, the <b>crux</b>, as easy as possible, and among betas with that crux has the smallest total cost. Two searches do this:</p>
   <ol>
-    <li><b>Bottleneck Dijkstra.</b> A path's label is the largest move cost on it. Expand states in order of label, starting from every start state at once; the first goal popped has the smallest possible crux \(B^\star\).</li>
-    <li><b>Ordinary Dijkstra</b> on the sum of costs, using only moves with \(w \le B^\star\) (plus \(10^{-6}\) for rounding).</li>
+    <li><b>Bottleneck Dijkstra.</b> A path's label is its largest move cost. Expanding from all start states at once, the first goal reached has the smallest possible crux \(B^\star\).</li>
+    <li><b>Ordinary Dijkstra</b> on total cost, using only moves with \(w \le B^\star\).</li>
   </ol>
-  <p>Why not one search with the label \((\text{crux}, \text{total})\) compared in that order? Because the order does not survive extending a path. Take a path with the smaller crux but the larger total, and another with a slightly larger crux but a smaller total. Add a move harder than both, and the cruxes become equal, so the second path now wins. Dijkstra would already have thrown it away. Two stages avoid this. Both share the cached checks, so the second costs almost nothing; the search stops with a "search limit" report after 200,000 expansions.</p>
-  <p><b>No solution:</b> if the first stage runs out of states, the report names the highest state reached and why the next hand move fails, using the diagnosis of step 3, for example “Stuck at step 4 (catch): left hand cannot reach T”.</p>
+  <p>Why not one search on the pair (crux, total)? Dijkstra keeps only the best label per state, and that order can flip later: a path with a smaller crux but a larger total wins now, yet after a move harder than both the cruxes tie and the other path is better. By then it has been discarded. The second stage reuses the cached checks and costs almost nothing.</p>
+  <p><b>No solution:</b> when the first stage runs out of states, the report names the highest state reached and why the next hand move fails, for example “Stuck at move 4: left hand → T fails the catch check (cannot reach)”.</p>
 
   <figure class="fig" id="fig-dijkstra">
     <div class="tip-row" data-draw="dijkstra-charts"></div>
-    <figcaption><b>Both stages on the toy route</b>, for <span data-text="dijkstra-climber"></span>. Each dot is one expanded state, in the order expanded. Stage 1: the label (largest move cost so far) never decreases, and the first goal fixes \(B^\star\). Stage 2: the total cost so far, over moves no harder than \(B^\star\).</figcaption>
+    <figcaption><b>Both stages on the toy route</b>, for <span data-text="dijkstra-climber"></span>. Each dot is a state, in the order expanded. Stage 1's label never decreases, and the first goal fixes \(B^\star\); stage 2 adds up costs over moves no harder than \(B^\star\).</figcaption>
   </figure>
   <figure class="fig" id="fig-beta">
     <div class="fig-row">
       <div class="fig-main" data-draw="beta-route"></div>
       <div class="fig-key"><div class="tbl-wrap"><table class="tbl" data-draw="beta-steps"></table></div></div>
     </div>
-    <figcaption><b>The beta it finds.</b> Numbered arrows: hand moves (solid) and foot moves (dashed), in order. The crux is marked in the list.</figcaption>
+    <figcaption><b>The beta it finds.</b> Numbered arrows in order: hands solid, feet dashed.</figcaption>
   </figure>
   <ul data-draw="dijkstra-stats"></ul>
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p>The tests compare the two-stage search with an exhaustive reference on small routes: for every state and every path length up to a bound, it keeps each (crux, total) pair that no other path beats in both, so the best pair overall is always kept. For Ava, Ben and Cal on an eight-hold route, the two agree exactly on the crux and the total. Code: <a data-src="src/betasolver/search.py">search.py</a>, <code>bottleneck</code>, <code>cheapest</code>, <code>solve</code>, <code>pareto_reference</code>.</p>
+    <p>The tests compare the search with an exhaustive reference that keeps every (crux, total) pair no other path beats in both. For Ava, Ben and Cal on an eight-hold route the two agree exactly. Code: <a data-src="src/betasolver/search.py">search.py</a>, <code>bottleneck</code>, <code>cheapest</code>, <code>pareto_reference</code>.</p>
   </details>
   <h3 id="search-player">The beta player</h3>
-  <p><b>Smoothing.</b> A state check returns <i>a</i> best body position, but often many are equally good, so frame to frame the body could jump. Every keyframe of the beta (start, release, catch and end of each move) is therefore solved once more: effort at most its own optimum plus <span data-text="player-slack"></span>, and the body as close as possible to where it was in the previous frame. This changes how the beta looks, never which beta it is.</p>
-  <p><b>Playing a beta.</b> Each move plays its five phases between the four keyframes. Since each slide stays inside one convex region (step 4), every in-between pose is valid too.</p>
+  <p><b>Smoothing.</b> Many body positions are often equally good, so the raw solutions jump from frame to frame. Each keyframe is solved once more: effort within <span data-text="player-slack"></span> of its optimum, body as close as possible to the previous frame. This changes how the beta looks, never which beta it is.</p>
+  <p><b>Playing.</b> Each move plays its five phases between four keyframes; since every slide stays in one convex region, every in-between pose is valid.</p>
   <figure class="fig" id="fig-player">
     <div class="player" data-draw="player"></div>
-    <figcaption><b>The beta player, on the toy route.</b> Pick a climber; play, step, or click a move in the list (keys: \(\leftarrow\) \(\rightarrow\) and space once the player has focus). Limbs are coloured by the share of strength they use, bars show each move's difficulty, and the inset is a side view with the pull-in and push forces.</figcaption>
+    <figcaption><b>The beta player, on the toy route.</b> Play, step, or click a move (keyboard: arrows and space). Bars show each move's difficulty; the inset is a side view.</figcaption>
   </figure>
   <ul data-draw="player-stats"></ul>
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p>Each keyframe is one more cone program: the state's constraints, \(t \le t^\star + \text{slack}\), and the objective \(|x_c - x_c'| + |y_c - y_c'|\) to the previous frame (the first frame aims at a natural height). The run is exported in the format the example pages use: four frames per move, each with the state, body position, forces, shares of strength and joint points. Code: <a data-src="src/betasolver/export.py">export.py</a>, <code>smooth_frame</code>, <code>export_run</code>.</p>
+    <p>Each keyframe is one more cone program: the state's constraints, \(t \le t^\star + \text{slack}\), and the objective \(|x_c - x_c'| + |y_c - y_c'|\) to the previous frame. Code: <a data-src="src/betasolver/export.py">export.py</a>, <code>smooth_frame</code>, <code>export_run</code>.</p>
   </details>
 </section>
 
@@ -764,39 +778,39 @@ __EXAMPLES__
 <section class="chapter" id="limits" data-group="Notes" data-short="What the model cannot see" hidden>
   <header><p class="eyebrow">Limits</p><h2>What the model cannot see</h2>
   <p class="lede">Flagging, heel and toe hooks, hips against the wall, momentum and dynos.</p></header>
-  <p>The model is a flat, slow, rigid version of climbing. Each rule below keeps it small enough to check exactly, and each one costs something. For each: what a climber can do that the model cannot, what the model does instead, and where it shows in the examples.</p>
+  <p>The model is a flat, slow, rigid version of climbing. Each simplification keeps it small enough to solve exactly, and each has a cost. Below: what a climber can do that the model cannot, and where it shows.</p>
 
   <h3 id="limits-body">The body</h3>
   <ul class="limits">
-    <li><b>The torso never turns.</b> No hip turned into the wall, no drop knee, no flag (a leg pressed out sideways as a counterweight). These are exactly how climbers stop a barn-door, so here only the grip twist and the foot positions can. <i>Shows in:</i> Cal swinging open in <a href="#ex1">examples 1</a>, <a href="#ex2">2</a> and <a href="#ex3">3</a>; a real climber might flag and stay on. Barn-doors are only partly modelled, and the model is pessimistic about them.</li>
-    <li><b>The hips stay <span data-text="limits-d"></span> from the wall.</b> A climber pulls the hips in to take load off the hands; the model cannot, so the hands must hold the body in harder than they would. <i>Shows in:</i> slopers, which hold you in poorly, are almost unusable for everyone, and Ben, who stands furthest out, needs more twist in <a href="#ex3">example 3</a>.</li>
-    <li><b>Limbs are straight lines with a greatest length.</b> They fold completely and joints have no angle limits, so some positions are too comfortable. Elbows and knees are only drawn. The convexity argument of <a href="#move">One move</a> holds for this body, not a real one.</li>
-    <li><b>Feet only push, and only on holds.</b> No heel or toe hooks, and no smearing on blank wall. <i>Shows in:</i> <a href="#ex5">example 5</a>, where Ava lets go with her feet because the wall under the rail is blank; a real climber would probably smear.</li>
+    <li><b>The torso never turns.</b> No hip turned in, no drop knee, no flag (a leg pressed out as a counterweight). These are how climbers stop a barn-door; here only the grip and the feet can, so the model is pessimistic about barn-doors. <i>Shows in:</i> Cal swinging open in <a href="#ex1">examples 1</a>, <a href="#ex2">2</a> and <a href="#ex3">3</a>; a real climber might flag and stay on.</li>
+    <li><b>The hips stay <span data-text="limits-d"></span> from the wall.</b> Climbers pull their hips in to unload their hands; here the hands must hold the body in harder. <i>Shows in:</i> slopers, which hold you in poorly, are almost unusable, and Ben, furthest out, needs more twist in <a href="#ex3">example 3</a>.</li>
+    <li><b>Limbs have only a greatest length.</b> They fold completely and joints have no limits, so some positions are too comfortable; elbows and knees are only drawn. The convexity argument of <a href="#move">One move</a> holds for this body, not a real one.</li>
+    <li><b>Feet only push, and only on holds.</b> No heel or toe hooks, no smearing on blank wall. <i>Shows in:</i> <a href="#ex5">example 5</a>, where Ava lets her feet go under the rail; a real climber would probably smear.</li>
   </ul>
 
   <h3 id="limits-motion">Motion</h3>
   <ul class="limits">
-    <li><b>Everything is static.</b> No momentum, no deadpoints, no dynos: every position along a move must hold on its own. <i>Shows in:</i> the height threshold of <a href="#ex6">example 6</a>; a small jump would let shorter climbers reach J2, so the real threshold is lower.</li>
-    <li><b>Swing moves are the exception.</b> Taking off the last foot, or putting on the first, swings the body between hanging flat and standing out from the wall. The search allows these moves but checks only that the climber can hold the positions before and after; the swing itself is not modelled.</li>
-    <li><b>One limb at a time.</b> No moving a hand and a foot together, and no foot swaps done as one motion: a swap is two moves, through the hold both feet share.</li>
+    <li><b>Everything is static.</b> No momentum, deadpoints or dynos: every position along a move must hold on its own. <i>Shows in:</i> the threshold of <a href="#ex6">example 6</a>; a small jump would reach J2, so the real threshold is lower.</li>
+    <li><b>Except swing moves.</b> Taking off the last foot, or putting on the first, swings the body between hanging flat and standing out. The search allows these moves and checks the positions before and after, but not the swing.</li>
+    <li><b>One limb at a time.</b> No moving a hand and a foot together; a foot swap is two moves through the shared hold.</li>
   </ul>
 
   <h3 id="limits-holds">Holds, wall and strength</h3>
   <ul class="limits">
-    <li><b>A hold is a point with a type.</b> No size, shape or texture, and no better or worse spots on the same hold. A sloper is just a narrow range of directions, which makes it harsher than a real one, where body position and friction matter.</li>
-    <li><b>The wall is flat and vertical.</b> No overhangs, slabs, aretes or volumes; everything happens in the wall plane plus a fixed distance out.</li>
-    <li><b>Strength never runs out.</b> Limits are fixed multiples of body weight: no fatigue, no pump, and a long route is no harder than its hardest move. Body weight itself cancels out.</li>
-    <li><b>The style costs are choices.</b> The extra cost of a move, of distance, of crossing hands and of taking a foot off only break ties between betas that work; they are not measured, and other values give other betas with the same crux.</li>
+    <li><b>A hold is a point with a type.</b> No size, shape or texture. A sloper is just a narrow range of directions, harsher than a real one, where friction and body position matter.</li>
+    <li><b>The wall is flat and vertical.</b> No overhangs, slabs, aretes or volumes.</li>
+    <li><b>Strength never runs out.</b> No fatigue or pump: a long route is no harder than its hardest move, and body weight cancels out.</li>
+    <li><b>The style costs are choices.</b> They only break ties between betas that work. They are not measured, and other values would give other betas with the same crux.</li>
   </ul>
 
   <h3 id="limits-numbers">What the numbers mean</h3>
-  <p>The routes were designed to show one effect each, and the climbers are made-up profiles. Results are qualitative: who gets up and why is meaningful, but a crux of 0.64 or a threshold of 1.67 m belongs to this model and these profiles, not to a real gym. The reasons a climber fails are the most trustworthy output, because each one points at a single constraint that can be checked by hand.</p>
+  <p>The routes were built to show one effect each, and the climbers are invented. Who gets up, and why, is meaningful; a crux of 0.64 or a threshold of 1.67 m belongs to this model, not to a real gym. The failure reasons are the most trustworthy output: each points at one constraint you can check by hand.</p>
 </section>
 <section class="chapter" id="appendix" data-group="Notes" data-short="Implementation and tests" hidden>
   <header><p class="eyebrow">Appendix</p><h2>Implementation and tests</h2>
   <p class="lede">Data format, test results and how to reproduce everything.</p></header>
   <h3 id="appendix-format">Data format</h3>
-  <p>All solving happens offline. <code>python -m betasolver.run_all</code> writes every example to one file, <code>site/results.json</code> (<span data-text="results-kb"></span>), and the page only reads it. The file records a fingerprint of the route definitions and the solver code; a test fails when the two no longer match.</p>
+  <p>All solving happens offline: <code>python -m betasolver.run_all</code> writes every example to <code>site/results.json</code> (<span data-text="results-kb"></span>), which the page only reads. The file carries a fingerprint of the routes and solver code, and a test fails if they drift apart.</p>
   <div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Level</th><th>Fields</th></tr></thead>
     <tbody>
@@ -828,7 +842,7 @@ python -m betasolver.run_all
 pytest --report site/test_report.json
 # build the page: docs/index.html
 python site/build_page.py</pre>
-  <p>The solver is deterministic, so <code>run_all</code> reproduces the same betas, numbers and failure reasons; only the timings and the date differ. <code>pytest</code> alone runs the tests without writing a report. <code>cvxpy</code>, installed by the <code>exact</code> extra, is used only to cross-check the hand-built cone program.</p>
+  <p>The solver is deterministic: <code>run_all</code> reproduces the same betas and numbers; only timings and the date differ. Plain <code>pytest</code> skips the report. <code>cvxpy</code> (the <code>exact</code> extra) is used only for the cross-check.</p>
 </section>
 
       <nav class="pager" id="pager" aria-label="Chapter navigation"></nav>
@@ -887,7 +901,16 @@ var Draw = (function () {
     opts = opts || {};
     var b = sc.box, g = sc.layers.wall;
     var x0 = Math.max(0, b.x0), x1 = Math.min(w.w, b.x1), y0 = Math.max(0, b.y0), y1 = Math.min(w.h, b.y1);
-    el(g, "rect", { x: sc.X(x0), y: sc.Y(y1), width: r3((x1 - x0) * sc.k), height: r3((y1 - y0) * sc.k), rx: 2 }, "w-wall");
+    var wr = el(g, "rect", { x: sc.X(x0), y: sc.Y(y1), width: r3((x1 - x0) * sc.k), height: r3((y1 - y0) * sc.k), rx: 2 }, "w-wall");
+    if (!sc.wallId) {  // a soft light-from-above gradient and a grid of bolt holes, once per scene
+      sc.wallId = "wf" + (++clipCount);
+      var defs = el(sc.svg, "defs"), gr = el(defs, "linearGradient", { id: sc.wallId + "g", x1: 0, y1: 0, x2: 0, y2: 1 });
+      el(gr, "stop", { offset: "0" }, "w-stop-hi"); el(gr, "stop", { offset: "1" }, "w-stop-lo");
+      var bs = 0.25 * sc.k, pt = el(defs, "pattern", { id: sc.wallId + "p", width: r3(bs), height: r3(bs), patternUnits: "userSpaceOnUse", x: r3(sc.X(0) - bs / 2), y: r3(sc.Y(0) - bs / 2) });
+      el(pt, "circle", { cx: r3(bs / 2), cy: r3(bs / 2), r: r3(Math.max(0.8, Math.min(1.6, 0.006 * sc.k))) }, "w-bolt");
+    }
+    wr.style.fill = "url(#" + sc.wallId + "g)";
+    if (opts.grid) el(g, "rect", { x: sc.X(x0), y: sc.Y(y1), width: r3((x1 - x0) * sc.k), height: r3((y1 - y0) * sc.k), fill: "url(#" + sc.wallId + "p)" });
     if (opts.clip) { // keep circles and regions inside the wall
       if (!sc.clipId) {
         sc.clipId = "clip" + (++clipCount);
@@ -932,6 +955,7 @@ var Draw = (function () {
       case "jug": { // big round hold with a dark pocket: the lip you grab
         var r = s * k;
         var c = el(g, "circle", { cx: cx, cy: cy, r: r3(r) }, cls);
+        el(g, "ellipse", { cx: r3(cx - r * 0.3), cy: r3(cy - r * 0.45), rx: r3(r * 0.38), ry: r3(r * 0.2) }, "h-gloss");
         el(g, "path", { d: "M" + r3(cx - r * 0.62) + " " + r3(cy - r * 0.18) +
           "Q" + r3(cx) + " " + r3(cy + r * 0.55) + " " + r3(cx + r * 0.62) + " " + r3(cy - r * 0.18) +
           "Q" + r3(cx) + " " + r3(cy + r * 0.12) + " " + r3(cx - r * 0.62) + " " + r3(cy - r * 0.18) + "Z" }, "h-pocket");
@@ -1026,7 +1050,9 @@ var Draw = (function () {
       var uc = opts.limbClass && opts.limbClass[limb] ? opts.limbClass[limb] : opts.util && frame.util ? utilClass(frame.util[limb], bands) : null;
       var cls = uc || "cl-stroke";
       var pts = [P(root), P(mid), P(j.end)];
-      el(g, "path", { d: "M" + pts.map(function (p) { return p.join(" "); }).join("L"), "stroke-width": r3(wLimb) }, "fg-limb " + cls);
+      var dL = "M" + pts.map(function (p) { return p.join(" "); }).join("L");
+      el(g, "path", { d: dL, "stroke-width": r3(wLimb + 3) }, "fg-halo");
+      el(g, "path", { d: dL, "stroke-width": r3(wLimb) }, "fg-limb " + cls);
       var fill = uc || "cl-fill";
       el(g, "circle", { cx: pts[1][0], cy: pts[1][1], r: r3(wLimb * 0.62) }, "fg-joint " + fill);
       el(g, "circle", { cx: pts[2][0], cy: pts[2][1], r: r3(wLimb * 0.85) }, "fg-joint " + fill);
@@ -1321,14 +1347,8 @@ var Draw = (function () {
       Draw.hold(sc, { x: 0, y: 0, type: t.type, dir: t.dir });
       var b = document.createElement("b");
       b.textContent = t.type;
-      var u = document.createElement("span");
-      u.textContent = t.use === "foot" ? "feet only" : "hands and feet";
       cell.appendChild(b);
-      cell.appendChild(u);
-      if (spec) {
-        var dsc = document.createElement("small");
-        dsc.textContent = spec.alpha + "\u00b0 either side of " + dirWord(spec.dir);
-        cell.appendChild(dsc);
+      if (spec) {  // the numbers are in the table below
         var note = document.createElement("span");
         note.className = "note";
         note.textContent = spec.note;
@@ -1721,7 +1741,7 @@ var Draw = (function () {
       reach: "no body position reaches every hold;",
       strength: "some limb would need more than its strength (\\(t^\\star > 1\\));",
       balance: "no forces balance the body, e.g. a sidepull with nothing pushing back;",
-      unusable: "a hold the climber has no strength for, such as a crimp for Ava (injured). Found before solving."
+      unusable: "the climber has no strength for it, like a crimp for Ava (injured); found before solving."
     };
     order.forEach(function (k) {
       var li = document.createElement("li");
@@ -1955,8 +1975,8 @@ var Draw = (function () {
     var ava = S.runs[0], u = ava.frame.util;
     function typeOf(l) { var h = byId[S.state[l]]; return l[1] === "F" ? "foothold" : h.type; }
     document.querySelector('[data-text="effort-example"]').textContent =
-      "Example: " + ava.name + "'s left hand on a " + typeOf("LH") + " uses " + pct(u.LH) + " of its limit, the right hand on a " +
-      typeOf("RH") + " " + pct(u.RH) + ", the feet about " + pct((u.LF + u.RF) / 2) + ": t = " + two(ava.t) + ", set by the right hand.";
+      "For example, " + ava.name + "'s left hand on a " + typeOf("LH") + " uses " + pct(u.LH) + " of its strength, her right hand on a " +
+      typeOf("RH") + " " + pct(u.RH) + " and each foot about " + pct((u.LF + u.RF) / 2) + ", so t = " + two(ava.t) + ".";
 
     // the figure
     var v = S.view, sc = Draw.scene(slot, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 230, pad: 4, title: "Forces against strength limits" });
@@ -1999,10 +2019,10 @@ var Draw = (function () {
       var rd = document.createElement("p"); rd.className = "t-read";
       var tv = document.createElement("b"); tv.className = b.key; tv.textContent = "t = " + two(run.t);
       rd.appendChild(tv);
-      rd.appendChild(document.createTextNode(", " + b.name + ". The largest share is the " + NAMES[run.limiting] + " on the " + typeOf(run.limiting) + "."));
+      rd.appendChild(document.createTextNode(", " + b.name.toLowerCase() + ", set by the " + NAMES[run.limiting] + " on the " + typeOf(run.limiting) + "."));
       keyEl.appendChild(rd);
       var nt = document.createElement("p"); nt.className = "t-note";
-      nt.textContent = "Dashed line: 100% of the limit. Solver, with these forces held fixed: t = " + run.t_solver.toFixed(3) + ".";
+      nt.textContent = "Dashed line: the limit. The solver, given these forces, agrees: t = " + run.t_solver.toFixed(3) + ".";
       keyEl.appendChild(nt);
     }
     var sw = document.querySelector('[data-draw="strength-switch"]'), btns = [];
@@ -2050,7 +2070,7 @@ var Draw = (function () {
       st.className = "st " + (P.ok ? "ok" : "bad"); note.className = "note";
       if (P.key === "hang") {
         st.textContent = "✓ Holds";
-        note.textContent = "x_c = " + m2(P.torso[0]) + " m, right below the hand. Hand force (" + m2(P.forces.LH.f[0]) + ", " + m2(P.forces.LH.f[1]) + "), " + pct(P.share.LH) + " of its limit.";
+        note.textContent = "Centre of mass right below the hand; the hand uses " + pct(P.share.LH) + " of its strength.";
       } else if (P.key === "off") {
         // the body would swing back toward the point below the hand
         var hx = P.hold_x, hy = P.joints.LH.end[1];
@@ -2065,7 +2085,7 @@ var Draw = (function () {
         Draw.el(sc.layers.over, "line", { x1: sc.X(hx), y1: sc.Y(P.torso[1] - 0.2), x2: sc.X(P.torso[0]), y2: sc.Y(P.torso[1] - 0.2) }, "anno-line");
         Draw.el(sc.layers.over, "text", { x: sc.X((hx + P.torso[0]) / 2), y: sc.Y(P.torso[1] - 0.2) + 13, "text-anchor": "middle" }, "anno-strong").textContent = m2(P.shift) + " m";
         st.textContent = "✗ Swings";
-        note.textContent = "Body held " + m2(P.shift) + " m to the side: hand force and gravity are not in line and turn the body. No solution.";
+        note.textContent = "Body " + m2(P.shift) + " m to the side: hand force and gravity are out of line and turn it.";
       } else {
         // head-to-tail: f_RH, f_RF, gravity, back to the start
         var vecs = [], o = [v.x1 - 0.22, v.y0 + 0.1];
@@ -2083,8 +2103,8 @@ var Draw = (function () {
         Draw.el(sc.layers.over, "text", { x: sc.X(v.x1) - 6, y: sc.Y(o[1]) + 14, "text-anchor": "end" }, "anno").textContent = "head to tail: closed";
         var lim = P.limiting;
         st.textContent = "✓ Holds";
-        note.textContent = "Sidepull pulls right (" + m2(P.forces.RH.f[0]) + ", " + m2(P.forces.RH.f[1]) + "), foot pushes left (" +
-          m2(P.forces.RF.f[0]) + ", " + m2(P.forces.RF.f[1]) + "); shares " + pct(P.share.RH) + " and " + pct(P.share.RF) + ".";
+        note.textContent = "The sidepull pulls right, the foot pushes left; each uses " +
+          (pct(P.share.RH) === pct(P.share.RF) ? pct(P.share.RH) : pct(P.share.RH) + " and " + pct(P.share.RF)) + " of its strength.";
       }
       cell.appendChild(st); cell.appendChild(note);
       row.appendChild(cell);
@@ -2265,7 +2285,7 @@ var Draw = (function () {
     document.querySelector('[data-math="flex-row"]').textContent =
       "\\[ p_{k,y} \\le y_c - " + hip + "\\,H + \\text{flex}\\cdot H \\]";
     var tb = document.querySelector('[data-draw="flex-table"]');
-    tb.innerHTML = "<thead><tr><th>Climber</th><th>flex</th><th>Highest foot</th></tr></thead>";
+    if (tb) tb.innerHTML = "<thead><tr><th>Climber</th><th>flex</th><th>Highest foot</th></tr></thead>";
     var body = document.createElement("tbody");
     var rows = DATA.model.climbers.concat(DATA.model.variants.filter(function (v) { return v.flex !== undefined && v.key === "A_stiff"; }));
     rows.forEach(function (c) {
@@ -2276,7 +2296,7 @@ var Draw = (function () {
       });
       body.appendChild(tr);
     });
-    tb.appendChild(body);
+    if (tb) tb.appendChild(body);
     if (!row) return;
 
     var v = X.view;
@@ -2312,19 +2332,19 @@ var Draw = (function () {
     function m2(x) { return x.toFixed(2); }
     if (F.tipping) {
       var T = F.tipping, lo = T.views[0], hi = T.views[1];
-      set("tip-facts", "For " + T.climber.name + " (d = " + m2(T.d) + " m), h = " + m2(lo.h) + " m gives N = " + m2(lo.N) + " and h = " + m2(hi.h) +
-        " m gives N = " + m2(hi.N) + "; at " + T.sweep.length + " foot heights the check matches d/h to " +
-        (T.max_error * 100 < 0.1 ? "within 0.1%" : (T.max_error * 100).toFixed(1) + "%") + ".");
+      set("tip-facts", "For " + T.climber.name + " (d = " + m2(T.d) + " m): N = " + m2(lo.N) + " at h = " + m2(lo.h) + " m, N = " + m2(hi.N) +
+        " at h = " + m2(hi.h) + " m. The check matches d/h " + (T.max_error * 100 < 0.1 ? "within 0.1%" : "within " + (T.max_error * 100).toFixed(1) + "%") +
+        " at " + T.sweep.length + " foot heights.");
     }
     if (F.barndoor) {
       var D = F.barndoor, side = D.panels[1];
-      set("door-facts", "With both feet " + m2(side.feet_x[0] - side.hand_x) + "–" + m2(side.feet_x[1] - side.hand_x) +
-        " m to the right of " + D.climber.name + "'s hand, the grip would have to twist " + side.needed.toFixed(3) +
-        " but can give " + side.cap.toFixed(3) + ", so the check fails.");
+      set("door-facts", "Both feet " + m2(side.feet_x[0] - side.hand_x) + "–" + m2(side.feet_x[1] - side.hand_x) +
+        " m to the right of " + D.climber.name + "'s hand need a twist of " + side.needed.toFixed(3) +
+        "; her grip gives " + side.cap.toFixed(3) + ", so she swings open.");
     }
     if (F.convex) {
       var S = F.convex.sweep;
-      set("convex-facts", "Checked on " + S.moves + " random moves (" + S.points.toLocaleString("en") + " positions along their slides): every blend is valid and t never exceeds the difficulty by more than " +
+      set("convex-facts", "On " + S.moves + " random moves (" + S.points.toLocaleString("en") + " positions along their slides), every blend is valid and t never exceeds the difficulty by more than " +
         Math.max(S.worst_min, S.worst_mix).toExponential(0) + ".");
     }
   })(DATA.figures || {});
@@ -2385,7 +2405,7 @@ var Draw = (function () {
         v.appendChild(b);
         v.appendChild(document.createTextNode(" (largest share: " + NAMES[R.limiting] + ")."));
       } else {
-        var head = { strength: "Not strong enough", reach: "Cannot reach", balance: "Direction or balance does not work", unusable: "Unusable hold" }[R.reason];
+        var head = { strength: "Not strong enough", reach: "Cannot reach", balance: "Direction or balance fails", unusable: "Unusable hold" }[R.reason];
         b.textContent = "\u2717 " + head;
         v.appendChild(b);
         var why = "";
@@ -2408,11 +2428,10 @@ var Draw = (function () {
     var M = V.summary, Z = V.size;
     document.querySelector('[data-text="solver-size"]').textContent =
       "With four limbs on, the program has " + Z.variables + " unknowns, " + Z.equalities + " equations, " + Z.inequalities +
-      " linear inequalities and " + Z.cones + " second-order cones (sizes " + Z.cone_sizes.join(" and ") +
-      "). Clarabel, an interior-point solver, takes about " + M.ms.toFixed(1) + " ms per state, or " + M.ms_tidy.toFixed(1) +
-      " ms with the second stage (median). The search will call it many thousands of times.";
-    [["Random states, solved and cross-checked against cvxpy", String(M.n)],
-     ["Same verdict", String(M.n - M.disagree) + " of " + M.n + " (" + M.both + " with a solution, " + M.neither + " without)"],
+      " linear inequalities and " + Z.cones + " second-order cones. The interior-point solver Clarabel needs about " + M.ms.toFixed(1) +
+      " ms per state (" + M.ms_tidy.toFixed(1) + " ms with the tie-breaking second stage). The search calls it thousands of times.";
+    [["Cross-check against cvxpy", M.n + " random states"],
+     ["Same verdict", String(M.n - M.disagree) + " of " + M.n + " (" + M.both + " hold, " + M.neither + " do not)"],
      ["Largest difference in t*", V.max_diff.toExponential(1)],
      ["Time per state", M.ms.toFixed(1) + " ms here, " + M.ref_ms.toFixed(0) + " ms through cvxpy"]
     ].forEach(function (r) {
@@ -2827,10 +2846,10 @@ var Draw = (function () {
 
     var M = S.moves;
     document.querySelector('[data-text="graph-moves"]').textContent =
-      "Exploring the whole graph meant looking at " + M.candidates.toLocaleString("en") + " candidate moves: " +
-      M.pruned.toLocaleString("en") + " were ruled out by geometry before any check, " + M.fail.toLocaleString("en") +
-      " failed a check, and " + M.ok.toLocaleString("en") + " work. That took " + S.checks.toLocaleString("en") +
-      " state checks. The search in the next section needs only a part of this: it stops at the first goal.";
+      "The whole graph has " + M.candidates.toLocaleString("en") + " candidate moves: " +
+      M.pruned.toLocaleString("en") + " ruled out by geometry, " + M.fail.toLocaleString("en") +
+      " failing a check and " + M.ok.toLocaleString("en") + " that work, found with " + S.checks.toLocaleString("en") +
+      " state checks. The search below explores only part of it.";
     var mb = document.querySelector('[data-draw="graph-moves-bar"]');
     var W = 560, H = 70, x0 = 4, w = W - 8;
     var svg = Draw.el(mb, "svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Candidate moves: ruled out, failing, working" }, "chart-svg");
@@ -2843,9 +2862,8 @@ var Draw = (function () {
       acc += ww;
     });
     document.querySelector('[data-text="graph-impl"]').textContent =
-      "Graph keeps one cached Checker, so each state check runs once however many moves need it, and the geometric filter is cached per state too. " +
-      "Counting every stage and exploring the whole graph took " + S.seconds.states.toFixed(1) + " s and " + S.seconds.explore.toFixed(1) +
-      " s here. Every reachable state can be held: a swing move also checks its end state. Code: search.py, Graph, graph_stats.";
+      "One cached Checker runs each state check once, however many moves need it. Counting the states took " + S.seconds.states.toFixed(1) +
+      " s, exploring the graph " + S.seconds.explore.toFixed(1) + " s. Code: search.py, Graph, graph_stats.";
   }
   if (DATA.figures && DATA.figures.graph) renderGraph(DATA.figures.graph);
 
@@ -2923,11 +2941,9 @@ var Draw = (function () {
     });
     tb.appendChild(body);
     var S = D.stats, st = document.querySelector('[data-draw="dijkstra-stats"]');
-    [["Stage 1", S.expanded_1 + " states expanded, " + S.checks_1.toLocaleString("en") + " state checks"],
-     ["Stage 2", S.expanded_2 + " states expanded, only " + S.checks_2 + " new checks"],
-     ["Against the whole graph", D.full_graph.toLocaleString("en") + " reachable states; the search touched " + S.expanded_1 + " in stage 1"],
-     ["Time", S.seconds.toFixed(1) + " s for both stages"],
-     ["Result", D.steps.length + " moves, crux " + D.crux.toFixed(3) + " at move " + (D.crux_step + 1) + ", total " + D.total.toFixed(3)]
+    [["Stage 1", S.expanded_1 + " of " + D.full_graph.toLocaleString("en") + " reachable states expanded, " + S.checks_1.toLocaleString("en") + " state checks"],
+     ["Stage 2", S.expanded_2 + " states expanded, " + S.checks_2 + " new checks"],
+     ["Result", D.steps.length + " moves, crux " + D.crux.toFixed(3) + " at move " + (D.crux_step + 1) + ", total " + D.total.toFixed(3) + ", in " + S.seconds.toFixed(1) + " s"]
     ].forEach(function (r) {
       var li = document.createElement("li"); var b = document.createElement("b"); b.textContent = r[0] + ": ";
       li.appendChild(b); li.appendChild(document.createTextNode(r[1])); st.appendChild(li);
@@ -2947,6 +2963,10 @@ var Draw = (function () {
     var side = document.createElement("div"); side.className = "player-side";
     root.appendChild(cv); root.appendChild(side);
     var sc = Draw.scene(cv, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 170, pad: 4, title: "Beta" });
+    // compare mode: two walls side by side, one clock (built on first use)
+    var cmp = document.createElement("div"); cmp.className = "player-compare"; cmp.hidden = true;
+    root.insertBefore(cmp, side);
+    var compare = false, AB = [EX.runs[0], EX.runs[1] || EX.runs[0]], scAB = [];
 
     var who = document.createElement("div"); who.className = "seg"; who.setAttribute("role", "group"); who.setAttribute("aria-label", "Climber");
     var ctl = document.createElement("div"); ctl.className = "seg"; ctl.setAttribute("role", "group"); ctl.setAttribute("aria-label", "Playback");
@@ -2954,7 +2974,8 @@ var Draw = (function () {
     var prog = document.createElement("input"); prog.type = "range"; prog.className = "player-prog"; prog.min = "0"; prog.step = "0.001"; prog.setAttribute("aria-label", "Position in the beta");
     var summary = document.createElement("p"); summary.className = "player-summary";
     var list = document.createElement("ol"); list.className = "player-steps";
-    [who, summary, ctl, spd, prog, list].forEach(function (e) { side.appendChild(e); });
+    var mode = document.createElement("div"); mode.className = "seg"; mode.setAttribute("role", "group"); mode.setAttribute("aria-label", "View");
+    [mode, who, summary, ctl, spd, prog, list].forEach(function (e) { side.appendChild(e); });
 
     var run = null, T = 0, playing = false, last = null, speed = 1;
     function btn(parent, text, fn) { var b = document.createElement("button"); b.type = "button"; b.textContent = text; b.addEventListener("click", fn); parent.appendChild(b); return b; }
@@ -3009,24 +3030,55 @@ var Draw = (function () {
       });
       return ends;
     }
-    function draw() {
-      Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; });
-      Draw.wall(sc, R.wall, { grid: 0.5, clip: true });
+    function len() { return compare ? Math.max(AB[0].steps.length, AB[1].steps.length) : run.steps.length; }
+    function paint(S, r, TT, inset) {  // one run at time TT on scene S; returns the step shown
+      Object.keys(S.layers).forEach(function (k) { S.layers[k].textContent = ""; });
+      Draw.wall(S, R.wall, { grid: 0.5, clip: true });
       var used = {};
-      if (run.start) Object.keys(run.start).forEach(function (l) { if (run.start[l]) used[run.start[l]] = 1; });
-      run.steps.forEach(function (st) { if (st.to) used[st.to] = 1; });
-      R.holds.forEach(function (h) { Draw.hold(sc, h, { used: !!used[h.id], label: true }); });
-      if (!run.steps.length) { summary.textContent = ""; return; }
-      var i = Math.min(run.steps.length - 1, Math.floor(T)), u = Math.min(1, T - i), st = run.steps[i], P = pose(st, u);
-      var body = run.body, ends = hangEnds(body, P.torso, P.ends);
+      if (r.start) Object.keys(r.start).forEach(function (l) { if (r.start[l]) used[r.start[l]] = 1; });
+      r.steps.forEach(function (st) { if (st.to) used[st.to] = 1; });
+      R.holds.forEach(function (h) { Draw.hold(S, h, { used: !!used[h.id], label: true }); });
+      if (!r.steps.length) {
+        if (r.fail && r.fail.state) {  // where it gets stuck: rings on the holds in use, a dashed line to the hold it cannot get to
+          var on = {}, Fs = r.fail.state;
+          Object.keys(Fs).forEach(function (l) { if (Fs[l]) on[Fs[l]] = (on[Fs[l]] || []).concat(l); });
+          Object.keys(on).forEach(function (id) {
+            var q = holdXY(id);
+            Draw.el(S.layers.over, "circle", { cx: S.X(q[0]), cy: S.Y(q[1]), r: 0.075 * S.k }, "stuck-on cl-stroke cl-" + r.climber);
+            Draw.el(S.layers.over, "text", { x: S.X(q[0]) + 0.09 * S.k, y: S.Y(q[1]) + 0.1 * S.k }, "stuck-limbs").textContent = on[id].join("+");
+          });
+          var from = Fs[r.fail.limb], to = r.fail.hold;
+          if (to) {
+            var b2 = holdXY(to);
+            if (from) { var a2 = holdXY(from); Draw.el(S.layers.over, "line", { x1: S.X(a2[0]), y1: S.Y(a2[1]), x2: S.X(b2[0]), y2: S.Y(b2[1]) }, "stuck-line"); }
+            Draw.el(S.layers.over, "circle", { cx: S.X(b2[0]), cy: S.Y(b2[1]), r: 0.085 * S.k }, "stuck-target");
+          }
+        }
+        Draw.el(S.layers.over, "text", { x: S.W / 2, y: 24, "text-anchor": "middle" }, "limit-text").textContent =
+          "No beta: stuck at move " + (r.fail ? r.fail.step : "?");
+        return -1;
+      }
+      var i = Math.min(r.steps.length - 1, Math.floor(TT)), u = Math.min(1, TT - i), st = r.steps[i], P = pose(st, u);
+      var body = r.body, ends = hangEnds(body, P.torso, P.ends);
       var J = Draw.pose(body, P.torso, ends).joints, cls = {};
       if (P.air) cls[P.limb] = "limb-rest";
-      Draw.figure(sc, { torso: P.torso, joints: J, util: P.util }, { key: run.climber, head: run.head }, { util: true, bands: bands, limbClass: cls });
+      Draw.figure(S, { torso: P.torso, joints: J, util: P.util }, { key: r.climber, head: r.head }, { util: true, bands: bands, limbClass: cls });
       var shown = {}; Object.keys(P.forces).forEach(function (l) { if (P.ends[l]) shown[l] = P.forces[l]; });
-      Draw.forces(sc, { joints: J, forces: shown }, EX.force_scale);
-      Draw.com(sc, P.torso, st.frames.map(function (f) { return f.torso; }));
-      Draw.sideView(sc, { torso: P.torso, joints: J, forces: shown }, { key: run.climber, d_wall: run.d_wall }, EX.force_scale, { w: 104, h: 160, top: true });
-      Array.prototype.forEach.call(list.children, function (li, j) { li.classList.toggle("now", j === i); });
+      Draw.forces(S, { joints: J, forces: shown }, EX.force_scale);
+      Draw.com(S, P.torso, st.frames.map(function (f) { return f.torso; }));
+      if (inset) Draw.sideView(S, { torso: P.torso, joints: J, forces: shown }, { key: r.climber, d_wall: r.d_wall }, EX.force_scale, { w: 104, h: 160, top: true });
+      else Draw.el(S.layers.over, "text", { x: S.W / 2, y: 24, "text-anchor": "middle" }, "anno-strong").textContent =
+        TT >= r.steps.length - 1e-9 ? "at the top, " + r.steps.length + " moves" : "move " + (i + 1) + " of " + r.steps.length;
+      return i;
+    }
+    function draw() {
+      if (compare) {
+        AB.forEach(function (r, j) { paint(scAB[j], r, Math.min(T, r.steps.length), false); });
+      } else {
+        var i = paint(sc, run, T, true);
+        if (i < 0) return;
+        Array.prototype.forEach.call(list.children, function (li, j) { li.classList.toggle("now", j === i); });
+      }
       prog.value = String(T);
     }
     function setRun(r) {
@@ -3062,9 +3114,9 @@ var Draw = (function () {
       [prevB, playB, nextB].concat(spBtns).forEach(function (b) { b.disabled = !run.steps.length; });
       draw();
     }
-    function stepTo(j) { if (!run.steps.length) return; setPlaying(false); T = Math.max(0, Math.min(run.steps.length, j)); draw(); }
+    function stepTo(j) { if (!len()) return; setPlaying(false); T = Math.max(0, Math.min(len(), j)); draw(); }
     function setPlaying(on) {
-      if (on && T >= run.steps.length - 1e-6) T = 0;
+      if (on && T >= len() - 1e-6) T = 0;
       playing = on; last = null; playB.textContent = on ? "Pause" : "Play";
       playB.setAttribute("aria-pressed", on ? "true" : "false");
       if (on) requestAnimationFrame(tick);
@@ -3073,7 +3125,7 @@ var Draw = (function () {
       if (!playing) return;
       if (last != null) T += (ts - last) / 1000 / STEP_SECONDS * speed;
       last = ts;
-      if (T >= run.steps.length) { T = run.steps.length; draw(); setPlaying(false); return; }
+      if (T >= len()) { T = len(); draw(); setPlaying(false); return; }
       draw();
       requestAnimationFrame(tick);
     }
@@ -3082,17 +3134,46 @@ var Draw = (function () {
       if (e.target !== root) return;
       if (e.key === "ArrowRight") { e.preventDefault(); stepTo(Math.floor(T + 1e-6) + 1); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); stepTo(Math.ceil(T - 1e-6) - 1); }
-      else if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
+      else if (e.key === " ") { e.preventDefault(); if (len()) setPlaying(!playing); }
     });
     var whoBtns = EX.runs.map(function (r, j) {
-      var b = btn(who, "", function () { whoBtns.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); setRun(r); });
+      var b = btn(who, "", function () { if (compare) setCompare(false); whoBtns.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); setRun(r); });
       b.className = "cl-" + r.climber;
       var sw = document.createElement("span"); sw.className = "swatch"; b.appendChild(sw); b.appendChild(document.createTextNode(r.label));
       b.setAttribute("aria-pressed", j === 0 ? "true" : "false");
       return b;
     });
+    function cmpSummary() {
+      summary.textContent = "";
+      AB.forEach(function (r, j) {
+        var b = document.createElement("b"); b.textContent = r.label + ": ";
+        summary.appendChild(b);
+        summary.appendChild(document.createTextNode((r.status === "ok" ? r.steps.length + " moves, crux " + r.crux.toFixed(2) : "no beta") + (j === 0 ? ". " : ".")));
+      });
+    }
+    function setCompare(on) {
+      if (on && !scAB.length) {
+        [0, 1].forEach(function (j) {
+          var cell = document.createElement("div"); cell.className = "cmp-cell";
+          var sel = document.createElement("select"); sel.setAttribute("aria-label", (j ? "Right" : "Left") + " climber");
+          EX.runs.forEach(function (r, k) { var o = document.createElement("option"); o.value = String(k); o.textContent = r.label; sel.appendChild(o); });
+          sel.value = String(EX.runs.indexOf(AB[j]));
+          sel.addEventListener("change", function () { AB[j] = EX.runs[+sel.value]; T = 0; setPlaying(false); prog.max = String(Math.max(0.001, len())); cmpSummary(); draw(); });
+          var c = document.createElement("div"); c.className = "player-canvas";
+          cell.appendChild(sel); cell.appendChild(c); cmp.appendChild(cell);
+          scAB.push(Draw.scene(c, { x0: v.x0, y0: v.y0, x1: v.x1 - 0.6, y1: v.y1, k: 170, pad: 4, title: "Compare" }));
+        });
+      }
+      compare = on; setPlaying(false); T = 0;
+      cv.hidden = on; cmp.hidden = !on; who.hidden = on; list.hidden = on;
+      modeBtns.forEach(function (b, k) { b.setAttribute("aria-pressed", (k === 1) === on ? "true" : "false"); });
+      if (on) { prog.max = String(Math.max(0.001, len())); cmpSummary(); [prevB, playB, nextB].concat(spBtns).forEach(function (b) { b.disabled = !len(); }); draw(); }
+      else setRun(run);
+    }
+    var modeBtns = EX.runs.length > 1 && EX.compare !== false ? [btn(mode, "One climber", function () { setCompare(false); }), btn(mode, "Compare two", function () { setCompare(true); })] : [];
+    if (modeBtns.length) modeBtns[0].setAttribute("aria-pressed", "true"); else mode.hidden = true;
     setRun(EX.runs[0]);
-    return { setRun: setRun, select: function (j) { whoBtns[j].click(); }, onSelect: function (fn) { whoBtns.forEach(function (b, j) { b.addEventListener("click", function () { fn(j); }); }); } };
+    return { setRun: setRun, compare: setCompare, select: function (j) { whoBtns[j].click(); }, onSelect: function (fn) { whoBtns.forEach(function (b, j) { b.addEventListener("click", function () { fn(j); }); }); } };
   }
 
   function renderPlayerSection(X) {
@@ -3105,8 +3186,8 @@ var Draw = (function () {
       var c = X.smoothing[j];
       var li = document.createElement("li"); var b = document.createElement("b"); b.textContent = r.label + ": ";
       li.appendChild(b);
-      li.appendChild(document.createTextNode(r.steps.length + " moves, crux " + r.crux.toFixed(3) + ". Smoothed frames " +
-        (c.valid ? "all valid" : "NOT all valid") + ", effort never above its optimum + " + X.slack.toFixed(2) + "."));
+      li.appendChild(document.createTextNode(r.steps.length + " moves, crux " + r.crux.toFixed(3) + "; smoothed frames " +
+        (c.valid ? "all valid" : "NOT all valid") + "."));
       st.appendChild(li);
     });
   }
@@ -3313,8 +3394,8 @@ var Draw = (function () {
     renderClimberCards(DATA.model.climbers);
     renderVariants(DATA.model.variants, DATA.model.climbers);
     var c0 = DATA.model.climbers[0], ex = document.querySelector('[data-text="strength-example"]');
-    if (ex) ex.textContent = c0.name + "'s jug strength of " + num(c0.F.jug, 1) + " means one hand can hold " +
-      num(c0.F.jug, 1) + " times the climber's own weight on a jug.";
+    if (ex) ex.textContent = c0.name + "'s jug strength " + num(c0.F.jug, 1) + " means one hand holds " +
+      num(c0.F.jug, 1) + " times her weight on a jug.";
   }
   if (DATA.figures && DATA.figures.route_example) renderRouteExample(DATA.figures.route_example);
 

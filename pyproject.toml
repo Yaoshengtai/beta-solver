@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "betasolver"
-version = "0.0.1"
+version = "1.0.0"
 description = "Finding a climbing beta with optimization: state-check LPs plus a two-stage Dijkstra search."
 readme = "README.md"
 requires-python = ">=3.10"
