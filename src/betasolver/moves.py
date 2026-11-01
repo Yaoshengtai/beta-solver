@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from .body import Body
 from .model import FEET, HANDS, Route
-from .stance import LIMB_NAMES, Result, State, check
+from .stance import LIMB_NAMES, Result, State, assemble, check, satisfies, solve, vector
 
 KINDS = {
     "swap": "a limb goes from one hold to another",
@@ -62,6 +62,21 @@ class Move:
             raise ValueError("a move must change the hold")
         if self.frm is None and self.limb not in FEET:
             raise ValueError("only a foot can be placed from hanging")
+
+    @property
+    def swing(self) -> bool:
+        """Does the move take off the last foot, or put on the first?
+
+        With no foot pushing, the body hangs flat against the wall (d = 0);
+        with one, it stands a distance d off it. So the moment the last foot
+        unloads, or the first one loads, the body swings in or out: that part
+        of the move is not static, and the straight-line argument of section
+        4.2 does not cover it.
+        """
+        if self.limb not in FEET:
+            return False
+        others = [l for l in FEET if l != self.limb and self.state.hold(l) is not None]
+        return not others
 
     def describe(self, route: Route) -> str:
         who = LIMB_NAMES[self.limb].capitalize()
@@ -115,3 +130,54 @@ def evaluate(body: Body, route: Route, move: Move) -> MoveResult:
     catch = check(body, route, s1, no_force=move.limb) if move.to is not None else None
     end = check(body, route, s1)
     return MoveResult(move, start, release, catch, end)
+
+
+# ------------------------------------------------------------ convexity, checked numerically (section 4.2)
+
+def segments(move: Move, res: MoveResult):
+    """The three straight slides of a move, each inside one convex region (section 4.3):
+
+        1 unload   x0 -> x1   in state sigma, all limbs pushing
+        3 travel   x1 -> x2   in the three-limb problem, the moving limb in the air
+        5 load     x2 -> x3   in state sigma', all limbs pushing
+
+    Each entry: (phase, state, no_force, off, start Result, end Result).
+    """
+    k, s0, s1 = move.limb, move.state, move.new_state
+    out = []
+    if res.release is not None:
+        out.append((1, s0, None, None, res.start, res.release))
+    if res.release is not None and res.catch is not None:
+        out.append((3, s0, k, k, res.release, res.catch))
+    if res.catch is not None:
+        out.append((5, s1, None, None, res.catch, res.end))
+    return out
+
+
+def path_check(body: Body, route: Route, move: Move, res: MoveResult | None = None, n: int = 20) -> list:
+    """Sample each slide of a working move at n + 1 points and check it two ways.
+
+    t_min: the smallest effort with the body held at that point (a fresh solve);
+    t_mix, ok_mix: the endpoint solutions blended linearly (body, forces and t
+    together), and whether the blend meets every constraint of that phase.
+    Both should stay at or below the move's difficulty.
+    """
+    res = res or evaluate(body, route, move)
+    if not res.ok:
+        raise ValueError("only a move that works has a path")
+    if move.swing:
+        raise ValueError("a swing move (last foot off or first foot on) is not a straight slide")
+    out = []
+    for phase, state, nf, off, a, b in segments(move, res):
+        P = assemble(body, route, state, nf, off=off)
+        za = vector(P.layout, a.torso, a.forces, a.t)
+        zb = vector(P.layout, b.torso, b.forces, b.t)
+        for i in range(n + 1):
+            u = i / n
+            z = (1 - u) * za + u * zb
+            x = (float(z[P.layout[("x", None)]][0]), float(z[P.layout[("x", None)]][1]))
+            fixed = solve(body, route, state, nf, torso=x, tidy=False, off=off)
+            out.append({"phase": phase, "u": u, "torso": x,
+                        "t_min": fixed["t"] if fixed["ok"] else None,
+                        "t_mix": float(z[P.layout[("t", None)].start]), "ok_mix": satisfies(P, z, tol=1e-5)})
+    return out

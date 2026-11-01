@@ -476,7 +476,7 @@ def barndoor_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], l
 
 # ------------------------------------------------------------ ⑥ flexibility
 
-def flex_rows(body: Body, route: Route, state: State, lay: Layout):
+def flex_rows(body: Body, route: Route, state: State, lay: Layout, skip: str | None = None):
     """⑥ as linear inequalities on the body position: no foot higher than the hip plus flex H.
 
         p_ky <= y_c - 0.03 H + flex H,   i.e.   -y_c <= -p_ky + body.foot_limit((0, 0))
@@ -486,7 +486,7 @@ def flex_rows(body: Body, route: Route, state: State, lay: Layout):
     rows, rhs, owner = [], [], []
     top = body.foot_limit((0.0, 0.0))  # highest foot relative to y_c
     for limb in state.on():
-        if limb not in FEET:
+        if limb not in FEET or limb == skip:
             continue
         row = np.zeros(lay.size)
         row[lay[("x", None)].start + 1] = -1.0
@@ -603,16 +603,50 @@ def run(P: Program, c: np.ndarray):
     return np.array(sol.x)
 
 
+def satisfies(P: Program, z: np.ndarray, tol: float = 1e-6) -> bool:
+    """Does z meet every constraint of the program (within tol)?"""
+    if len(P.A) and np.max(np.abs(P.A @ z - P.b)) > tol:
+        return False
+    if len(P.G) and np.max(P.G @ z - P.h) > tol:
+        return False
+    for Ak, bk in P.cones:
+        sv = bk - Ak @ z
+        if sv[0] < np.linalg.norm(sv[1:]) - tol:
+            return False
+    return True
+
+
+def vector(lay: Layout, torso, forces: dict, t: float) -> np.ndarray:
+    """Pack a body position, forces (in the format of `effort`, tau optional) and t into z."""
+    z = np.zeros(lay.size)
+    z[lay[("x", None)]] = torso
+    z[lay[("t", None)]] = t
+    for limb, F in forces.items():
+        if ("f", limb) not in lay.index:
+            continue
+        z[lay[("f", limb)]] = F["f"]
+        z[lay[(_normal(limb), limb)]] = F.get("n", 0.0) if limb in HANDS else F.get("m", 0.0)
+        if limb in HANDS:
+            z[lay[("tau", limb)]] = F.get("tau", 0.0)
+    return z
+
+
 # The constraint families in the order they are built; `upto` stops after one of them.
 BUILT = ("reach", "direction", "strength", "inplane", "outofwall", "barndoor", "flex")
 
 
-def assemble(body: Body, route: Route, state: State, no_force: str | None = None, upto: str | None = None) -> Program:
+def assemble(body: Body, route: Route, state: State, no_force: str | None = None, upto: str | None = None,
+             off: str | None = None) -> Program:
     """The state check as one cone program.
 
     upto: stop after this constraint family (one of BUILT), so a figure can
     show the model as it stood in its own section. None means all of them.
+    off: a limb in the air (it must also be the no_force limb): it neither
+    pushes nor has to reach anything. This is the three-limb problem of a
+    move's travel phase (section 4.3).
     """
+    if off is not None and off != no_force:
+        raise ValueError("a limb in the air carries no force: pass the same limb as no_force")
     keep = BUILT if upto is None else BUILT[: BUILT.index(upto) + 1]
     A_, AF = limb_sets(state, no_force)
     lay = layout(AF)
@@ -620,7 +654,7 @@ def assemble(body: Body, route: Route, state: State, no_force: str | None = None
     Gs, P = sign_rows(lay)
     P = Program(lay, n, np.zeros((0, n)), np.zeros(0), [], Gs, P, [("sign", None)] * len(Gs), [], [])
     if "reach" in keep:
-        blocks, own = reach_cones(body, route, state, lay)
+        blocks, own = reach_cones(body, route, state, lay, skip=off)
         P.cones += blocks; P.cone_owners += [("reach", l) for l in own]
     if "direction" in keep:
         G, h, own = direction_rows(route, state, AF, lay)
@@ -640,7 +674,7 @@ def assemble(body: Body, route: Route, state: State, no_force: str | None = None
         P.add_eq(A, b, [("barndoor", o) for o in own])
         P.add_ineq(G, h, [("barndoor", l) for l in gown])
     if "flex" in keep:
-        G, h, own = flex_rows(body, route, state, lay)
+        G, h, own = flex_rows(body, route, state, lay, skip=off)
         P.add_ineq(G, h, [("flex", l) for l in own])
     return P
 
@@ -675,7 +709,7 @@ def _tidy(P: Program, t_star: float, AF: tuple[str, ...]):
         Q.add_ineq(row, 0.0, [("tidy", None)])
     row = np.zeros(n + k)
     row[lay[("t", None)].start] = 1.0
-    Q.add_ineq(row, t_star * (1 + 1e-6) + 1e-9, [("tidy", None)])
+    Q.add_ineq(row, t_star * (1 + 1e-7) + 1e-10, [("tidy", None)])
     c = np.zeros(n + k)
     c[n:] = 1.0
     for limb in AF:
@@ -685,25 +719,33 @@ def _tidy(P: Program, t_star: float, AF: tuple[str, ...]):
 
 
 def solve(body: Body, route: Route, state: State, no_force: str | None = None,
-          fixed: dict | None = None, torso=None, tidy: bool = True, upto: str | None = None) -> dict:
+          fixed: dict | None = None, torso=None, tidy: bool = True, upto: str | None = None,
+          off: str | None = None) -> dict:
     """Minimise t subject to the constraints, with Clarabel.
 
     fixed: optional forces held at given values, in the format of `effort`.
-    torso: optional body position (x_c, y_c) held fixed.
+    torso: optional body position (x_c, y_c) held fixed (to within 1e-7 m).
     tidy: run the second stage (`_tidy`) that removes useless squeezing.
     upto: use only the constraints up to this family (see `assemble`).
+    off: a limb in the air, neither pushing nor reaching (see `assemble`).
     Returns ok, t, the body position, every pushing limb's forces, each
     limb's share of its strength and the limiting limb.
     """
-    P = assemble(body, route, state, no_force, upto)
+    P = assemble(body, route, state, no_force, upto, off)
     lay = P.layout
     for limb, F in (fixed or {}).items():
         sf, sn = lay[("f", limb)], lay[(_normal(limb), limb)]
         v = F.get("n", 0.0) if limb in HANDS else F.get("m", 0.0)
         _fix(P, [sf.start, sf.start + 1, sn.start], [F["f"][0], F["f"][1], v], "fixed")
     if torso is not None:
-        sx = lay[("x", None)]
-        _fix(P, [sx.start, sx.start + 1], torso, "torso")
+        # held within 1e-7 m rather than exactly: a position on the edge of the
+        # feasible region would otherwise be numerically degenerate
+        sx = lay[("x", None)].start
+        for i, v in enumerate(torso):
+            for sign in (1.0, -1.0):
+                row = np.zeros(P.n)
+                row[sx + i] = sign
+                P.add_ineq(row, sign * v + 1e-7, [("torso", None)])
     c = np.zeros(P.n)
     c[lay[("t", None)].start] = 1.0
     z = run(P, c)

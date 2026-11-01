@@ -177,3 +177,13 @@ def test_move_figure_embedded(html):
     assert works["ok"] and abs(works["difficulty"] - max(works["t_release"], works["t_catch"])) < 2e-3
     assert not fails["ok"] and not fails["release_ok"] and fails["catch_ok"]
     assert 'data-draw="move"' in html and "Planned · unit 3.1" not in html
+
+
+
+def test_convex_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    X = json.loads(raw)["figures"]["convex"]
+    assert len(X["points"]) == 63 and all(p["ok"] for p in X["points"])
+    assert max(p["t_min"] for p in X["points"]) <= X["difficulty"] + 2e-3
+    assert X["sweep"]["all_feasible"] and X["sweep"]["moves"] == 100
+    assert 'data-draw="convex-chart"' in html and "Planned · unit 3.2" not in html
