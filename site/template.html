@@ -3065,7 +3065,8 @@ var Draw = (function () {
       });
       tb.appendChild(body);
       var xs = E.route.holds.map(function (h) { return h.x; }), ys = E.route.holds.map(function (h) { return h.y; });
-      var view = { x0: Math.max(0, Math.min.apply(null, xs) - 0.45), x1: Math.min(E.route.wall.w, Math.max.apply(null, xs) + 0.95),
+      // 0.95 m of room on the right for the side-view inset, even past the wall's edge on a wide route
+      var view = { x0: Math.max(0, Math.min.apply(null, xs) - 0.45), x1: Math.max.apply(null, xs) + 0.95,
                    y0: Math.max(0, Math.min.apply(null, ys) - 0.35), y1: Math.min(E.route.wall.h, Math.max.apply(null, ys) + 0.45) };
       makePlayer(document.querySelector('[data-example-player="' + i + '"]'),
                  { route: E.route, runs: E.runs, bands: [0.5, 0.8], force_scale: 0.3, view: view });
