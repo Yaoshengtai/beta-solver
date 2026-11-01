@@ -102,22 +102,32 @@ class MoveResult:
     def t_catch(self) -> float | None:
         return None if self.catch is None else self.catch.t
 
+    def _checks(self):
+        """The checks that decide the move: release and catch; for a swing move also the start
+        and end states, since the body swings between hanging flat and standing off the wall
+        and the end state must be one the climber can hold (section 4.3 does not cover it)."""
+        out = [("release", self.release), ("catch", self.catch)]
+        if self.move.swing:
+            out = [("start", self.start)] + out + [("end", self.end)]
+        return [(ph, r) for ph, r in out if r is not None]
+
     @property
     def ok(self) -> bool:
-        return all(r.ok for r in (self.release, self.catch) if r is not None)
+        return all(r.ok for _, r in self._checks())
 
     @property
     def difficulty(self) -> float | None:
-        """max(t_release, t_catch) when the move works (section 4.3)."""
+        """max(t_release, t_catch) when the move works (section 4.3); a swing move also counts
+        the start and end states."""
         if not self.ok:
             return None
-        return max(t for t in (self.t_release, self.t_catch) if t is not None)
+        return max(r.t for _, r in self._checks())
 
     @property
     def failure(self) -> dict | None:
         """Which check fails first and why, in the format of the exported `fail` field."""
-        for phase, r in (("release", self.release), ("catch", self.catch)):
-            if r is not None and not r.ok:
+        for phase, r in self._checks():
+            if not r.ok:
                 return {"phase": phase, "reason": r.reason, "limb": r.limb, "hold": r.hold}
         return None
 
@@ -282,6 +292,7 @@ class Checker:
     def __init__(self, body: Body, route: Route):
         self.body, self.route = body, route
         self.cache: dict = {}
+        self.geometry: dict = {}
         self.solves = 0
 
     def check(self, state: State, no_force: str | None = None) -> Result:
@@ -297,10 +308,10 @@ class Checker:
         from .stance import _geometry_ok, precheck
 
         s1 = move.new_state
-        early = precheck(self.body, self.route, s1)
-        if early is not None and early.reason == "reach":
-            return False
-        return _geometry_ok(self.body, self.route, s1)
+        if s1 not in self.geometry:
+            early = precheck(self.body, self.route, s1)
+            self.geometry[s1] = not (early is not None and early.reason == "reach") and _geometry_ok(self.body, self.route, s1)
+        return self.geometry[s1]
 
     def evaluate(self, move: Move) -> MoveResult:
         s0, s1, k = move.state, move.new_state, move.limb

@@ -803,3 +803,32 @@ def checker_figure() -> dict:
         "presets": presets,
         "view": {"x0": 0.75, "y0": 0.5, "x1": 2.35, "y1": 2.75},
     })
+
+
+# ------------------------------------------------------------ the search: the state graph
+
+def toy_route() -> Route:
+    """A small route for the search chapter: two start jugs, four hand holds above, six footholds."""
+    holds = [Hold("S1", 1.30, 1.80, "jug"), Hold("S2", 1.70, 1.80, "jug"), Hold("H3", 1.25, 2.25, "crimp"),
+             Hold("H4", 1.75, 2.35, "jug"), Hold("H5", 1.45, 2.70, "pinch"), Hold("T", 1.55, 3.05, "jug"),
+             Hold("F1", 1.30, 0.60, "foot_big"), Hold("F2", 1.70, 0.65, "foot_big"), Hold("F3", 1.25, 1.05, "foot_big"),
+             Hold("F4", 1.75, 1.15, "foot_big"), Hold("F5", 1.50, 1.45, "foot_chip"), Hold("F6", 1.75, 1.60, "foot_big")]
+    return Route("toy", "Toy route", "A small route to show the search.", holds, ("S1", "S2"), "T")
+
+
+import functools  # noqa: E402
+
+
+@functools.lru_cache(maxsize=1)
+def graph_figure() -> dict:
+    """Data for the state graph section in #search: the toy route and how its graph shrinks."""
+    from betasolver.search import foot_options, graph_stats, hand_options
+
+    r = toy_route()
+    stats = graph_stats(r, AVA)
+    return _round({
+        "route": r.to_dict(),
+        "climber": {"key": AVA.key, "name": AVA.name},
+        "hands": len(hand_options(r)), "feet": len(foot_options(r)),
+        "stats": stats,
+    })

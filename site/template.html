@@ -370,6 +370,10 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .cand-list button.fail { border-color: var(--limit); }
 .cand-list button.pruned { color: var(--muted); border-style: dashed; }
 .cand-list button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; }
+.funnel { grid-template-columns: 150px minmax(0, 1fr) 52px; }
+.funnel .lab { font-family: var(--font-body); font-size: 0.82rem; color: var(--ink); }
+.funnel-fill { background: var(--accent); }
+.seg-ok { fill: var(--easy); } .seg-fail { fill: var(--limit); } .seg-pruned { fill: var(--muted); opacity: 0.55; }
 .cost-tbl { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 8px; }
 .cost-tbl td { padding: 3px 0; border-bottom: 1px solid var(--line); }
 .cost-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -876,7 +880,20 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p class="lede">A two-stage Dijkstra search: first make the crux as easy as possible, then make the rest as cheap as possible.</p>
   </header>
   <h3 id="search-graph">The state graph</h3>
-  <div class="planned"><span class="chip">Planned · unit 4.1</span><p>How many states there are, and how geometric pruning keeps the search small.</p></div>
+  <p>The search walks a graph. <b>Nodes</b> are states, <b>edges</b> are moves that work (step 4), weighted by their cost \(w\). <b>Start</b>: both hands on the start holds, the feet in every combination that holds, hanging included. <b>Goal</b>: both hands on the top hold, in a state that holds. Edges are built lazily, only when the search reaches their start state, and every state check is cached.</p>
+  <figure class="fig" id="fig-graph">
+    <div class="fig-row">
+      <div class="fig-main" data-draw="toy-route"></div>
+      <div class="fig-key" data-draw="graph-funnel"></div>
+    </div>
+    <figcaption><b>How the state graph of a small route shrinks</b>, for <span data-text="graph-climber"></span>. Every combination of holds, then the prechecks (unusable holds, holds too far apart), then reach and flexibility alone, then the states that can be held, then those reachable from a start by moves that work, and of those the ones from which the top can still be reached.</figcaption>
+  </figure>
+  <p data-text="graph-moves"></p>
+  <div class="fig-main" data-draw="graph-moves-bar"></div>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p data-text="graph-impl"></p>
+  </details>
   <h3 id="search-dijkstra">Two-stage Dijkstra</h3>
   <div class="planned"><span class="chip">Planned · unit 4.2</span><p>A bottleneck search for the crux, then an ordinary shortest path under that crux.</p></div>
   <h3 id="search-player">The beta player</h3>
@@ -2799,7 +2816,8 @@ var Draw = (function () {
       if (m.status === "pruned") {
         p.textContent = "Ruled out before checking: no body position reaches every hold of the new state.";
       } else if (m.status === "fail") {
-        p.textContent = "Fails the " + m.failure.phase + " check: " + (DATA.stance.reasons[m.failure.reason] || m.failure.reason) +
+        var where = { release: "the release check", "catch": "the catch check", start: "the start state", end: "the new state, which cannot be held once the foot pushes" }[m.failure.phase];
+        p.textContent = "A swing move".slice(0, m.swing ? 99 : 0) + (m.swing ? "; fails at " : "Fails ") + where + ": " + (DATA.stance.reasons[m.failure.reason] || m.failure.reason) +
           (m.failure.limb ? " (" + NAMES[m.failure.limb] + (m.failure.hold ? ", " + m.failure.hold : "") + ")" : "") + ".";
       } else {
         var parts = [];
@@ -2880,6 +2898,62 @@ var Draw = (function () {
     setLimb("RH");
   }
   if (DATA.figures && DATA.figures.checker) renderChecker(DATA.figures.checker);
+
+  /* ---------- #search: the state graph (unit 4.1) ---------- */
+  function renderGraph(G) {
+    var slot = document.querySelector('[data-draw="toy-route"]');
+    if (!slot) return;
+    var R = G.route, S = G.stats;
+    var sc = Draw.scene(slot, { x0: 0.95, y0: 0.4, x1: 2.05, y1: 3.25, k: 120, pad: 4, title: "The toy route" });
+    Draw.wall(sc, R.wall, { grid: 0.5, clip: true });
+    R.holds.forEach(function (h) { Draw.hold(sc, h, { label: true }); });
+    document.querySelector('[data-text="graph-climber"]').textContent = G.climber.name;
+
+    // funnel: one bar per stage, length by count
+    var f = document.querySelector('[data-draw="graph-funnel"]');
+    var stages = [["Every combination", S.states.all, G.hands + "² × " + G.feet + "²"],
+                  ["After the prechecks", S.states.precheck], ["Reach and flexibility", S.states.geometry],
+                  ["Can be held", S.states.held], ["Reachable from a start", S.states.reachable],
+                  ["Can still reach the top", S.states.useful]];
+    var bars = document.createElement("div"); bars.className = "ubars funnel";
+    bars.setAttribute("role", "img"); bars.setAttribute("aria-label", "Number of states after each pruning stage");
+    stages.forEach(function (st) {
+      var lab = document.createElement("span"); lab.className = "lab"; lab.textContent = st[0];
+      if (st[2]) { var sm = document.createElement("small"); sm.textContent = st[2]; lab.appendChild(sm); }
+      var tr = document.createElement("span"); tr.className = "track";
+      var fl = document.createElement("span"); fl.className = "fill funnel-fill"; fl.style.width = (100 * st[1] / S.states.all) + "%";
+      tr.appendChild(fl);
+      var val = document.createElement("span"); val.className = "val"; val.textContent = st[1].toLocaleString("en");
+      bars.appendChild(lab); bars.appendChild(tr); bars.appendChild(val);
+    });
+    f.appendChild(bars);
+    var note = document.createElement("p"); note.className = "t-note";
+    note.textContent = S.starts + " start states, " + S.goals + " goal states.";
+    f.appendChild(note);
+
+    var M = S.moves;
+    document.querySelector('[data-text="graph-moves"]').textContent =
+      "Exploring the whole graph meant looking at " + M.candidates.toLocaleString("en") + " candidate moves: " +
+      M.pruned.toLocaleString("en") + " were ruled out by geometry before any check, " + M.fail.toLocaleString("en") +
+      " failed a check, and " + M.ok.toLocaleString("en") + " work. That took " + S.checks.toLocaleString("en") +
+      " state checks. The search in the next section needs only a part of this: it stops at the first goal.";
+    var mb = document.querySelector('[data-draw="graph-moves-bar"]');
+    var W = 560, H = 70, x0 = 4, w = W - 8;
+    var svg = Draw.el(mb, "svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Candidate moves: ruled out, failing, working" }, "chart-svg");
+    var acc = 0;
+    [["pruned", M.pruned, "ruled out", "seg-pruned"], ["fail", M.fail, "fail a check", "seg-fail"], ["ok", M.ok, "work", "seg-ok"]].forEach(function (q) {
+      var ww = w * q[1] / M.candidates;
+      Draw.el(svg, "rect", { x: x0 + acc + 1, y: 8, width: Math.max(0, ww - 2), height: 24, rx: 4 }, q[3]);
+      Draw.el(svg, "text", { x: x0 + acc + ww / 2, y: 50, "text-anchor": "middle" }, "chart-label").textContent = q[2];
+      Draw.el(svg, "text", { x: x0 + acc + ww / 2, y: 64, "text-anchor": "middle" }, "chart-tick").textContent = Math.round(100 * q[1] / M.candidates) + "%";
+      acc += ww;
+    });
+    document.querySelector('[data-text="graph-impl"]').textContent =
+      "Graph keeps one cached Checker, so each state check runs once however many moves need it, and the geometric filter is cached per state too. " +
+      "Counting every stage and exploring the whole graph took " + S.seconds.states.toFixed(1) + " s and " + S.seconds.explore.toFixed(1) +
+      " s here. Every reachable state can be held: a swing move also checks its end state. Code: search.py, Graph, graph_stats.";
+  }
+  if (DATA.figures && DATA.figures.graph) renderGraph(DATA.figures.graph);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
