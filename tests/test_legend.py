@@ -77,7 +77,7 @@ def test_strength_figure_matches_the_solver():
         t, share, limiting = effort(b, route, state, legend.STRENGTH_FORCES)
         assert abs(r["t"] - t) < TOL and r["limiting"] == limiting
         assert all(abs(r["frame"]["util"][l] - share[l]) < TOL for l in share)
-        assert abs(r["t_lp"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES)["t"]) < TOL
+        assert abs(r["t_lp"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES, upto="inplane")["t"]) < TOL
         assert r["t"] - TOL <= r["t_lp"] <= r["t"] / S["coverage"] + TOL
     by = {r["name"]: r for r in S["runs"]}
     # the three readings of t: Ava near the limit on the sloper, Ben on the crimp, Cal too weak
@@ -118,3 +118,14 @@ def test_strength_figure_torso_is_balanced():
     m = moment(legend.strength_route(), State(**S["state"]), legend.STRENGTH_FORCES)
     for r in S["runs"]:
         assert abs(r["frame"]["torso"][0] - m) < TOL
+
+
+def test_tipping_figure_follows_d_over_h():
+    T = legend.tipping_figure()
+    low, high = T["views"]
+    assert low["h"] > high["h"] and high["N"] > low["N"] and high["share"] > low["share"]
+    for v in T["views"]:
+        assert abs(v["N"] - T["d"] / v["h"]) < TOL and abs(v["M"] - v["N"]) < TOL
+    assert all(abs(p["N"] - p["formula"]) <= 0.01 * p["formula"] for p in T["sweep"])
+    for r in T["strength_again"]:
+        assert r["t"] >= r["t_before"] - TOL and r["pull"] > 0
