@@ -122,28 +122,34 @@ EXAMPLES: list = [
         ),
     ),
     Example(
-        "ex3", "One-Arm Bandit",
-        "The last move is a campus move: hang on one hand, reach with the other.",
-        _route("ex3", "One-Arm Bandit", [
-            ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"), ("R1", 1.50, 2.20, "jug"), ("T", 1.50, 3.24, "jug"),
-            ("F1", 1.30, 0.50, "foot_big"), ("F2", 1.70, 0.50, "foot_big"),
-            ("F3", 1.35, 1.00, "foot_big"), ("F4", 1.65, 1.15, "foot_big")], feet_on_hands=False),
-        ("B", "A", "C", "C_grip"),
-        {"B": "ok", "A": "fail", "C": "fail", "C_grip": "ok"},
+        "ex3", "Lean on Me",
+        "A layback: hands pull sideways on a flake, feet push back, and nothing may twist open.",
+        _route("ex3", "Lean on Me", [
+            ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"),
+            ("L1", 1.30, 1.90, "sidepull", 0.0), ("L2", 1.33, 2.35, "sidepull", 0.0),
+            ("L3", 1.30, 2.80, "sidepull", 0.0), ("L4", 1.33, 3.25, "sidepull", 0.0), ("T", 1.55, 3.70, "jug"),
+            ("F1", 1.36, 0.55, "foot_big"), ("F2", 1.41, 1.00, "foot_big"), ("F3", 1.36, 1.45, "foot_big"),
+            ("F4", 1.41, 1.90, "foot_big"), ("F5", 1.36, 2.35, "foot_big")], feet_on_hands=False),
+        ("A", "B", "C", "D"),
+        {"A": "ok", "B": "ok", "C": "fail", "D": "ok"},
         (
-            "A rung R1, and the top jug a long way straight above it, with nothing in between and the footholds far "
-            "below. The feet cannot help, so the last move is made hanging from one hand: that hand holds the whole "
-            "body while the other reaches for the top.",
-            "{B.label} does it (crux {B.crux}), and the crux is exactly that one-armed hang.",
-            "{A.label} could hang on one arm, but is {A.fail}. Hanging below one hand, her free hand cannot get high enough.",
-            "{C.label} is tall enough, but is {C.fail}. One hand on a jug cannot hold the whole body.",
-            "{C_grip.label}, Cal with Ava's grip on jugs, tops out (crux {C_grip.crux}): for Cal it was the grip, not the reach.",
+            "A flake runs straight up: four sidepulls, L1 to L4, that pull the hands to the right, with the footholds "
+            "almost directly below them, a few centimetres to the right. The hands pull, the feet push back, and every "
+            "time a hand or foot moves, whatever stays on must also stop the body twisting open.",
+            "{A.label} laybacks up it in {A.steps} moves (crux {A.crux}).",
+            "{B.label} gets up too (crux {B.crux}), but needs {B.steps} moves, with more shuffling. He stands further "
+            "from the wall, so his hands must pull in harder, and the same small offset of the feet needs more twist.",
+            "{C.label} gets both hands onto L2 and then cannot move either foot: one foot pushing a few centimetres "
+            "to the side of two weak sidepull grips swings the body open. With the feet stuck low, Cal is {C.fail}.",
+            "{D.label} climbs exactly like Ava (crux {D.crux}): a sidepull is held like a pinch, so her injured finger "
+            "does not matter here.",
         ),
         (
-            ("Ava fails on reach", lambda R: R["A"]["fail"]["reason"] == "reach"),
-            ("Cal fails on strength", lambda R: R["C"]["fail"]["reason"] == "strength"),
-            ("Ben's crux is the one-armed hang on R1 or T", lambda R: R["B"]["steps"][R["B"]["crux_step"]]["to"] == "T"),
-            ("Cal with a stronger grip gets up", lambda R: R["C_grip"]["status"] == "ok"),
+            ("Ava's and Ava (injured)'s betas are the same", lambda R: [st["text"] for st in R["A"]["steps"]] == [st["text"] for st in R["D"]["steps"]]),
+            ("Ben needs more moves than Ava", lambda R: len(R["B"]["steps"]) > len(R["A"]["steps"])),
+            ("Cal is stuck with both hands on L2 and his feet low",
+             lambda R: R["C"]["fail"]["state"]["LH"] == R["C"]["fail"]["state"]["RH"] == "L2"
+             and all(R["C"]["fail"]["state"][f] in ("F1", "F2", None) for f in ("LF", "RF"))),
         ),
     ),
 ]

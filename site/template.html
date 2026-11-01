@@ -924,9 +924,11 @@ var Draw = (function () {
       arrowPx(g, cx + Math.cos(a) * r0, cy - Math.sin(a) * r0, cx + Math.cos(a) * r1, cy - Math.sin(a) * r1, "h-dir", Math.max(5, 0.035 * k));
     }
     var off = 0.09 * k;
-    if (h.role === "start") el(g, "text", { x: r3(cx + off), y: r3(cy - off * 0.6) }, "h-role").textContent = "S";
+    // start marker under the hold; footholds labelled below right so a hand- and foothold side by side stay readable
+    if (h.role === "start") el(g, "text", { x: r3(cx), y: r3(cy + off * 1.6), "text-anchor": "middle" }, "h-role").textContent = "S";
     if (h.role === "finish") el(g, "text", { x: r3(cx + off), y: r3(cy - off * 0.6) }, "h-role").textContent = "TOP";
-    if (opts.label) el(g, "text", { x: r3(cx - off), y: r3(cy - off * 0.6), "text-anchor": "end" }, "h-label").textContent = h.id;
+    var foot = String(h.type).indexOf("foot") === 0;
+    if (opts.label) el(g, "text", { x: r3(foot ? cx + off : cx - off), y: r3(foot ? cy + off * 0.9 : cy - off * 0.6), "text-anchor": foot ? "start" : "end" }, "h-label").textContent = h.id;
     return g;
   }
 

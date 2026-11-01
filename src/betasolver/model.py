@@ -262,7 +262,5 @@ VARIANTS: dict[str, Climber] = {
                     blurb="Ava with no dislike of crossing hands."),
         AVA.variant("A_cross4", "Ava (avoids crossing)", w_cross=0.4,
                     blurb="Ava with a strong dislike of crossing hands."),
-        CAL.variant("C_grip", "Cal (strong grip)", F={"jug": 1.2},
-                    blurb="Cal with Ava's grip on jugs. Used in example 3."),
     )
 }

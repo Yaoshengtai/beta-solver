@@ -142,16 +142,12 @@ def test_strength_follows_hold_type():
 
 def test_variants_change_one_attribute():
     expected = {"A_stiff": ("flex", -0.10), "A_cross0": ("w_cross", 0.0), "A_cross4": ("w_cross", 0.4)}
-    assert set(VARIANTS) == set(expected) | {"C_grip"}
+    assert set(VARIANTS) == set(expected)
     for key, (attr, value) in expected.items():
         v = VARIANTS[key]
         changed = [a for a in ("H", "span", "F", "flex", "w_cross") if getattr(v, a) != getattr(AVA, a)]
         assert changed == [attr] and getattr(v, attr) == value, key
     assert VARIANTS["A_stiff"].flex == BEN.flex  # "Ava with Ben's hip flexibility"
-    # "Cal with Ava's grip on jugs": only the jug strength changes
-    g = VARIANTS["C_grip"]
-    assert [k for k in g.F if g.F[k] != CAL.F[k]] == ["jug"] and g.F["jug"] == AVA.F["jug"]
-    assert (g.H, g.span, g.flex, g.w_cross) == (CAL.H, CAL.span, CAL.flex, CAL.w_cross)
 
 
 def test_variant_does_not_touch_the_original():
