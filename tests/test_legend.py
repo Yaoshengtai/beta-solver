@@ -4,10 +4,13 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-spec = importlib.util.spec_from_file_location("legend", ROOT / "site" / "legend.py")
-legend = importlib.util.module_from_spec(spec)
-sys.modules["legend"] = legend
-spec.loader.exec_module(legend)
+if "legend" in sys.modules:  # already loaded by the page build: share its cached figures
+    legend = sys.modules["legend"]
+else:
+    spec = importlib.util.spec_from_file_location("legend", ROOT / "site" / "legend.py")
+    legend = importlib.util.module_from_spec(spec)
+    sys.modules["legend"] = legend
+    spec.loader.exec_module(legend)
 
 L = legend.legend()
 TOL = 2e-3  # values are rounded to 3 decimals
@@ -170,3 +173,14 @@ def test_move_figure_matches_the_checks():
     assert abs(works["frames"]["catch"]["t"] - works["t_catch"]) < TOL
     # the resting hand carries nothing in the two handover keyframes
     assert "RH" not in works["frames"]["release"]["forces"] and "RH" not in works["frames"]["catch"]["forces"]
+
+
+
+def test_state_graph_shrinks_stage_by_stage():
+    G = legend.graph_figure()
+    st = G["stats"]["states"]
+    assert st["all"] == G["hands"] ** 2 * G["feet"] ** 2
+    assert st["all"] >= st["precheck"] >= st["geometry"] >= st["held"] >= st["reachable"] >= st["useful"] > 0
+    M = G["stats"]["moves"]
+    assert M["candidates"] == M["pruned"] + M["fail"] + M["ok"] and M["ok"] > 0
+    assert G["stats"]["starts"] > 0 and G["stats"]["goals"] > 0

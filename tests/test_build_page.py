@@ -209,3 +209,11 @@ def test_checker_figure_embedded(html):
     assert any(m.get("cost") and m["cost"]["cut"] > 0 for m in moves)     # and the cut penalty
     assert 'data-draw="checker"' in html and "Planned · unit 3.4" not in html
     assert "Planned · unit 3." not in html                                 # chapter 3 is complete
+
+
+
+def test_graph_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    G = json.loads(raw)["figures"]["graph"]
+    assert G["stats"]["states"]["reachable"] <= G["stats"]["states"]["held"]
+    assert 'data-draw="graph-funnel"' in html and "Planned · unit 4.1" not in html
