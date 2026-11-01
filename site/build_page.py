@@ -132,10 +132,10 @@ def fill(text: str, runs: dict, sweep: dict | None = None) -> str:
             return r["label"]
         if f == "fail":
             x = r["fail"] or {}
-            why = {"reach": "out of reach", "strength": "not strong enough", "balance": "direction or balance does not work",
-                   "unusable": "a hold this climber cannot use"}.get(x.get("reason"), x.get("reason"))
-            return (f"stuck at move {x.get('step')}, {NAMES.get(x.get('limb'), 'a limb')} to {x.get('hold')}, "
-                    f"which fails the {x.get('phase')} check: {why}")
+            why = {"reach": "out of reach", "strength": "not strong enough", "balance": "direction or balance",
+                   "unusable": "unusable hold"}.get(x.get("reason"), x.get("reason"))
+            return (f"stuck at move {x.get('step')}: {NAMES.get(x.get('limb'), 'a limb')} to {x.get('hold')} "
+                    f"fails the {x.get('phase')} check ({why})")
         raise KeyError(f)
     return re.sub(r"\{([A-Za-z0-9_]+)\.([a-z]+)\}", one, text)
 
@@ -162,7 +162,7 @@ def examples_html(results: dict) -> str:
   <p class="lede">{html_escape(e['lesson'])}</p></header>
   <div class="tbl-wrap"><table class="tbl" data-example-outcomes="{i}"></table></div>
 {sweep_fig}  <figure class="fig"><div class="player" data-example-player="{i}"></div>
-    <figcaption><b>Every climber's beta on this route.</b> Pick a climber, then play or step through the moves.</figcaption></figure>
+    <figcaption><b>Every climber's beta.</b> Pick a climber and play, or compare two side by side.</figcaption></figure>
 {paras}
   <details class="impl"><summary>Acceptance checks</summary><ul data-example-checks="{i}"></ul></details>
 </section>""")

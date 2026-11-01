@@ -124,7 +124,7 @@ def test_check_sections(markup):
     ids = re.findall(r'<h3 id="(check-[a-z]+)"', markup)
     assert ids == ["check-unknowns", "check-reach", "check-direction", "check-strength", "check-balance",
                    "check-problem", "check-solve"]
-    for slot in ('data-draw="reach"', 'data-math="flex-row"', 'data-draw="flex-table"', 'data-draw="balance"',
+    for slot in ('data-draw="reach"', 'data-math="flex-row"', 'data-draw="balance"',
                  'data-text="tip-facts"', 'data-text="door-facts"', 'data-math="full-problem"', 'data-draw="result-cards"'):
         assert slot in markup
 

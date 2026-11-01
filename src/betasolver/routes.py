@@ -86,7 +86,7 @@ def _never_drops(xs, tol=0.005):
 EXAMPLES: list = [
     Example(
         "ex1", "Halfway House",
-        "A long gap with one small crimp halfway: reach past it, or hang on it.",
+        "A long gap with one small crimp in it: reach past it, or use it.",
         _route("ex1", "Halfway House", [
             ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"), ("C", 1.25, 2.25, "crimp"),
             ("J1", 1.55, 2.60, "jug"), ("J2", 1.45, 3.05, "jug"), ("T", 1.55, 3.45, "jug"),
@@ -95,14 +95,10 @@ EXAMPLES: list = [
         ("B", "A", "C", "D"),
         {"B": "ok", "A": "ok", "C": "fail", "D": "fail"},
         (
-            "Between the start jugs and the next jug J1 there is a long gap. The only thing in it is a small crimp, "
-            "C, off to the side, and apart from the start jugs there are no footholds between the floor and the high ones.",
-            "{B.label} is tall enough to reach J1 straight from the start, with the feet still low (crux {B.crux}). "
-            "{A.label} is not: she pulls onto the crimp with both hands, steps her feet up onto a start jug and a high foothold, and "
-            "reaches J1 from there (crux {A.crux}).",
-            "{C.label} gets a hand onto the crimp but is {C.fail}. With one hand on a crimp and both feet to one side, "
-            "the body needs a little grip twist to stay square, and a weak grip on a small edge cannot give it: a barn-door.",
-            "{D.label} cannot use the crimp at all ({D.fail}), and without it J1 is out of reach.",
+            "A long gap separates the start from the next jug, J1. The only hold in it is a small crimp, C, off to the side, and apart from the start jugs there are no footholds between the floor and the high ones.",
+            "{B.label} reaches J1 straight from the start, feet still low (crux {B.crux}). {A.label} cannot: she pulls onto the crimp, steps up onto a start jug and a high foothold, and reaches J1 from there (crux {A.crux}).",
+            "{C.label} gets onto the crimp, then is {C.fail}. With one hand on a crimp and both feet to one side, the grip must twist to keep the body square, and his weak grip cannot: a barn-door.",
+            "{D.label} cannot use the crimp at all, and without it J1 is out of reach.",
         ),
         (
             ("Ava uses the crimp before she reaches J1", lambda R: R["A"]["status"] == "ok" and _first_hand_target(R["A"]) == "C"),
@@ -113,7 +109,7 @@ EXAMPLES: list = [
     ),
     Example(
         "ex2", "Fork in the Road",
-        "Small crimps straight up, or big jugs far out to the right.",
+        "Small crimps straight up, or big jugs far to the right.",
         _route("ex2", "Fork in the Road", [
             ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"),
             ("C1", 1.12, 2.05, "crimp"), ("C2", 1.12, 2.55, "crimp"), ("C3", 1.12, 3.05, "crimp"),
@@ -123,15 +119,11 @@ EXAMPLES: list = [
         ("A", "B", "C", "D"),
         {"A": "ok", "B": "ok", "C": "fail", "D": "fail"},
         (
-            "Two ways up. On the left, three small crimps in a line, with every foothold a few centimetres to their right. "
-            "On the right, two big jugs, J1 and J2, so far apart that only a long reach links them.",
-            "{A.label} takes the crimps (crux {A.crux}). With every foothold off to one side, a hand on a crimp has to "
-            "twist a little to keep the body square, and her strong fingers can.",
-            "{B.label} takes the jugs (crux {B.crux}), using a crimp only as a step while the other hand is on a jug, "
-            "which does the twisting.",
-            "{C.label} is {C.fail}. The same twist is too much for a weaker grip, and the body swings open.",
-            "{D.label} is {D.fail}. She has Ava's body, so her failure also shows that the jugs alone are too far apart "
-            "for a climber of Ava's size.",
+            "Two ways up: three small crimps in a line on the left, with every foothold a few centimetres to their right; or two big jugs on the right, J1 and J2, linked only by a long reach.",
+            "{A.label} takes the crimps (crux {A.crux}). With her feet off to one side, each crimp must twist a little to keep her square, and her strong fingers can.",
+            "{B.label} takes the jugs (crux {B.crux}), using a crimp only as a step while his other hand holds a jug.",
+            "{C.label} is {C.fail}. The same twist is too much for his weaker grip.",
+            "{D.label} cannot use the crimps, and with Ava's reach the jugs alone are too far apart.",
         ),
         (
             ("Ava climbs on the crimps and never touches the jugs", lambda R: R["A"]["status"] == "ok"
@@ -143,7 +135,7 @@ EXAMPLES: list = [
     ),
     Example(
         "ex3", "Lean on Me",
-        "A layback: hands pull sideways on a flake, feet push back, and nothing may twist open.",
+        "A layback: hands pull sideways, feet push back, and nothing may swing open.",
         _route("ex3", "Lean on Me", [
             ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"),
             ("L1", 1.30, 1.90, "sidepull", 0.0), ("L2", 1.33, 2.35, "sidepull", 0.0),
@@ -153,14 +145,10 @@ EXAMPLES: list = [
         ("A", "B", "C"),
         {"A": "ok", "B": "ok", "C": "fail"},
         (
-            "A flake runs straight up: four sidepulls, L1 to L4, that pull the hands to the right, with the footholds "
-            "almost directly below them, a few centimetres to the right. The hands pull, the feet push back, and every "
-            "time a hand or foot moves, whatever stays on must also stop the body twisting open.",
-            "{A.label} laybacks up it in {A.steps} moves (crux {A.crux}).",
-            "{B.label} gets up too (crux {B.crux}), but needs {B.steps} moves, with more shuffling. He stands further "
-            "from the wall, so his hands must pull in harder, and the same small offset of the feet needs more twist.",
-            "{C.label} gets both hands onto L2 and then cannot move either foot: one foot pushing a few centimetres "
-            "to the side of two weak sidepull grips swings the body open. With the feet stuck low, Cal is {C.fail}.",
+            "Four sidepulls, L1 to L4, run up a flake and pull the hands to the right; the footholds sit a few centimetres to their right. Hands pull, feet push, and whatever stays on during a move must stop the body swinging open.",
+            "{A.label} laybacks up in {A.steps} moves (crux {A.crux}).",
+            "{B.label} gets up too (crux {B.crux}) but needs {B.steps} moves. Standing further from the wall, he must pull in harder, so the same offset of the feet needs more twist.",
+            "{C.label} gets both hands onto L2, then cannot move a foot without swinging open. With his feet low, he is {C.fail}.",
         ),
         (
             ("Ben needs more moves than Ava", lambda R: len(R["B"]["steps"]) > len(R["A"]["steps"])),
@@ -180,16 +168,11 @@ EXAMPLES: list = [
         ("A", "B", "A_stiff", "B_flex"),
         {"A": "ok", "B": "fail", "A_stiff": "fail", "B_flex": "ok"},
         (
-            "Above the start jugs there are only two underclings, and then J1, 0.85 m higher. The footholds are low, "
-            "except F3, just 25 cm below the start jugs. To reach J1 the feet have to come up, first onto "
-            "F3 and then onto the start jugs, while the hands pull up on the underclings.",
-            "{A.label} starts with a foot on F3, a foot near hip height. Her flexible hips allow that. From there she "
-            "steps onto the jugs and stands up into J1 ({A.steps} moves, crux {A.crux}).",
-            "{B.label} is {B.fail}. He is much taller, but his stiff hips will not let a foot go anywhere near F3 "
-            "or the start jugs, and with his feet that low even his reach falls short.",
-            "{A_stiff.label} has Ava's body with Ben's hips. She is {A_stiff.fail}.",
-            "{B_flex.label} has Ben's body with Ava's hips, and gets up ({B_flex.steps} moves, crux {B_flex.crux}). "
-            "So it is the hips, not the height.",
+            "Above the start jugs are two underclings, then J1, 0.85 m higher. Apart from F3, 25 cm below the start jugs, the footholds are low. To reach J1 the feet must come up, onto F3 and then the start jugs, while the hands pull up on the underclings.",
+            "{A.label} starts with a foot on F3, near hip height, which her flexible hips allow. She steps up onto the jugs and stands into J1 ({A.steps} moves, crux {A.crux}).",
+            "{B.label} is {B.fail}. He is much taller, but his stiff hips keep his feet low, and from there even his reach falls short.",
+            "{A_stiff.label}, Ava's body with Ben's hips, is {A_stiff.fail}.",
+            "{B_flex.label}, Ben's body with Ava's hips, gets up ({B_flex.steps} moves, crux {B_flex.crux}). It is the hips, not the height.",
         ),
         (
             ("Ava and Ben (flexible) start with a foot on F3",
@@ -200,7 +183,7 @@ EXAMPLES: list = [
     ),
     Example(
         "ex5", "Mind the Gap",
-        "No footholds under the rail: bridge across with a long body, or let the feet go.",
+        "No footholds under the rail: bridge it with a long body, or let the feet go.",
         _route("ex5", "Mind the Gap", [
             ("S1", 0.30, 1.90, "jug"), ("S2", 0.60, 1.90, "jug"),
             ("R1", 1.05, 2.00, "jug"), ("R2", 1.52, 2.05, "jug"), ("R3", 1.98, 2.10, "jug"),
@@ -210,15 +193,10 @@ EXAMPLES: list = [
         ("A", "B", "C"),
         {"A": "ok", "B": "ok", "C": "fail"},
         (
-            "A traverse to the right along a rail of good jugs, R1 to R4, about 0.47 m apart. The footholds are at "
-            "both ends, and the wall under the rail is blank for almost 2 m.",
-            "{B.label} bridges the gap ({B.steps} moves, crux {B.crux}): with a foot still on the start footholds he "
-            "can already reach R2, and from there his right foot reaches F3 at the far end. He always has a foot on.",
-            "{A.label} is too small for that. She lets both feet go and swings across on her arms, matching each jug "
-            "({A.steps} moves, crux {A.crux}): every hand move hangs her whole weight on one jug, t = 1/1.2 = 0.83.",
-            "{C.label} can do neither. He is too short to bridge like Ben, and hanging on one jug, like Ava, needs "
-            "1/0.8 = 1.25 of his jug strength. The furthest he gets is a stretch from the start to R3 on one foot, and "
-            "there he is {C.fail}.",
+            "A traverse right along a rail of jugs, R1 to R4, about 0.47 m apart. The footholds are at the two ends; the wall in between is blank for almost 2 m.",
+            "{B.label} bridges the gap ({B.steps} moves, crux {B.crux}). With a foot still at the start he reaches R2, and from there his right foot reaches F3 at the far end, so he always has a foot on.",
+            "{A.label} is too small to bridge. She lets her feet go and swings across, matching each jug ({A.steps} moves, crux {A.crux}); every hand move hangs her whole weight on one jug, t = 1/1.2 = 0.83.",
+            "{C.label} can do neither: he is too short to bridge, and hanging on one arm would need 1/0.8 = 1.25 of his strength. His furthest position is a stretch from the start to R3 on one foot, where he is {C.fail}.",
         ),
         (
             ("Ava hangs with both feet off at some point", lambda R: _feet_off(R["A"])),
@@ -228,7 +206,7 @@ EXAMPLES: list = [
     ),
     Example(
         "ex6", "The Stretch",
-        "How tall do you need to be? One route, one climber, and only the height changes.",
+        "How tall do you need to be? One route, one climber, only the height changes.",
         _route("ex6", "The Stretch", [
             ("S1", 1.35, 1.25, "jug"), ("S2", 1.65, 1.25, "jug"), ("J1", 1.50, 1.85, "jug"),
             ("J2", 1.50, 2.90, "jug"), ("T", 1.50, 3.30, "jug"),
@@ -236,17 +214,9 @@ EXAMPLES: list = [
         ("S_1550", "S_1650", "S_1750", "S_1850"),
         {"S_1550": "fail", "S_1650": "fail", "S_1750": "ok", "S_1850": "ok"},
         (
-            "Low start jugs, one more jug J1 above them, and then nothing: the next jug, J2, is 1.05 m higher, and "
-            "the only footholds are two chips near the floor. Every climber on this page is the same person at a "
-            "different height: arm span equal to height, grip and hips halfway between Cal and Ava, and every length "
-            "of the body in proportion to the height (chapter 2).",
-            "The chart solves the route at 19 heights from 1.50 m to 1.95 m. Below {sweep.hstar} nobody gets up, and "
-            "always for the same reason: from J1, J2 is out of reach. From there up, everyone does. "
-            "At 1.65 m the climber is {S_1650.fail}.",
-            "Past the threshold, being taller does not make the route easier. The crux even creeps up, from "
-            "{S_1750.crux} at 1.75 m to {S_1850.crux} at 1.85 m: a taller body stands further from the wall, so "
-            "its hands must pull in harder. The tallest climbers save two moves, because they reach the top "
-            "without stepping onto J1 first. Height buys reach, and on this route reach is all that matters.",
+            "Low start jugs, one more jug J1, then a 1.05 m gap to J2, with only two chips near the floor for the feet. Every climber here is the same person at a different height: span equal to height, strength and hips halfway between Cal and Ava, every body length in proportion.",
+            "Solved at 19 heights from 1.50 to 1.95 m, the route goes for everyone from {sweep.hstar} up and for nobody below, always for the same reason: from J1, J2 is out of reach. At 1.65 m the climber is {S_1650.fail}.",
+            "Past the threshold, taller is not easier. The crux even creeps up, from {S_1750.crux} at 1.75 m to {S_1850.crux} at 1.85 m: a taller body stands further from the wall and must pull in harder. The tallest climbers save two moves by reaching the top without stepping onto J1. Height buys reach, and here reach is all that matters.",
         ),
         (
             ("H* is between 1.60 and 1.85 m",

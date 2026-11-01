@@ -131,10 +131,10 @@ def layout(AF: tuple[str, ...]) -> Layout:
 # -------------------------------------------------------------------- result
 
 REASONS = {
-    "unusable": "a hold this climber cannot use at all",
+    "unusable": "unusable hold",
     "reach": "cannot reach",
     "strength": "not strong enough",
-    "balance": "direction or balance does not work",
+    "balance": "direction or balance fails",
 }
 
 
