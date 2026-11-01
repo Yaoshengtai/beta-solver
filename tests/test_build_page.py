@@ -143,3 +143,10 @@ def test_tipping_figure_embedded(html):
     for slot in ('data-draw="tipping"', 'data-draw="tipping-chart"', 'data-text="tip-strength"'):
         assert slot in html
     assert "Planned · unit 2.5" not in html
+
+
+def test_barndoor_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    D = json.loads(raw)["figures"]["barndoor"]
+    assert [p["ok"] for p in D["panels"]] == [True, False]
+    assert 'data-draw="barndoor"' in html and "Planned · unit 2.6" not in html

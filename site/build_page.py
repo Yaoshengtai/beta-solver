@@ -80,6 +80,7 @@ def collect_data() -> dict:
             "strength": legend.strength_figure(),
             "balance": legend.balance_figure(),
             "tipping": legend.tipping_figure(),
+            "barndoor": legend.barndoor_figure(),
             # the four typical holds of section 3.2; a sidepull faces right here
             "direction_picks": [{"type": "jug"}, {"type": "sloper"}, {"type": "sidepull", "dir": 0}, {"type": "undercling"}],
         },

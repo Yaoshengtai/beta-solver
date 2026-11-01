@@ -355,9 +355,9 @@ def test_lp_rejects_a_force_outside_the_cone():
 def test_lp_size_matches_plan():
     # section 3.7: about 17 variables and 180 constraints for a four-limb state
     P = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
-    assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (5, 17)
-    assert {o[0] for o in P.owners} == {"reach", "direction", "strength", "outofwall"}
-    assert {o[0] for o in P.eq_owners} == {"inplane", "outofwall"}
+    assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (6, 17)
+    assert {o[0] for o in P.owners} == {"reach", "direction", "strength", "outofwall", "barndoor"}
+    assert {o[0] for o in P.eq_owners} == {"inplane", "outofwall", "barndoor"}
     assert 150 <= len(P.h) + len(P.b) <= 185
     # a figure can ask for the model as it stood in an earlier section
     Q = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"), upto="inplane")
@@ -523,3 +523,54 @@ def test_tipping_rows_shape():
     A, bvec, names, G, h, owner = tipping_rows(b, r, s, AF, lay)
     assert A.shape == (2, lay.size) and list(bvec) == [0.0, b.d_wall] and len(names) == 2
     assert G.shape == (2, lay.size) and owner == ["LH", "RH"] and np.all(h == 0)
+
+
+# ------------------------------------------------------------ ⑤ no barn-door
+from dataclasses import replace as _replace  # noqa: E402
+
+from betasolver.stance import barndoor_rows  # noqa: E402
+
+
+def _one_hand_two_feet(f1x, f2x, kind="jug"):
+    holds = [Hold("H1", 1.5, 2.2, kind), Hold("H3", 1.5, 3.6, "jug"),
+             Hold("F1", f1x, 1.0, "foot_big"), Hold("F2", f2x, 1.05, "foot_big")]
+    return route(holds=holds, start_hands=("H1", "H1"))
+
+
+def test_barn_door_fails_with_both_feet_on_one_side(monkeypatch):
+    # step 10: one hand, two feet, both feet right of the hand and r = 0: infeasible;
+    # the hand between the feet: feasible
+    monkeypatch.setitem(HOLD_TYPES, "jug", _replace(HOLD_TYPES["jug"], r=0.0))
+    b, s = make_body(AVA), State("H1", "H1", "F1", "F2")
+    assert not solve(b, _one_hand_two_feet(1.75, 1.95), s, no_force="RH")["ok"]
+    assert solve(b, _one_hand_two_feet(1.25, 1.75), s, no_force="RH")["ok"]
+
+
+def test_grip_torque_allows_a_small_offset():
+    # with the jug's real r, feet slightly to one side are fine; far to one side still fails
+    b, s = make_body(AVA), State("H1", "H1", "F1", "F2")
+    near = solve(b, _one_hand_two_feet(1.5, 1.6), s, no_force="RH")
+    assert near["ok"] and abs(near["forces"]["LH"]["tau"]) > 1e-6
+    assert abs(near["forces"]["LH"]["tau"]) <= HOLD_TYPES["jug"].r * AVA.F["jug"] + 1e-9
+    assert not solve(b, _one_hand_two_feet(1.95, 2.05), s, no_force="RH")["ok"]
+    # without the barn-door rows the far case would pass
+    assert solve(b, _one_hand_two_feet(1.95, 2.05), s, no_force="RH", upto="outofwall")["ok"]
+
+
+def test_solution_does_not_swing_open():
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    lp = solve(b, r, s)
+    F = lp["forces"]
+    x = {l: r.hold(s.hold(l)).x for l in s.on()}
+    total = sum(x[l] * F[l]["n"] + F[l]["tau"] for l in ("LH", "RH")) - sum(x[l] * F[l]["m"] for l in ("LF", "RF"))
+    assert total == pytest.approx(0.0, abs=1e-9)
+
+
+def test_barndoor_rows_shape():
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    A_, AF = limb_sets(s)
+    lay = layout(AF)
+    A, bvec, names, G, h, owner = barndoor_rows(b, r, s, AF, lay)
+    assert A.shape == (1, lay.size) and list(bvec) == [0.0] and names == ["no barn-door"]
+    assert G.shape == (4, lay.size) and owner == ["LH", "LH", "RH", "RH"]
+    assert np.allclose(h, HOLD_TYPES["jug"].r * AVA.F["jug"])

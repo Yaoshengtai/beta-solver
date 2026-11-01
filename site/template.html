@@ -727,7 +727,22 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>Equations (a) and (b) are two more equality rows, and the pull-in limit is one inequality row per hand, all exact. When no foot pushes, the right side of (b) is 0 instead of \(d\). Earlier figures on this page are still drawn with the constraints of their own sections, so they keep showing what they explain. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>tipping_rows</code>, <code>wall_distance</code>, and the <code>upto</code> option of <code>solve</code>.</p>
   </details>
   <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.6</span><p>With one hand on, the body swings open unless the feet are placed on both sides.</p></div>
+  <p><b>The idea.</b> This is the last of the six balance equations: no turning about a vertical axis. The hands are pulled in toward the wall and the feet pushed out. If those pulls and pushes do not line up from left to right, they twist the body about a vertical line, and it swings open like a door. Climbers call this a barn-door. A hand can resist a little by gripping the hold hard: a twist \(\tau_k\) about the vertical axis.</p>
+  <p><b>The math.</b></p>
+  <div class="math-block">\[ \text{(c)}\quad \sum_{k \in A_F \cap \text{hands}} p_{k,x}\, N_k \;-\; \sum_{k \in A_F \cap \text{feet}} p_{k,x}\, M_k \;+\; \sum_{k \in A_F \cap \text{hands}} \tau_k \;=\; 0 \]</div>
+  <div class="math-block">\[ |\tau_k| \;\le\; r_{\text{type}}\, F_k, \qquad k \in A_F \cap \text{hands} \]</div>
+  <p>The torque arm \(r\) comes from the hold table: a jug can be gripped hard and resists twisting, while a sloper (\(r = 0\)) cannot resist at all. Both rows are linear.</p>
+  <p><b>One hand, two feet.</b> This is the middle of every hand move. Equation (a) says the feet push out as much as the hand pulls in. Equation (c) then says the hand must sit at the push-weighted middle of the feet, give or take what the grip twist can make up. With both feet on the same side of the hand, the body swings open and the state check fails. That matches what climbers know about barn-doors.</p>
+
+  <figure class="fig" id="fig-barndoor">
+    <div class="tip-row" data-draw="barndoor"></div>
+    <figcaption><b>One hand, two feet, from the front.</b> \(\otimes\): the wall pulls the hand in. \(\odot\): the wall pushes a foot out. Symbol size follows the force. Dashed line: the vertical axis through the hand. Left: the hand is between the feet and the pushes balance the pull with no twist at all. Right: both feet are to the right. Everything else can still balance, but only with more twist than the grip can give, so the body swings open.</figcaption>
+  </figure>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p data-text="door-impl"></p>
+  </details>
   <h3 id="check-flex">Flexibility</h3>
   <div class="planned"><span class="chip">Planned · unit 2.7</span><p>A foot cannot go too far above the hip.</p></div>
   <h3 id="check-problem">The full problem and why it fails</h3>
@@ -2214,6 +2229,63 @@ var Draw = (function () {
       ". Cal rises most: Cal\u2019s crimp limit is the lowest of the three, and the sloper can hardly help, since its β lets it hold the body in only a little.";
   }
   if (DATA.figures && DATA.figures.tipping) renderTipping(DATA.figures.tipping);
+
+  /* ---------- #check: no barn-door (unit 2.6) ---------- */
+  function renderBarndoor(D) {
+    var row = document.querySelector('[data-draw="barndoor"]');
+    if (!row) return;
+    var v = D.view, C = D.climber, s = D.force_scale;
+    function m2(x) { return x.toFixed(2); }
+    function m3(x) { return x.toFixed(3); }
+    D.panels.forEach(function (P) {
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var sc = Draw.scene(cell, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 200, pad: 4, title: P.ok ? "Hand between the feet" : "Both feet to one side" });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      P.holds.forEach(function (h) { Draw.hold(sc, h, { used: true }); });
+      var cls = {}; cls[P.rest] = "limb-rest";
+      Draw.figure(sc, { torso: P.torso, joints: P.joints }, { key: C.key, head: C.head }, { limbClass: cls });
+      Draw.com(sc, P.torso);
+      // vertical axis through the hand
+      Draw.el(sc.layers.over, "line", { x1: sc.X(P.hand_x), y1: sc.Y(v.y1), x2: sc.X(P.hand_x), y2: sc.Y(v.y0) }, "anno-line");
+      // out-of-wall forces: into the wall at the hand, out of it at the feet
+      Object.keys(P.forces).forEach(function (l) {
+        var F = P.forces[l], j = P.joints[l].end, val = l[1] === "H" ? F.n : F.m;
+        if (val < 1e-3) return;
+        var x = sc.X(j[0]), y = sc.Y(j[1]) + (l[1] === "H" ? -26 : 24), r = 5 + 30 * val;
+        var g = Draw.el(sc.layers.over, "g", null, "");
+        Draw.el(g, "circle", { cx: x, cy: y, r: r.toFixed(1) }, "tip");
+        if (l[1] === "H") {
+          var q = r * 0.6;
+          Draw.el(g, "path", { d: "M" + (x - q) + " " + (y - q) + "L" + (x + q) + " " + (y + q) + "M" + (x + q) + " " + (y - q) + "L" + (x - q) + " " + (y + q) }, "com");
+        } else {
+          Draw.el(g, "circle", { cx: x, cy: y, r: 2.6 }, "trail-dot");
+        }
+        if (l[1] === "H") Draw.el(sc.layers.over, "text", { x: x + r + 4, y: y + 4 }, "anno-strong").textContent = "N " + m2(val);
+        else Draw.el(sc.layers.over, "text", { x: x, y: y + r + 13, "text-anchor": "middle" }, "anno-strong").textContent = "M " + m2(val);
+      });
+      if (!P.ok) {
+        // swinging open about the axis: an elliptical arc at hip height
+        var cy = P.torso[1] - 0.05, rx = 0.32, ry = 0.07, pts = [];
+        for (var i = 0; i <= 20; i++) { var a = Math.PI * (1.15 + 0.8 * i / 20); pts.push([sc.X(P.hand_x + rx * Math.cos(a)), sc.Y(cy + ry * Math.sin(a))]); }
+        Draw.el(sc.layers.over, "path", { d: "M" + pts.map(function (p) { return p.join(" "); }).join("L") }, "swing");
+        var q2 = pts[pts.length - 2], e = pts[pts.length - 1];
+        Draw.arrowPx(sc.layers.over, q2[0], q2[1], e[0], e[1], "swing-head", 9);
+      }
+      var st = document.createElement("span"); st.className = "st " + (P.ok ? "ok" : "bad");
+      st.style.fontWeight = "600"; st.style.color = P.ok ? "var(--easy)" : "var(--limit)";
+      st.textContent = P.ok ? "✓ Holds" : "✗ Barn-door";
+      var note = document.createElement("span");
+      note.textContent = P.ok
+        ? "Feet at x = " + P.feet_x.map(m2).join(" and ") + ", hand at " + m2(P.hand_x) + ". Twist needed: " + m3(P.needed) + "; the grip could give up to " + m3(P.cap) + "."
+        : "Both feet right of the hand (x = " + P.feet_x.map(m2).join(" and ") + "). Twist needed: at least " + m3(P.needed) + "; the grip gives at most " + m3(P.cap) + ".";
+      cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+    });
+    document.querySelector('[data-text="door-impl"]').textContent =
+      "Equation (c) is one more equality row, and the twist limit two inequality rows per hand (τ ≤ rF and −τ ≤ rF). In the figure, the grip limit is r F = " +
+      m2(D.r) + " m × " + m2(D.F) + " = " + m3(D.panels[0].cap) + " for " + C.name + " on a jug, and “twist needed” is the smallest twist over every way of meeting the other constraints with t ≤ 1, found by a separate linear program. The second stage of the solver now also keeps |τ| as small as it can. Code: stance.py, barndoor_rows.";
+  }
+  if (DATA.figures && DATA.figures.barndoor) renderBarndoor(DATA.figures.barndoor);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

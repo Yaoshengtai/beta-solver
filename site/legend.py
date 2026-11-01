@@ -377,7 +377,7 @@ def tipping_figure() -> dict:
     def run(h):
         r = _route("tip", [Hold("H1", hand[0], hand[1], "jug"), Hold("F1", hand[0], hand[1] - h, "foot_big"),
                            Hold("T", 1.50, 3.60, "jug")], ("H1", "H1"))
-        return r, solve(body, r, state, no_force="RH")
+        return r, solve(body, r, state, no_force="RH", upto="outofwall")
 
     views = []
     for h in (1.2, 0.6):
@@ -402,7 +402,7 @@ def tipping_figure() -> dict:
         c = PROFILES[key]
         b = make_body(c)
         before = solve(b, route, s4, upto="inplane")
-        after = solve(b, route, s4)
+        after = solve(b, route, s4, upto="outofwall")
         again.append({"climber": key, "name": c.name, "t_before": before["t_exact"], "t": after["t_exact"],
                       "pull": after["forces"]["LH"]["n"] + after["forces"]["RH"]["n"],
                       "share": after["share"], "limiting": after["limiting"]})
@@ -416,4 +416,81 @@ def tipping_figure() -> dict:
         "max_error": err,
         "force_scale": 0.5,
         "strength_again": again,
+    })
+
+
+# ------------------------------------------------------------ ⑤ no barn-door
+
+def _twist_needed(body, route, state, no_force):
+    """Smallest grip torque that would hold the body, over every solution of the
+    other constraints with t <= 1: min |sum p_x N - sum p_x M|."""
+    import numpy as np
+    from scipy.optimize import linprog
+
+    from betasolver.model import HANDS
+    from betasolver.stance import assemble, variable_bounds
+
+    P = assemble(body, route, state, no_force, upto="outofwall")
+    lay, n = P.layout, P.layout.size
+    e = np.zeros(n)
+    for limb in state.on():
+        if limb == no_force:
+            continue
+        x = route.hold(state.hold(limb)).x
+        if limb in HANDS:
+            e[lay[("N", limb)].start] = x
+        else:
+            e[lay[("M", limb)].start] = -x
+    G = np.hstack([P.G, np.zeros((len(P.G), 1))])
+    extra = np.zeros((3, n + 1))
+    extra[0, :n], extra[0, n] = e, -1.0
+    extra[1, :n], extra[1, n] = -e, -1.0
+    extra[2, lay[("t", None)].start] = 1.0
+    G = np.vstack([G, extra])
+    h = np.concatenate([P.h, [0.0, 0.0, 1.0]])
+    A = np.hstack([P.A, np.zeros((len(P.A), 1))])
+    c = np.zeros(n + 1)
+    c[n] = 1.0
+    res = linprog(c, A_ub=G, b_ub=h, A_eq=A, b_eq=P.b, bounds=variable_bounds(lay) + [(0.0, None)], method="highs")
+    return float(res.x[n]) if res.status == 0 else None
+
+
+def barndoor_figure() -> dict:
+    """Data for the barn-door figure in #check: one hand, two feet, two foot placements.
+
+    Left: the hand between the feet, solved by the state check. Right: both
+    feet to the right of the hand. Every other constraint can still be met,
+    but the twist the grip would need is more than it can give, so the state
+    check fails.
+    """
+    from betasolver.stance import State, solve, strength_limit, torso_region
+
+    body = make_body(AVA)
+    state = State("H1", "H1", "F1", "F2")
+    panels = []
+    for key, feet in (("between", (1.22, 1.78)), ("side", (1.86, 2.14))):
+        r = _route("door", [Hold("H1", 1.50, 2.20, "jug"), Hold("F1", feet[0], 1.00, "foot_big"),
+                            Hold("F2", feet[1], 1.00, "foot_big"), Hold("T", 1.50, 3.60, "jug")], ("H1", "H1"))
+        full = solve(body, r, state, no_force="RH")
+        base = full if full["ok"] else solve(body, r, state, no_force="RH", upto="outofwall")
+        if (key == "between") != full["ok"] or not base["ok"]:
+            raise ValueError(f"barn-door example {key} does not behave as intended")
+        torso = (base["torso"][0], mid_y(torso_region(body, r, state), base["torso"][0], 0.35))
+        ends = {l: (r.hold(h).x, r.hold(h).y) for l, h in state.as_dict().items() if h}
+        cap = HOLD_TYPES["jug"].r * strength_limit(body, r, state, "LH")
+        panels.append({
+            "key": key, "ok": full["ok"],
+            "holds": [{**h, "role": "normal"} for h in r.to_dict()["holds"] if h["id"] != "T"],
+            "state": state.as_dict(), "rest": "RH", "torso": list(torso), "joints": body.joints(torso, ends),
+            "forces": base["forces"], "t": full["t_exact"] if full["ok"] else None,
+            "tau": full["forces"]["LH"]["tau"] if full["ok"] else None,
+            "needed": _twist_needed(body, r, state, "RH"), "cap": cap,
+            "hand_x": 1.50, "feet_x": list(feet),
+        })
+    return _round({
+        "climber": {"key": AVA.key, "name": AVA.name, "H": AVA.H, "head": list(body.head)},
+        "r": HOLD_TYPES["jug"].r, "F": AVA.F["jug"],
+        "panels": panels,
+        "force_scale": 0.3,
+        "view": {"x0": 0.95, "y0": 0.62, "x1": 2.5, "y1": 2.5},
     })

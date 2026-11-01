@@ -7,8 +7,8 @@ the smallest effort t.
 
 This module holds the framework (states, unknowns, result type, checks done
 before any solving) and the constraints built so far: reach, direction,
-strength, in-plane balance, no tipping, plus the linear program that puts
-them together. The barn-door and flexibility are added in units 2.6 to 2.9.
+strength, in-plane balance, no tipping, no barn-door, plus the linear
+program that puts them together. Flexibility is added in unit 2.7.
 """
 
 from __future__ import annotations
@@ -476,6 +476,39 @@ def tipping_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], la
     return A, np.array([0.0, d]), ["push equals pull", "no tipping"], G, np.zeros(len(rows)), owner
 
 
+# ------------------------------------------------------------ ⑤ out-of-wall balance: no barn-door
+
+def barndoor_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], lay: Layout):
+    """⑤ (c) as an equation and the grip torque limit as inequalities.
+
+        (c)  sum p_kx N_k - sum p_kx M_k + sum tau_k = 0     (no swinging open about a vertical axis)
+        |tau_k| <= r_k F_k   for hands                       (how hard the hand can twist on the hold)
+    With one hand and two feet, (a) and (c) put the hand at the push-weighted
+    middle of the feet, give or take what the grip torque can make up. Both
+    feet on one side of the hand and the body swings open like a door.
+    """
+    A = np.zeros((1, lay.size))
+    rows, rhs, owner = [], [], []
+    for limb in AF:
+        h = route.hold(state.hold(limb))
+        if limb in HANDS:
+            A[0, lay[("N", limb)].start] = h.x
+            it = lay[("tau", limb)].start
+            A[0, it] = 1.0
+            kind, _ = h.contact(limb)
+            cap = kind.r * strength_limit(body, route, state, limb)
+            for sign in (1.0, -1.0):
+                row = np.zeros(lay.size)
+                row[it] = sign
+                rows.append(row)
+                rhs.append(cap)
+                owner.append(limb)
+        else:
+            A[0, lay[("M", limb)].start] = -h.x
+    G = np.array(rows, dtype=float).reshape(len(rows), lay.size)
+    return A, np.zeros(1), ["no barn-door"], G, np.array(rhs, dtype=float), owner
+
+
 # ------------------------------------------------------- the linear program
 
 def variable_bounds(lay: Layout) -> list:
@@ -540,7 +573,7 @@ class Program:
 
 
 # The constraint families in the order they are built; `upto` stops after one of them.
-BUILT = ("reach", "direction", "strength", "inplane", "outofwall")
+BUILT = ("reach", "direction", "strength", "inplane", "outofwall", "barndoor")
 
 
 def assemble(body: Body, route: Route, state: State, no_force: str | None = None, upto: str | None = None) -> Program:
@@ -572,6 +605,10 @@ def assemble(body: Body, route: Route, state: State, no_force: str | None = None
         At, bt, ot, Gt, ht, gt = tipping_rows(body, route, state, AF, lay)
         Aeq.append(At); beq.append(bt); eq_owners += [("outofwall", n) for n in ot]
         Gs.append(Gt); hs.append(ht); owners += [("outofwall", l) for l in gt]
+    if "barndoor" in keep:
+        Ad, bd, od, Gd, hd, gd = barndoor_rows(body, route, state, AF, lay)
+        Aeq.append(Ad); beq.append(bd); eq_owners += [("barndoor", n) for n in od]
+        Gs.append(Gd); hs.append(hd); owners += [("barndoor", l) for l in gd]
     A = np.vstack(Aeq) if Aeq else np.zeros((0, lay.size))
     b = np.concatenate(beq) if beq else np.zeros(0)
     return Program(lay, np.vstack(Gs), np.concatenate(hs), owners, A, b, eq_owners)
@@ -581,20 +618,22 @@ def _tidy(P: Program, bounds: list, t_star: float, AF: tuple[str, ...]):
     """Second stage: keep t at its optimum and remove force that does nothing.
 
     The polyhedron has flat faces, so many force splits share the optimal t;
-    some of them have two limbs squeezing sideways against each other for no
-    reason. Holding t <= t*, minimise sum |f_kx| + sum N_k + sum M_k. This
-    never changes t, only which of the equally good solutions is reported.
+    some of them have two limbs squeezing sideways against each other, or a
+    hand twisting, for no reason. Holding t <= t*, minimise
+    sum |f_kx| + sum |tau_k| + sum N_k + sum M_k. This never changes t, only
+    which of the equally good solutions is reported.
     """
     from scipy.optimize import linprog
 
-    lay, n, k = P.layout, P.layout.size, len(AF)
+    lay, n = P.layout, P.layout.size
+    absolute = [lay[("f", l)].start for l in AF] + [sl.start for (name, _), sl in lay.index.items() if name == "tau"]
+    k = len(absolute)
     G = np.hstack([P.G, np.zeros((len(P.G), k))])
     extra, rhs = [], []
-    for i, limb in enumerate(AF):
-        fx = lay[("f", limb)].start
+    for i, col in enumerate(absolute):
         for sign in (1.0, -1.0):
             row = np.zeros(n + k)
-            row[fx], row[n + i] = sign, -1.0
+            row[col], row[n + i] = sign, -1.0
             extra.append(row)
             rhs.append(0.0)
     row = np.zeros(n + k)
@@ -655,6 +694,8 @@ def solve(body: Body, route: Route, state: State, no_force: str | None = None,
         f = z[lay[("f", limb)]]
         out = float(z[lay[(_normal(limb), limb)]][0])
         forces[limb] = {"f": (float(f[0]), float(f[1])), ("n" if limb in HANDS else "m"): out}
+        if limb in HANDS:
+            forces[limb]["tau"] = float(z[lay[("tau", limb)]][0])
     t_exact, share, limiting = effort(body, route, state, forces)
     return {"ok": True, "t": float(z[lay[("t", None)]][0]), "torso": tuple(float(v) for v in z[lay[("x", None)]]),
             "forces": forces, "share": share, "t_exact": t_exact, "limiting": limiting, "z": z, "layout": lay}
@@ -669,4 +710,4 @@ def check(body: Body, route: Route, state: State, no_force: str | None = None) -
         return early
     if not torso_region(body, route, state, REACH_SIDES):
         return Result(ok=False, reason="reach")
-    raise NotImplementedError("the barn-door and flexibility are added in units 2.6 to 2.9")
+    raise NotImplementedError("flexibility is added in unit 2.7")

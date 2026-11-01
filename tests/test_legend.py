@@ -129,3 +129,12 @@ def test_tipping_figure_follows_d_over_h():
     assert all(abs(p["N"] - p["formula"]) <= 0.01 * p["formula"] for p in T["sweep"])
     for r in T["strength_again"]:
         assert r["t"] >= r["t_before"] - TOL and r["pull"] > 0
+
+
+def test_barndoor_figure():
+    D = legend.barndoor_figure()
+    between, side = D["panels"]
+    assert between["ok"] and abs(between["tau"]) <= between["cap"] + TOL and between["needed"] < TOL
+    assert not side["ok"] and side["needed"] > side["cap"]
+    assert min(between["feet_x"]) < between["hand_x"] < max(between["feet_x"])
+    assert min(side["feet_x"]) > side["hand_x"]
