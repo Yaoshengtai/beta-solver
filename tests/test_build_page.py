@@ -267,3 +267,8 @@ def test_appendix_slots_and_test_report(html):
     if data["tests"] is not None:  # written by: pytest --report site/test_report.json
         assert set(data["tests"]["counts"]) == {"passed", "failed", "skipped"}
         assert all(f["file"].startswith("tests/test_") and f["about"] for f in data["tests"]["files"])
+
+
+def test_players_offer_compare_mode(html):
+    # the example players build a "Compare two" view: two walls, one clock (step 9)
+    assert '"Compare two"' in html and "player-compare" in html

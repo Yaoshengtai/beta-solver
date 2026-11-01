@@ -389,6 +389,9 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .player { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; outline: none; }
 .player:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
 .player-canvas svg { width: 100%; height: auto; }
+.player-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-content: start; }
+.player-compare[hidden], .player-canvas[hidden], .player-side [hidden] { display: none; }
+.cmp-cell select { width: 100%; margin-bottom: 6px; font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
 .player-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .player-side .seg { margin: 0; flex-wrap: wrap; }
 .player-prog { width: 100%; accent-color: var(--accent); }
@@ -2947,6 +2950,10 @@ var Draw = (function () {
     var side = document.createElement("div"); side.className = "player-side";
     root.appendChild(cv); root.appendChild(side);
     var sc = Draw.scene(cv, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 170, pad: 4, title: "Beta" });
+    // compare mode: two walls side by side, one clock (built on first use)
+    var cmp = document.createElement("div"); cmp.className = "player-compare"; cmp.hidden = true;
+    root.insertBefore(cmp, side);
+    var compare = false, AB = [EX.runs[0], EX.runs[1] || EX.runs[0]], scAB = [];
 
     var who = document.createElement("div"); who.className = "seg"; who.setAttribute("role", "group"); who.setAttribute("aria-label", "Climber");
     var ctl = document.createElement("div"); ctl.className = "seg"; ctl.setAttribute("role", "group"); ctl.setAttribute("aria-label", "Playback");
@@ -2954,7 +2961,8 @@ var Draw = (function () {
     var prog = document.createElement("input"); prog.type = "range"; prog.className = "player-prog"; prog.min = "0"; prog.step = "0.001"; prog.setAttribute("aria-label", "Position in the beta");
     var summary = document.createElement("p"); summary.className = "player-summary";
     var list = document.createElement("ol"); list.className = "player-steps";
-    [who, summary, ctl, spd, prog, list].forEach(function (e) { side.appendChild(e); });
+    var mode = document.createElement("div"); mode.className = "seg"; mode.setAttribute("role", "group"); mode.setAttribute("aria-label", "View");
+    [mode, who, summary, ctl, spd, prog, list].forEach(function (e) { side.appendChild(e); });
 
     var run = null, T = 0, playing = false, last = null, speed = 1;
     function btn(parent, text, fn) { var b = document.createElement("button"); b.type = "button"; b.textContent = text; b.addEventListener("click", fn); parent.appendChild(b); return b; }
@@ -3009,24 +3017,40 @@ var Draw = (function () {
       });
       return ends;
     }
-    function draw() {
-      Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; });
-      Draw.wall(sc, R.wall, { grid: 0.5, clip: true });
+    function len() { return compare ? Math.max(AB[0].steps.length, AB[1].steps.length) : run.steps.length; }
+    function paint(S, r, TT, inset) {  // one run at time TT on scene S; returns the step shown
+      Object.keys(S.layers).forEach(function (k) { S.layers[k].textContent = ""; });
+      Draw.wall(S, R.wall, { grid: 0.5, clip: true });
       var used = {};
-      if (run.start) Object.keys(run.start).forEach(function (l) { if (run.start[l]) used[run.start[l]] = 1; });
-      run.steps.forEach(function (st) { if (st.to) used[st.to] = 1; });
-      R.holds.forEach(function (h) { Draw.hold(sc, h, { used: !!used[h.id], label: true }); });
-      if (!run.steps.length) { summary.textContent = ""; return; }
-      var i = Math.min(run.steps.length - 1, Math.floor(T)), u = Math.min(1, T - i), st = run.steps[i], P = pose(st, u);
-      var body = run.body, ends = hangEnds(body, P.torso, P.ends);
+      if (r.start) Object.keys(r.start).forEach(function (l) { if (r.start[l]) used[r.start[l]] = 1; });
+      r.steps.forEach(function (st) { if (st.to) used[st.to] = 1; });
+      R.holds.forEach(function (h) { Draw.hold(S, h, { used: !!used[h.id], label: true }); });
+      if (!r.steps.length) {
+        if (!inset) Draw.el(S.layers.over, "text", { x: S.W / 2, y: 24, "text-anchor": "middle" }, "limit-text").textContent =
+          "No beta: stuck at move " + (r.fail ? r.fail.step : "?");
+        return -1;
+      }
+      var i = Math.min(r.steps.length - 1, Math.floor(TT)), u = Math.min(1, TT - i), st = r.steps[i], P = pose(st, u);
+      var body = r.body, ends = hangEnds(body, P.torso, P.ends);
       var J = Draw.pose(body, P.torso, ends).joints, cls = {};
       if (P.air) cls[P.limb] = "limb-rest";
-      Draw.figure(sc, { torso: P.torso, joints: J, util: P.util }, { key: run.climber, head: run.head }, { util: true, bands: bands, limbClass: cls });
+      Draw.figure(S, { torso: P.torso, joints: J, util: P.util }, { key: r.climber, head: r.head }, { util: true, bands: bands, limbClass: cls });
       var shown = {}; Object.keys(P.forces).forEach(function (l) { if (P.ends[l]) shown[l] = P.forces[l]; });
-      Draw.forces(sc, { joints: J, forces: shown }, EX.force_scale);
-      Draw.com(sc, P.torso, st.frames.map(function (f) { return f.torso; }));
-      Draw.sideView(sc, { torso: P.torso, joints: J, forces: shown }, { key: run.climber, d_wall: run.d_wall }, EX.force_scale, { w: 104, h: 160, top: true });
-      Array.prototype.forEach.call(list.children, function (li, j) { li.classList.toggle("now", j === i); });
+      Draw.forces(S, { joints: J, forces: shown }, EX.force_scale);
+      Draw.com(S, P.torso, st.frames.map(function (f) { return f.torso; }));
+      if (inset) Draw.sideView(S, { torso: P.torso, joints: J, forces: shown }, { key: r.climber, d_wall: r.d_wall }, EX.force_scale, { w: 104, h: 160, top: true });
+      else Draw.el(S.layers.over, "text", { x: S.W / 2, y: 24, "text-anchor": "middle" }, "anno-strong").textContent =
+        TT >= r.steps.length - 1e-9 ? "at the top, " + r.steps.length + " moves" : "move " + (i + 1) + " of " + r.steps.length;
+      return i;
+    }
+    function draw() {
+      if (compare) {
+        AB.forEach(function (r, j) { paint(scAB[j], r, Math.min(T, r.steps.length), false); });
+      } else {
+        var i = paint(sc, run, T, true);
+        if (i < 0) return;
+        Array.prototype.forEach.call(list.children, function (li, j) { li.classList.toggle("now", j === i); });
+      }
       prog.value = String(T);
     }
     function setRun(r) {
@@ -3062,9 +3086,9 @@ var Draw = (function () {
       [prevB, playB, nextB].concat(spBtns).forEach(function (b) { b.disabled = !run.steps.length; });
       draw();
     }
-    function stepTo(j) { if (!run.steps.length) return; setPlaying(false); T = Math.max(0, Math.min(run.steps.length, j)); draw(); }
+    function stepTo(j) { if (!len()) return; setPlaying(false); T = Math.max(0, Math.min(len(), j)); draw(); }
     function setPlaying(on) {
-      if (on && T >= run.steps.length - 1e-6) T = 0;
+      if (on && T >= len() - 1e-6) T = 0;
       playing = on; last = null; playB.textContent = on ? "Pause" : "Play";
       playB.setAttribute("aria-pressed", on ? "true" : "false");
       if (on) requestAnimationFrame(tick);
@@ -3073,7 +3097,7 @@ var Draw = (function () {
       if (!playing) return;
       if (last != null) T += (ts - last) / 1000 / STEP_SECONDS * speed;
       last = ts;
-      if (T >= run.steps.length) { T = run.steps.length; draw(); setPlaying(false); return; }
+      if (T >= len()) { T = len(); draw(); setPlaying(false); return; }
       draw();
       requestAnimationFrame(tick);
     }
@@ -3082,17 +3106,46 @@ var Draw = (function () {
       if (e.target !== root) return;
       if (e.key === "ArrowRight") { e.preventDefault(); stepTo(Math.floor(T + 1e-6) + 1); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); stepTo(Math.ceil(T - 1e-6) - 1); }
-      else if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
+      else if (e.key === " ") { e.preventDefault(); if (len()) setPlaying(!playing); }
     });
     var whoBtns = EX.runs.map(function (r, j) {
-      var b = btn(who, "", function () { whoBtns.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); setRun(r); });
+      var b = btn(who, "", function () { if (compare) setCompare(false); whoBtns.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); setRun(r); });
       b.className = "cl-" + r.climber;
       var sw = document.createElement("span"); sw.className = "swatch"; b.appendChild(sw); b.appendChild(document.createTextNode(r.label));
       b.setAttribute("aria-pressed", j === 0 ? "true" : "false");
       return b;
     });
+    function cmpSummary() {
+      summary.textContent = "";
+      AB.forEach(function (r, j) {
+        var b = document.createElement("b"); b.textContent = r.label + ": ";
+        summary.appendChild(b);
+        summary.appendChild(document.createTextNode((r.status === "ok" ? r.steps.length + " moves, crux " + r.crux.toFixed(2) : "no beta") + (j === 0 ? ". " : ".")));
+      });
+    }
+    function setCompare(on) {
+      if (on && !scAB.length) {
+        [0, 1].forEach(function (j) {
+          var cell = document.createElement("div"); cell.className = "cmp-cell";
+          var sel = document.createElement("select"); sel.setAttribute("aria-label", (j ? "Right" : "Left") + " climber");
+          EX.runs.forEach(function (r, k) { var o = document.createElement("option"); o.value = String(k); o.textContent = r.label; sel.appendChild(o); });
+          sel.value = String(EX.runs.indexOf(AB[j]));
+          sel.addEventListener("change", function () { AB[j] = EX.runs[+sel.value]; T = 0; setPlaying(false); prog.max = String(Math.max(0.001, len())); cmpSummary(); draw(); });
+          var c = document.createElement("div"); c.className = "player-canvas";
+          cell.appendChild(sel); cell.appendChild(c); cmp.appendChild(cell);
+          scAB.push(Draw.scene(c, { x0: v.x0, y0: v.y0, x1: v.x1 - 0.6, y1: v.y1, k: 170, pad: 4, title: "Compare" }));
+        });
+      }
+      compare = on; setPlaying(false); T = 0;
+      cv.hidden = on; cmp.hidden = !on; who.hidden = on; list.hidden = on;
+      modeBtns.forEach(function (b, k) { b.setAttribute("aria-pressed", (k === 1) === on ? "true" : "false"); });
+      if (on) { prog.max = String(Math.max(0.001, len())); cmpSummary(); [prevB, playB, nextB].concat(spBtns).forEach(function (b) { b.disabled = !len(); }); draw(); }
+      else setRun(run);
+    }
+    var modeBtns = EX.runs.length > 1 && EX.compare !== false ? [btn(mode, "One climber", function () { setCompare(false); }), btn(mode, "Compare two", function () { setCompare(true); })] : [];
+    if (modeBtns.length) modeBtns[0].setAttribute("aria-pressed", "true"); else mode.hidden = true;
     setRun(EX.runs[0]);
-    return { setRun: setRun, select: function (j) { whoBtns[j].click(); }, onSelect: function (fn) { whoBtns.forEach(function (b, j) { b.addEventListener("click", function () { fn(j); }); }); } };
+    return { setRun: setRun, compare: setCompare, select: function (j) { whoBtns[j].click(); }, onSelect: function (fn) { whoBtns.forEach(function (b, j) { b.addEventListener("click", function () { fn(j); }); }); } };
   }
 
   function renderPlayerSection(X) {
