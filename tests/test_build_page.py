@@ -114,3 +114,15 @@ def test_reach_figure_embedded(html):
 
 def test_direction_figure_slots(html):
     assert 'data-draw="direction"' in html and 'data-draw="direction-reset"' in html
+
+
+def test_strength_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    data = json.loads(raw)
+    S = data["figures"]["strength"]
+    assert [r["climber"] for r in S["runs"]] == ["A", "B", "C"]
+    assert data["stance"]["strength"]["faces"] == 24
+    assert [b["key"] for b in data["stance"]["effort_bands"]] == ["easy", "hard", "limit", "fail"]
+    for slot in ("strength", "strength-bars", "strength-switch", "effort-table"):
+        assert f'data-draw="{slot}"' in html
+    assert "Planned · unit 2.3" not in html

@@ -226,3 +226,139 @@ def test_direction_rows_act_on_force_variables_only():
     assert np.all(G @ z <= 1e-12)
     z[lay[("f", "LH")]] = (0.5, 0.0)  # sideways on a jug is outside its 70 degrees
     assert np.any(G @ z > 0)
+
+
+# ------------------------------------------------------------ ③ strength
+from betasolver.model import BEN, CAL  # noqa: E402
+from betasolver.stance import (  # noqa: E402
+    EFFORT_BANDS, STRENGTH_AZIMUTHS, STRENGTH_ELEVATIONS, _corners, assemble, band, coverage, effort, solve,
+    strength_directions, strength_limit, strength_rows,
+)
+
+
+def test_polyhedron_has_24_faces_of_unit_length():
+    U = strength_directions()
+    assert U.shape == (STRENGTH_AZIMUTHS * len(STRENGTH_ELEVATIONS), 3) == (24, 3)
+    assert np.allclose(np.linalg.norm(U, axis=1), 1.0)
+    assert np.all(U[:, 2] > 0)  # every face leans toward the wall side
+
+
+def test_coverage_puts_the_polyhedron_inside_the_ball():
+    c = coverage()
+    corners = _corners(strength_directions()) * c
+    assert np.max(np.linalg.norm(corners, axis=1)) == pytest.approx(1.0)
+    # section 3.7: strength is understated by about 8% at most, never overstated
+    assert 0.07 < 1 - c < 0.09
+
+
+def test_polyhedron_is_between_two_balls():
+    # every force the rows allow is within the true limit; every force within c times the limit is allowed
+    U, c = strength_directions(), coverage()
+    rng = np.random.default_rng(3)
+    v = rng.normal(size=(20000, 3))
+    v[:, 2] = np.abs(v[:, 2])
+    v /= np.linalg.norm(v, axis=1)[:, None]
+    v *= rng.uniform(0, 1.2, size=(len(v), 1))
+    allowed = np.all(v @ U.T <= c + 1e-12, axis=1)
+    r = np.linalg.norm(v, axis=1)
+    assert np.all(r[allowed] <= 1 + 1e-9)
+    assert np.all(allowed[r <= c])
+
+
+def test_strength_limit_follows_the_grip():
+    b = make_body(AVA)
+    r = route(holds=[Hold("H1", 1.2, 1.6, "jug"), Hold("H2", 1.75, 1.55, "sidepull", dir=0),
+                     Hold("H3", 1.5, 3.6, "jug"), Hold("F1", 1.25, 0.45, "foot_chip")])
+    s = State("H1", "H2", "H1", "F1")
+    assert strength_limit(b, r, s, "LH") == AVA.F["jug"]
+    assert strength_limit(b, r, s, "RH") == AVA.F["pinch"]  # a sidepull uses the pinch limit
+    assert strength_limit(b, r, s, "LF") == AVA.F["foot"]   # a foot on a jug uses the foot limit
+    assert strength_limit(b, r, s, "RF") == AVA.F["foot"]
+
+
+def test_strength_rows_touch_own_force_and_t_only():
+    b, r, s = make_body(AVA), route(), State("H1", "H2", "F1", "F2")
+    A, AF = limb_sets(s, no_force="RH")
+    lay = layout(AF)
+    G, h, owner = strength_rows(b, r, s, AF, lay)
+    assert G.shape == (24 * len(AF), lay.size) and "RH" not in owner and np.all(h == 0)
+    for limb in AF:
+        rows = G[[i for i, o in enumerate(owner) if o == limb]]
+        out = "N" if limb[1] == "H" else "M"
+        cols = set(range(lay[("f", limb)].start, lay[("f", limb)].stop)) | {lay[(out, limb)].start, lay[("t", None)].start}
+        assert set(np.flatnonzero(np.any(rows != 0, axis=0))) == cols
+        assert np.allclose(rows[:, lay[("t", None)]], -coverage() * strength_limit(b, r, s, limb))
+
+
+def test_effort_of_the_plan_example():
+    # section 3.3: Ava, 0.45 on a crimp (limit 0.9) and 0.30 on a sloper (limit 0.35) -> t = 0.86, right hand
+    b = make_body(AVA)
+    r = route(holds=[Hold("H1", 1.2, 1.6, "crimp"), Hold("H2", 1.6, 1.65, "sloper"), Hold("H3", 1.5, 3.6, "jug")])
+    s = State("H1", "H2")
+    t, share, limiting = effort(b, r, s, {"LH": {"f": (0.0, 0.45)}, "RH": {"f": (0.0, 0.30)}})
+    assert share["LH"] == pytest.approx(0.5) and share["RH"] == pytest.approx(0.30 / 0.35)
+    assert t == pytest.approx(0.857, abs=1e-3) and limiting == "RH"
+    # the pull toward the wall counts against the same limit
+    t2, share2, _ = effort(b, r, s, {"LH": {"f": (0.0, 0.36), "n": 0.27}, "RH": {"f": (0.0, 0.30)}})
+    assert share2["LH"] == pytest.approx(0.5)
+
+
+def test_bands_read_t():
+    assert [band(v)["key"] for v in (0.3, 0.5, 0.7, 0.9, 1.0, 1.2)] == ["easy", "easy", "hard", "limit", "limit", "fail"]
+    assert EFFORT_BANDS[-1]["upto"] is None
+
+
+def _two_jugs():
+    holds = [Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, "jug"), Hold("H3", 1.5, 3.6, "jug"),
+             Hold("F1", 1.25, 0.6, "foot_big"), Hold("F2", 1.75, 0.6, "foot_big")]
+    return route(holds=holds)
+
+
+def test_lp_with_fixed_forces_is_a_little_conservative():
+    # step 10 preview: hanging evenly from two jugs, each hand takes 0.5, t = 0.5 / F_jug.
+    # Balance arrives in unit 2.4; here the forces are fixed and the LP only measures them.
+    r, s = _two_jugs(), State("H1", "H2")
+    for climber in (AVA, BEN, CAL):
+        b = make_body(climber)
+        forces = {"LH": {"f": (0.0, 0.5)}, "RH": {"f": (0.0, 0.5)}}
+        exact = 0.5 / climber.F["jug"]
+        assert effort(b, r, s, forces)[0] == pytest.approx(exact)
+        lp = solve(b, r, s, fixed=forces)
+        assert lp["ok"] and exact - 1e-9 <= lp["t"] <= exact / coverage() + 1e-9
+
+
+def test_lp_never_below_exact_effort():
+    r, s = _two_jugs(), State("H1", "H2", "F1", "F2")
+    b = make_body(AVA)
+    rng = np.random.default_rng(4)
+    for _ in range(200):
+        forces = {}
+        for limb in s.on():
+            a = math.radians(90 + rng.uniform(-50, 50))
+            m = rng.uniform(0, 0.6)
+            out = rng.uniform(0, 0.3)
+            forces[limb] = {"f": (m * math.cos(a), m * math.sin(a)), ("n" if limb[1] == "H" else "m"): out}
+        exact = effort(b, r, s, forces)[0]
+        lp = solve(b, r, s, fixed=forces)
+        assert lp["ok"]
+        assert exact - 1e-7 <= lp["t"] <= exact / coverage() + 1e-7
+
+
+def test_lp_rejects_a_force_outside_the_cone():
+    r, s = _two_jugs(), State("H1", "H2")
+    lp = solve(make_body(AVA), r, s, fixed={"LH": {"f": (0.5, 0.0)}, "RH": {"f": (0.0, 0.5)}})  # sideways on a jug
+    assert not lp["ok"]
+
+
+def test_lp_without_balance_carries_no_weight_yet():
+    # with only reach, direction and strength, nothing forces a limb to carry the body: t* = 0
+    lp = solve(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
+    assert lp["ok"] and lp["t"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_lp_size_matches_plan():
+    # section 3.7: about 17 variables and 180 constraints for a four-limb state
+    lay, G, h, owners = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
+    assert lay.size == 17 and G.shape == (len(h), 17)
+    assert {o[0] for o in owners} == {"reach", "direction", "strength"}
+    assert 150 <= len(h) <= 180

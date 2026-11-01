@@ -62,3 +62,32 @@ def test_body_figures_stand_on_the_ground():
         assert abs(f["reach"] - J["LH"]["end"][1]) < TOL
     ava, ben = figs[0], figs[1]
     assert ben["reach"] > ava["reach"]
+
+
+def test_strength_figure_matches_the_solver():
+    from betasolver.body import make_body
+    from betasolver.model import PROFILES
+    from betasolver.stance import State, effort, solve
+
+    S = legend.strength_figure()
+    route, state = legend.strength_route(), State(**S["state"])
+    assert [r["name"] for r in S["runs"]] == ["Ava", "Ben", "Cal"]
+    for r in S["runs"]:
+        b = make_body(PROFILES[r["climber"]])
+        t, share, limiting = effort(b, route, state, legend.STRENGTH_FORCES)
+        assert abs(r["t"] - t) < TOL and r["limiting"] == limiting
+        assert all(abs(r["frame"]["util"][l] - share[l]) < TOL for l in share)
+        assert abs(r["t_lp"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES)["t"]) < TOL
+        assert r["t"] - TOL <= r["t_lp"] <= r["t"] / S["coverage"] + TOL
+    by = {r["name"]: r for r in S["runs"]}
+    # the three readings of t: Ava near the limit on the sloper, Ben on the crimp, Cal too weak
+    assert by["Ava"]["band"] == "limit" and by["Ava"]["limiting"] == "RH"
+    assert by["Ben"]["band"] == "hard" and by["Ben"]["limiting"] == "LH"
+    assert by["Cal"]["band"] == "fail"
+
+
+def test_strength_example_forces_are_physical():
+    f = legend.STRENGTH_FORCES
+    assert abs(sum(v["f"][0] for v in f.values())) < 1e-9
+    assert abs(sum(v["f"][1] for v in f.values()) - 1.0) < 1e-9
+    assert abs(sum(v.get("n", 0) for v in f.values()) - sum(v.get("m", 0) for v in f.values())) < 1e-9
