@@ -62,6 +62,21 @@ def _uses(run, hold):
     return any(st["to"] == hold for st in run["steps"])
 
 
+def _states(run):
+    """Every state along a run's beta, the start included."""
+    st = dict(run["start"])
+    out = [dict(st)]
+    for step in run["steps"]:
+        st[step["limb"]] = step["to"]
+        out.append(dict(st))
+    return out
+
+
+def _feet_off(run):
+    """Does the climber ever hang with both feet off?"""
+    return any(s["LF"] is None and s["RF"] is None for s in _states(run))
+
+
 EXAMPLES: list = [
     Example(
         "ex1", "Halfway House",
@@ -175,6 +190,34 @@ EXAMPLES: list = [
              lambda R: all("F3" in (R[k]["start"]["LF"], R[k]["start"]["RF"]) for k in ("A", "B_flex"))),
             ("Both stiff climbers are stuck with both feet on the floor footholds",
              lambda R: all(R[k]["fail"]["state"][f] in ("F1", "F2") for k in ("B", "A_stiff") for f in ("LF", "RF"))),
+        ),
+    ),
+    Example(
+        "ex5", "Mind the Gap",
+        "No footholds under the rail: bridge across with a long body, or let the feet go.",
+        _route("ex5", "Mind the Gap", [
+            ("S1", 0.30, 1.90, "jug"), ("S2", 0.60, 1.90, "jug"),
+            ("R1", 1.05, 2.00, "jug"), ("R2", 1.52, 2.05, "jug"), ("R3", 1.98, 2.10, "jug"),
+            ("R4", 2.45, 2.15, "jug"), ("T", 2.65, 2.70, "jug"),
+            ("F1", 0.35, 0.50, "foot_big"), ("F2", 0.65, 0.95, "foot_big"),
+            ("F3", 2.45, 1.05, "foot_big"), ("F4", 2.70, 1.50, "foot_big")]),
+        ("A", "B", "C"),
+        {"A": "ok", "B": "ok", "C": "fail"},
+        (
+            "A traverse to the right along a rail of good jugs, R1 to R4, about 0.47 m apart. The footholds are at "
+            "both ends, and the wall under the rail is blank for almost 2 m.",
+            "{B.label} bridges the gap ({B.steps} moves, crux {B.crux}): with a foot still on the start footholds he "
+            "can already reach R2, and from there his right foot reaches F3 at the far end. He always has a foot on.",
+            "{A.label} is too small for that. She lets both feet go and swings across on her arms, matching each jug "
+            "({A.steps} moves, crux {A.crux}): every hand move hangs her whole weight on one jug, t = 1/1.2 = 0.83.",
+            "{C.label} can do neither. He is too short to bridge like Ben, and hanging on one jug, like Ava, needs "
+            "1/0.8 = 1.25 of his jug strength. The furthest he gets is a stretch from the start to R3 on one foot, and "
+            "there he is {C.fail}.",
+        ),
+        (
+            ("Ava hangs with both feet off at some point", lambda R: _feet_off(R["A"])),
+            ("Ben always keeps a foot on", lambda R: not _feet_off(R["B"])),
+            ("Ben's crux is lower than Ava's", lambda R: R["B"]["crux"] < R["A"]["crux"]),
         ),
     ),
 ]
