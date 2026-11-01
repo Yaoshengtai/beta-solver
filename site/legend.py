@@ -607,3 +607,29 @@ def result_cards() -> list:
 
 
 CAL_ = PROFILES["C"]
+
+
+
+# ------------------------------------------------------------ the linear program against the exact one
+
+def lp_figure() -> dict:
+    """Data for the comparison in #check: 500 random states, LP against the exact cone program."""
+    from betasolver.compare import compare, summary
+    from betasolver.stance import REACH_SIDES, State, assemble, coverage
+
+    records = compare()
+    both = [r for r in records if r["lp_ok"] and r["exact_ok"]]
+    pts = [[r["exact_t"], (r["lp_t"] - r["exact_t"]) / r["exact_t"]] for r in both if r["exact_t"] > 1e-9]
+    P = assemble(make_body(AVA), _route("size", [Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, "jug"),
+                                                  Hold("F1", 1.3, 0.9, "foot_big"), Hold("F2", 1.7, 0.95, "foot_big"),
+                                                  Hold("T", 1.5, 3.6, "jug")], ("H1", "H2")),
+                 State("H1", "H2", "F1", "F2"))
+    import math
+    return _round({
+        "summary": summary(records),
+        "points": pts,
+        "reach_loss": 1 - math.cos(math.pi / REACH_SIDES),
+        "strength_loss": 1 - coverage(),
+        "size": {"variables": P.layout.size, "inequalities": len(P.h), "equalities": len(P.b)},
+        "limit": 0.10,
+    })

@@ -671,3 +671,21 @@ def test_exact_is_never_above_the_lp():
 def test_exact_agrees_on_the_failure_examples():
     assert check(make_body(AVA), _hang(1.6, 2.2, "sidepull", dir=0), State("H1", "H1"), exact=True).reason == "balance"
     assert check(make_body(VARIANTS["A_stiff"]), _high_foot(1.45), State("H1", "H2", "F2", "F1"), exact=True).reason == "reach"
+
+
+
+# ------------------------------------------------------------ the linear program against the exact one
+from betasolver.compare import compare, summary  # noqa: E402
+
+
+def test_lp_against_exact_on_500_random_states():
+    # step 10: 500 random states; the LP's t* within 10% of the exact one, and the LP never
+    # holds a state the exact problem rejects
+    records = compare()  # n = 500 by default; same cache as the site build
+    S = summary(records)
+    assert S["n"] == 500 and S["both"] > 200
+    assert S["lp_only"] == 0
+    assert S["max_gap"] < 0.10 and S["min_gap"] >= -1e-6
+    for r in records:
+        if r["lp_ok"] and r["exact_ok"]:
+            assert r["lp_t"] >= r["exact_t"] - 1e-6

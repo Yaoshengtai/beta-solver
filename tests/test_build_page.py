@@ -158,3 +158,12 @@ def test_flex_figure_embedded(html):
 
 def test_full_problem_and_cards(html):
     assert 'data-math="full-problem"' in html and 'data-draw="result-cards"' in html and "Planned · unit 2.8" not in html
+
+
+
+def test_lp_comparison_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    L = json.loads(raw)["figures"]["lp"]
+    assert L["summary"]["n"] == 500 and L["summary"]["lp_only"] == 0 and L["summary"]["max_gap"] < 0.10
+    assert 'data-draw="lp-chart"' in html and "Planned · unit 2.9" not in html
+    assert "Planned · unit 2." not in html  # chapter 2 is complete

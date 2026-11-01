@@ -774,7 +774,21 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <div class="cards" data-draw="result-cards"></div>
   <p class="t-note">Each card is one state checked with the exact problem. Same marks as elsewhere: a red limb is the one the report blames.</p>
   <h3 id="check-lp">From cones to a linear program</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.9</span><p>Replacing circles and cones by polygons, and how close the linear program stays to the exact answer.</p></div>
+  <p><b>The idea.</b> The exact problem has discs and balls in it. A linear program is simpler and several times faster, and the search will solve many thousands of states. So every curved shape is replaced by a flat-sided one drawn inside it:</p>
+  <div class="tbl-wrap"><table class="tbl" data-draw="lp-table"></table></div>
+  <p data-text="lp-size"></p>
+  <p><b>Why the linear program can only be more cautious.</b> Every replacement shape lies inside the exact one. So any solution of the linear program is also a solution of the exact problem: the linear program never holds a state that the exact problem rejects, and its \(t^\star\) is never lower. In the other direction it gives away a little: a hold right at the edge of reach, or a limb right at its limit, may fail in the linear program while it holds exactly.</p>
+
+  <figure class="fig" id="fig-lp">
+    <div class="fig-main" data-draw="lp-chart"></div>
+    <figcaption><b>How far the linear program's \(t^\star\) is above the exact one</b>, for every random state that both can hold. Dashed line: the 10% the plan allows. Hover a dot for its values.</figcaption>
+  </figure>
+  <ul data-draw="lp-stats"></ul>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>Random states: one of Ava, Ben, Cal or Ava (less flexible); two random hand holds of any hand type (sometimes both hands on one); zero, one or two random footholds; and sometimes one resting limb. States that fail the prechecks are skipped. Each state goes to <code>solve</code> (HiGHS) and <code>solve_exact</code> (Clarabel). The test suite runs the same comparison and fails if the linear program ever holds a state the exact problem rejects, or if the gap ever reaches 10%. Code: <a data-src="src/betasolver/compare.py">compare.py</a>.</p>
+  </details>
 </section>
 
 <section class="chapter" id="move" data-group="The model" data-short="One move" hidden>
@@ -2432,6 +2446,68 @@ var Draw = (function () {
     });
   }
   if (DATA.figures && DATA.figures.cards) renderProblem(DATA.figures.cards, DATA.model.body);
+
+  /* ---------- #check: the linear program against the exact one (unit 2.9) ---------- */
+  function renderLP(L, S) {
+    var tb = document.querySelector('[data-draw="lp-table"]');
+    if (!tb) return;
+    function pc(x) { return (x * 100).toFixed(1) + "%"; }
+    tb.innerHTML = "<thead><tr><th>Constraint</th><th>Exact</th><th>In the linear program</th><th>Error</th></tr></thead>";
+    var body = document.createElement("tbody");
+    [["① Reach", "disc", "inscribed regular polygon with " + S.reach_sides + " sides", "reach up to " + pc(L.reach_loss) + " short (cautious)"],
+     ["② Direction", "cone in the plane", "the two edges as half-planes", "none"],
+     ["③ Strength", "ball (in-wall force and out-of-wall part)", S.strength.faces + "-face polyhedron, scaled by c = " + S.strength.coverage.toFixed(3), "strength up to " + pc(L.strength_loss) + " short (cautious)"],
+     ["④ ⑤ ⑥ Balance, flexibility", "linear", "as they are; |τ| ≤ rF as two rows", "none"]
+    ].forEach(function (r) {
+      var tr = document.createElement("tr");
+      r.forEach(function (t) { var td = document.createElement("td"); td.textContent = t; tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    tb.appendChild(body);
+    var M = L.summary;
+    document.querySelector('[data-text="lp-size"]').textContent =
+      "With all four limbs on, that is a linear program with " + L.size.variables + " unknowns, " + L.size.inequalities +
+      " inequalities and " + L.size.equalities + " equations. HiGHS solves one in about " + M.lp_ms.toFixed(1) +
+      " ms (median); the exact problem takes about " + M.exact_ms.toFixed(0) + " ms with Clarabel.";
+
+    var st = document.querySelector('[data-draw="lp-stats"]');
+    [["Random states checked both ways", String(M.n)],
+     ["Both hold a solution", String(M.both)],
+     ["Neither has a solution", String(M.neither)],
+     ["Linear program holds, exact rejects", String(M.lp_only) + (M.lp_only === 0 ? " (never, as it must be)" : "")],
+     ["Exact holds, linear program rejects", String(M.exact_only) + " (the cautious direction)"],
+     ["Gap in t*, where both hold", pc(M.min_gap) + " to " + pc(M.max_gap) + ", mean " + pc(M.mean_gap) + "; the plan allows " + pc(L.limit)]
+    ].forEach(function (r) {
+      var li = document.createElement("li"); var b = document.createElement("b"); b.textContent = r[0] + ": ";
+      li.appendChild(b); li.appendChild(document.createTextNode(r[1])); st.appendChild(li);
+    });
+
+    var slot = document.querySelector('[data-draw="lp-chart"]');
+    var W = 560, H = 250, mL = 52, mR = 18, mT = 14, mB = 42;
+    var xmax = Math.ceil(Math.max.apply(null, L.points.map(function (p) { return p[0]; })) * 2) / 2;
+    var ymax = Math.max(0.12, Math.ceil(M.max_gap * 50) / 50 + 0.02);
+    function X(t) { return mL + t / xmax * (W - mL - mR); }
+    function Y(g) { return H - mB - g / ymax * (H - mT - mB); }
+    var svg = Draw.el(slot, "svg", { viewBox: "0 0 " + W + " " + H, role: "img" }, "chart-svg");
+    Draw.el(svg, "title").textContent = "Gap between the linear program's t* and the exact t*, against the exact t*";
+    for (var g = 0; g <= ymax + 1e-9; g += 0.02) {
+      Draw.el(svg, "line", { x1: mL, y1: Y(g), x2: W - mR, y2: Y(g) }, "chart-grid");
+      Draw.el(svg, "text", { x: mL - 8, y: Y(g) + 4, "text-anchor": "end" }, "chart-tick").textContent = Math.round(g * 100) + "%";
+    }
+    for (var t = 0; t <= xmax + 1e-9; t += 0.5) Draw.el(svg, "text", { x: X(t), y: H - mB + 16, "text-anchor": "middle" }, "chart-tick").textContent = t.toFixed(1);
+    Draw.el(svg, "line", { x1: mL, y1: H - mB, x2: W - mR, y2: H - mB }, "chart-axis");
+    Draw.el(svg, "line", { x1: mL, y1: Y(L.limit), x2: W - mR, y2: Y(L.limit) }, "limit-line");
+    Draw.el(svg, "text", { x: W - mR, y: Y(L.limit) - 5, "text-anchor": "end" }, "limit-text").textContent = "limit " + pc(L.limit);
+    Draw.el(svg, "text", { x: (mL + W - mR) / 2, y: H - 6, "text-anchor": "middle" }, "chart-tick").textContent = "exact effort t*";
+    Draw.el(svg, "text", { x: 14, y: (mT + H - mB) / 2, "text-anchor": "middle", transform: "rotate(-90 14 " + (mT + H - mB) / 2 + ")" }, "chart-tick").textContent = "linear program above exact";
+    L.points.forEach(function (p) {
+      var gg = Draw.el(svg, "g", { tabindex: "0" }, "chart-pt");
+      Draw.el(gg, "title").textContent = "exact t* = " + p[0].toFixed(3) + ", linear program " + pc(p[1]) + " higher";
+      Draw.el(gg, "circle", { cx: X(p[0]), cy: Y(p[1]), r: 3.2 }, "chart-dot");
+      Draw.el(gg, "circle", { cx: X(p[0]), cy: Y(p[1]), r: 9 }, "chart-hit");
+    });
+  }
+  if (DATA.figures && DATA.figures.lp) renderLP(DATA.figures.lp, DATA.stance);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
