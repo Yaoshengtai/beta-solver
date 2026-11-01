@@ -23,8 +23,12 @@ scripts/            first_push.sh, sync.sh
 
 ```bash
 pip install -e ".[dev,exact]"
-pytest
+python -m betasolver.run_all             # solve every example -> site/results.json
+pytest --report site/test_report.json    # run the tests and write the report shown on the site
+python site/build_page.py                # build the site -> docs/index.html
 ```
+
+The solver is deterministic: `run_all` reproduces the committed `results.json` apart from timings and the date. Plain `pytest` runs the tests without writing a report.
 
 The `exact` extra (cvxpy) is only for the cross-check: the tests and the site build compare the hand-built cone program against the same problem written in cvxpy.
 

@@ -1,3 +1,4 @@
+"""The state check (step 3): every constraint, the cone program and the cross-check against cvxpy."""
 import pytest
 
 from betasolver.body import make_body
