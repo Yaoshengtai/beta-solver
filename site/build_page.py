@@ -70,6 +70,8 @@ def collect_data() -> dict:
             "bodies": legend.body_figures(),
             "state_example": legend.state_example(),
             "reach": legend.reach_figure(),
+            # the four typical holds of section 3.2; a sidepull faces right here
+            "direction_picks": [{"type": "jug"}, {"type": "sloper"}, {"type": "sidepull", "dir": 0}, {"type": "undercling"}],
         },
     }
 
