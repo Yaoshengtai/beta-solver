@@ -189,3 +189,91 @@ def test_cannot_let_go_means_s3_misses_d_a():
     assert min(math.dist(p, da) for p in poly) > L          # S3 and D_A do not meet
     assert min(math.dist(p, db) for p in poly) < L          # S3 and D_B do
     assert region(b, r, S, "RH", (2.6, 0.3)) == []          # a start point outside S3 gives nothing
+
+
+# ------------------------------------------------------------ cost, move types and candidates (unit 3.4)
+from betasolver.model import VARIANTS  # noqa: E402
+from betasolver.moves import COST, Checker, cost, crossed, distance, targets_for  # noqa: E402
+
+DEMO = [Hold("H1", 1.25, 1.95, "jug"), Hold("H2", 1.70, 1.90, "crimp"), Hold("H3", 1.15, 2.35, "pinch"),
+        Hold("H4", 1.95, 2.30, "sidepull", dir=180), Hold("H5", 1.55, 2.50, "jug"), Hold("H6", 2.05, 1.95, "sloper"),
+        Hold("H7", 1.05, 2.15, "crimp"),
+        Hold("F1", 1.25, 0.75, "foot_big"), Hold("F2", 1.70, 0.80, "foot_big"), Hold("F3", 1.45, 1.10, "foot_chip"),
+        Hold("F4", 1.95, 1.20, "foot_big"), Hold("F5", 1.00, 1.05, "foot_chip")]
+
+
+def test_crossed_hands():
+    r = route(DEMO)
+    assert not crossed(r, State("H1", "H2"))
+    assert crossed(r, State("H6", "H2"))                     # left hand 0.35 m right of the right hand
+    assert not crossed(r, State("H2", "H2"))                 # a match is not a cross
+    assert crossed(r, State("H1", "H7")) and COST["cross_gap"] == 0.10
+
+
+def test_cost_terms():
+    # section 4.4: w = max(t_release, t_catch) + c0 + lam_d |p_B - p_A| + w_cross [enters crossed] + c_cut [cut]
+    b, r = make_body(AVA), route(DEMO)
+    C = Checker(b, r)
+    s = State("H1", "H2", "F1", "F2")
+    plain = C.evaluate(Move(s, "RH", "H5"))
+    w = cost(r, AVA.w_cross, plain)
+    assert w["difficulty"] == pytest.approx(plain.difficulty) and w["step"] == COST["c0"]
+    assert w["distance"] == pytest.approx(COST["lam_d"] * distance(r, plain.move))
+    assert w["cross"] == 0 and w["cut"] == 0
+    assert w["total"] == pytest.approx(sum(v for k, v in w.items() if k != "total"))
+    cross = cost(r, AVA.w_cross, C.evaluate(Move(s, "RH", "H7")))
+    assert cross["cross"] == AVA.w_cross                     # entering a crossed state is penalised
+    out = cost(r, AVA.w_cross, C.evaluate(Move(State("H1", "H7", "F1", "F2"), "RH", "H2")))
+    assert out["cross"] == 0                                 # uncrossing is not
+    cut = cost(r, AVA.w_cross, C.evaluate(Move(s, "LF", None)))
+    assert cut["cut"] == COST["c_cut"] and cut["distance"] == 0
+
+
+def test_crossing_penalty_follows_the_climber():
+    b, r = make_body(AVA), route(DEMO)
+    res = Checker(b, r).evaluate(Move(State("H1", "H2", "F1", "F2"), "RH", "H7"))
+    lo, hi = cost(r, VARIANTS["A_cross0"].w_cross, res), cost(r, VARIANTS["A_cross4"].w_cross, res)
+    assert lo["cross"] == 0 and hi["cross"] == 0.4 and hi["total"] - lo["total"] == pytest.approx(0.4)
+
+
+def test_failed_move_has_no_cost():
+    b, r = make_body(AVA), route(DEMO)
+    res = Checker(b, r).evaluate(Move(State("H1", "H2", None, "F2"), "RH", "H5"))
+    assert not res.ok and cost(r, AVA.w_cross, res) is None
+
+
+def test_targets_follow_the_rules():
+    r = route(DEMO)
+    s = State("H1", "H2", "F1", "F2")
+    hands = targets_for(r, s, "RH")
+    assert "H2" not in hands and "H1" in hands               # a hand may match the other hand
+    assert not any(h.startswith("F") for h in hands if h)    # footholds are feet only
+    assert None not in hands                                 # hands never hang
+    feet = targets_for(r, s, "LF")
+    assert None in feet and "H3" in feet and "F2" in feet    # cut, hand holds and the other foot's hold
+    campus = Route("c", "c", "", DEMO + [Hold("T", 1.5, 3.6, "jug")], ("H1", "H2"), "T", allow_feet_on_handholds=False)
+    assert not any(h.startswith("H") for h in targets_for(campus, s, "LF") if h)
+
+
+def test_checker_caches_and_shares_the_release_check():
+    b, r = make_body(AVA), route(DEMO)
+    C = Checker(b, r)
+    s = State("H1", "H2", "F1", "F2")
+    C.evaluate(Move(s, "RH", "H3"))
+    n = C.solves
+    C.evaluate(Move(s, "RH", "H5"))                          # new catch check only; release and start are cached
+    assert C.solves == n + 2                                 # its catch check and its end state
+    C.evaluate(Move(s, "RH", "H5"))
+    assert C.solves == n + 2
+
+
+def test_pruned_candidates_are_really_impossible():
+    b, r = make_body(AVA), route(DEMO)
+    C = Checker(b, r)
+    cands = C.candidates(State("H1", "H2", "F1", "F2"))
+    kinds = {m.kind for m, _ in cands}
+    assert {"swap", "match", "cut"} <= kinds
+    pruned = [m for m, res in cands if res is None]
+    assert pruned
+    for m in pruned:
+        assert not check(b, r, m.new_state, no_force=m.limb).ok

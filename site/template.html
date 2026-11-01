@@ -360,6 +360,20 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .phase-strip li .tv { font-variant-numeric: tabular-nums; }
 .move-ctl { margin-top: 10px; }
 @media (max-width: 520px) { .phase-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cand-ok { fill: none; stroke: var(--easy); stroke-width: 2.6; cursor: pointer; }
+.cand-fail { fill: none; stroke: var(--limit); stroke-width: 2.6; cursor: pointer; }
+.cand-pruned { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 3 3; cursor: pointer; }
+.cand-sel { stroke-width: 4.5; }
+.cand-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cand-list button { font: inherit; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 3px 8px; cursor: pointer; }
+.cand-list button.ok { border-color: var(--easy); }
+.cand-list button.fail { border-color: var(--limit); }
+.cand-list button.pruned { color: var(--muted); border-style: dashed; }
+.cand-list button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; }
+.cost-tbl { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 8px; }
+.cost-tbl td { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.cost-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cost-tbl tr.total td { font-weight: 700; border-bottom: 0; }
 @media (max-width: 640px) { .bal-row { grid-template-columns: minmax(0, 1fr); } .bal-cell svg { max-width: 230px; } }
 details.impl { margin: 8px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
 details.impl summary { cursor: pointer; font-weight: 600; }
@@ -825,7 +839,34 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>\(S_3\) is convex, so it is star-shaped about any point inside it: its boundary is found by bisection along 72 rays from \(x_1\) (or \(x_2\)), each point a state check with the body held there and the moving hand in the air. Code: <a data-src="src/betasolver/moves.py">moves.py</a>, <code>region</code>.</p>
   </details>
   <h3 id="move-cost">Move cost and move types</h3>
-  <div class="planned"><span class="chip">Planned · unit 3.4</span><p>Swap, cut, place and match, and the small style penalties added to each move.</p></div>
+  <p>A move that works costs its difficulty plus a few small style terms, all in the units of \(t\):</p>
+  <div class="math-block">\[ \begin{aligned} w = {} & \max(t_{\text{release}}, t_{\text{catch}}) + c_0 + \lambda_d\, \|p_B - p_A\|_2 \\ & + w_{\text{cross}}\,[\text{enters crossed hands}] + c_{\text{cut}}\,[\text{a foot comes off}] \end{aligned} \]</div>
+  <div class="tbl-wrap"><table class="tbl" data-draw="cost-table"></table></div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Move</th><th>From \(\to\) to</th><th>Limbs</th><th>Checks</th></tr></thead>
+    <tbody>
+      <tr><td>Swap</td><td>hold \(\to\) another hold</td><td>hands, feet</td><td>release and catch</td></tr>
+      <tr><td>Match</td><td>hold \(\to\) a hold another limb is on</td><td>hands, feet</td><td>release and catch</td></tr>
+      <tr><td>Cut</td><td>hold \(\to\) hanging</td><td>feet</td><td>release</td></tr>
+      <tr><td>Place</td><td>hanging \(\to\) hold</td><td>feet</td><td>catch</td></tr>
+    </tbody>
+  </table></div>
+  <p>Two hands may share a hold, and two feet; a hand and a foot only if feet may use it. Hands never hang. <b>Candidates</b> for each limb are the holds it may use. Before any full check, a candidate is dropped if the new state fails the pairwise distance test or no body position meets reach and flexibility. The catch check runs first, since it fails most often; the release check depends only on the state and the limb, so it is done once and shared.</p>
+
+  <figure class="fig" id="fig-checker">
+    <div class="seg" role="group" aria-label="Start state" data-draw="checker-presets"></div>
+    <div class="seg" role="group" aria-label="Moving limb" data-draw="checker-limbs"></div>
+    <div class="fig-row">
+      <div class="fig-main" data-draw="checker"></div>
+      <div class="fig-key" data-draw="checker-detail"></div>
+    </div>
+    <div class="cand-list" data-draw="checker-list"></div>
+    <figcaption><b>Every move from one state.</b> Pick a start state and a limb; each hold it could go to is ringed: green works, red fails a check, grey was ruled out before checking. Click a ring or a list entry for the checks and the cost term by term.</figcaption>
+  </figure>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p data-text="checker-impl"></p>
+  </details>
 </section>
 
 <section class="chapter" id="search" data-group="The model" data-short="Finding the best beta" hidden>
@@ -2714,6 +2755,131 @@ var Draw = (function () {
     });
   }
   if (DATA.figures && DATA.figures.twochecks) renderTwoChecks(DATA.figures.twochecks);
+
+  /* ---------- #move: cost, move types, candidates (unit 3.4) ---------- */
+  function renderChecker(K) {
+    var slot = document.querySelector('[data-draw="checker"]');
+    if (!slot) return;
+    var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    var c = K.cost;
+    var ct = document.querySelector('[data-draw="cost-table"]');
+    ct.innerHTML = "<thead><tr><th>Term</th><th>Value</th><th>Prefers</th></tr></thead>";
+    var tb = document.createElement("tbody");
+    [["\\(c_0\\)", c.c0.toFixed(2) + " per move", "fewer moves"],
+     ["\\(\\lambda_d\\)", c.lam_d.toFixed(2) + " per metre", "shorter moves"],
+     ["\\(w_{\\text{cross}}\\)", "from the profile (" + K.climber.w_cross.toFixed(2) + " for " + K.climber.name + ")", "uncrossed hands: crossed means the left hand is over " + c.cross_gap.toFixed(2) + " m right of the right"],
+     ["\\(c_{\\text{cut}}\\)", c.c_cut.toFixed(2), "keeping the feet on"]
+    ].forEach(function (r) {
+      var tr = document.createElement("tr");
+      r.forEach(function (t, i) { var td = document.createElement("td"); td.textContent = t; if (i === 1) td.className = "num"; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    ct.appendChild(tb);
+
+    var v = K.view, byId = {};
+    K.holds.forEach(function (h) { byId[h.id] = h; });
+    var sc = Draw.scene(slot, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 180, pad: 4, title: "Candidate moves" });
+    var detail = document.querySelector('[data-draw="checker-detail"]');
+    var list = document.querySelector('[data-draw="checker-list"]');
+    var P = K.presets[0], limb = "RH", sel = null, limbBtns = [];
+    function tv(x) { return x == null ? "–" : x.toFixed(2); }
+    function fmt(x) { return x.toFixed(3); }
+
+    function showDetail(m) {
+      detail.textContent = "";
+      if (!m) { var hint = document.createElement("p"); hint.className = "t-note"; hint.textContent = "Click a ringed hold."; detail.appendChild(hint); return; }
+      var h = document.createElement("p"); h.className = "t-read";
+      var b = document.createElement("b");
+      b.className = m.status === "ok" ? "easy" : "fail";
+      b.textContent = (m.status === "ok" ? "✓ " : "✗ ") + m.describe;
+      h.appendChild(b);
+      h.appendChild(document.createTextNode(" (" + m.kind + ")"));
+      detail.appendChild(h);
+      var p = document.createElement("p"); p.className = "t-note";
+      if (m.status === "pruned") {
+        p.textContent = "Ruled out before checking: no body position reaches every hold of the new state.";
+      } else if (m.status === "fail") {
+        p.textContent = "Fails the " + m.failure.phase + " check: " + (DATA.stance.reasons[m.failure.reason] || m.failure.reason) +
+          (m.failure.limb ? " (" + NAMES[m.failure.limb] + (m.failure.hold ? ", " + m.failure.hold : "") + ")" : "") + ".";
+      } else {
+        var parts = [];
+        if (m.t_release != null) parts.push("release t = " + tv(m.t_release));
+        if (m.t_catch != null) parts.push("catch t = " + tv(m.t_catch));
+        var txt = parts.join(", ");
+        p.textContent = txt.charAt(0).toUpperCase() + txt.slice(1) + "." + (m.swing ? " A swing move: the last foot comes off or the first goes on." : "");
+      }
+      detail.appendChild(p);
+      if (m.cost) {
+        var t = document.createElement("table"); t.className = "cost-tbl";
+        [["Difficulty", m.cost.difficulty], ["Per move c₀", m.cost.step], ["Distance (" + m.distance.toFixed(2) + " m)", m.cost.distance],
+         ["Enters crossed hands", m.cost.cross], ["Foot comes off", m.cost.cut], ["Total w", m.cost.total]].forEach(function (r, i) {
+          var tr = document.createElement("tr"); if (i === 5) tr.className = "total";
+          var a = document.createElement("td"); a.textContent = r[0];
+          var n = document.createElement("td"); n.className = "num"; n.textContent = fmt(r[1]);
+          tr.appendChild(a); tr.appendChild(n); t.appendChild(tr);
+        });
+        detail.appendChild(t);
+      }
+    }
+    function draw() {
+      Object.keys(sc.layers).forEach(function (k) { sc.layers[k].textContent = ""; });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      var used = {};
+      Object.keys(P.state).forEach(function (l) { if (P.state[l]) used[P.state[l]] = true; });
+      K.holds.forEach(function (h) { Draw.hold(sc, h, { used: !!used[h.id], label: true }); });
+      Draw.figure(sc, { torso: P.torso, joints: P.joints }, { key: K.climber.key, head: K.climber.head }, {});
+      Draw.com(sc, P.torso);
+      var ms = P.moves.filter(function (m) { return m.limb === limb; });
+      ms.forEach(function (m) {
+        if (!m.to) return;
+        var h = byId[m.to];
+        var ring = Draw.el(sc.layers.over, "circle", { cx: sc.X(h.x), cy: sc.Y(h.y), r: 15, tabindex: "0", role: "button", "aria-label": m.describe + ": " + m.status },
+          "cand-" + m.status + (sel === m ? " cand-sel" : ""));
+        ring.addEventListener("click", function () { pick(m); });
+        ring.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(m); } });
+      });
+      list.textContent = "";
+      ms.forEach(function (m) {
+        var bt = document.createElement("button"); bt.type = "button"; bt.className = m.status;
+        bt.textContent = (m.to || "off") + (m.cost ? " · " + m.cost.total.toFixed(2) : m.status === "fail" ? " · fails" : " · ruled out");
+        bt.setAttribute("aria-pressed", sel === m ? "true" : "false");
+        bt.addEventListener("click", function () { pick(m); });
+        list.appendChild(bt);
+      });
+      showDetail(sel);
+    }
+    function pick(m) { sel = m; draw(); }
+    function setLimb(l) {
+      limb = l; sel = null;
+      limbBtns.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.limb === l ? "true" : "false"); });
+      var ms = P.moves.filter(function (m) { return m.limb === l && m.status === "ok"; });
+      sel = ms.length ? ms.reduce(function (a, m) { return m.cost.cross > 0 && !(a.cost.cross > 0) ? m : a; }, ms[0]) : null;
+      draw();
+    }
+    var pre = document.querySelector('[data-draw="checker-presets"]'), preBtns = [];
+    K.presets.forEach(function (q, i) {
+      var bt = document.createElement("button"); bt.type = "button"; bt.textContent = q.label;
+      bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      bt.addEventListener("click", function () {
+        preBtns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
+        P = q; setLimb(limb);
+      });
+      preBtns.push(bt); pre.appendChild(bt);
+    });
+    var lb = document.querySelector('[data-draw="checker-limbs"]');
+    ["LH", "RH", "LF", "RF"].forEach(function (l) {
+      var bt = document.createElement("button"); bt.type = "button"; bt.textContent = NAMES[l]; bt.dataset.limb = l;
+      bt.addEventListener("click", function () { setLimb(l); });
+      limbBtns.push(bt); lb.appendChild(bt);
+    });
+    var n = K.presets.map(function (q) { return q.moves.length; });
+    document.querySelector('[data-text="checker-impl"]').textContent =
+      "A cached Checker per climber and route keeps every state check by (state, no_force), so each candidate costs at most its catch check and the check of its new state; " +
+      K.presets.map(function (q) { return q.moves.length + " candidates from “" + q.label.toLowerCase() + "” took " + q.solves + " checks"; }).join(", ") +
+      ". The search reuses the same Checker. Code: moves.py, Checker, cost, targets_for.";
+    setLimb("RH");
+  }
+  if (DATA.figures && DATA.figures.checker) renderChecker(DATA.figures.checker);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

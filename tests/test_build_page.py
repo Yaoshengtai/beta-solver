@@ -197,3 +197,15 @@ def test_twochecks_figure_embedded(html):
     assert works["ok"] and works["x1"] and works["x2"] and len(works["S3"]) == 72
     assert not fails["ok"] and fails["x1"] is None and fails["x2"]
     assert 'data-draw="twochecks"' in html and "Planned · unit 3.3" not in html
+
+
+
+def test_checker_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    K = json.loads(raw)["figures"]["checker"]
+    moves = [m for p in K["presets"] for m in p["moves"]]
+    assert {m["status"] for m in moves} == {"ok", "fail", "pruned"}
+    assert any(m.get("cost") and m["cost"]["cross"] > 0 for m in moves)   # the crossing penalty shows up
+    assert any(m.get("cost") and m["cost"]["cut"] > 0 for m in moves)     # and the cut penalty
+    assert 'data-draw="checker"' in html and "Planned · unit 3.4" not in html
+    assert "Planned · unit 3." not in html                                 # chapter 3 is complete
