@@ -328,20 +328,22 @@ def test_lp_with_fixed_forces_is_a_little_conservative():
 
 
 def test_lp_never_below_exact_effort():
-    r, s = _two_jugs(), State("H1", "H2", "F1", "F2")
-    b = make_body(AVA)
+    # the polyhedron sits between the balls of radius c F and F, so for the LP's own forces
+    # exact share <= t_lp <= exact share / c
     rng = np.random.default_rng(4)
-    for _ in range(200):
-        forces = {}
-        for limb in s.on():
-            a = math.radians(90 + rng.uniform(-50, 50))
-            m = rng.uniform(0, 0.6)
-            out = rng.uniform(0, 0.3)
-            forces[limb] = {"f": (m * math.cos(a), m * math.sin(a)), ("n" if limb[1] == "H" else "m"): out}
-        exact = effort(b, r, s, forces)[0]
-        lp = solve(b, r, s, fixed=forces)
-        assert lp["ok"]
-        assert exact - 1e-7 <= lp["t"] <= exact / coverage() + 1e-7
+    b = make_body(AVA)
+    done = 0
+    for _ in range(60):
+        dx, dy = rng.uniform(-0.25, 0.25), rng.uniform(-0.15, 0.15)
+        holds = [Hold("H1", 1.25 + dx, 2.0 + dy, "crimp"), Hold("H2", 1.75 + dx, 2.0 - dy, "jug"),
+                 Hold("H3", 1.5, 3.6, "jug"), Hold("F1", 1.2 + rng.uniform(-0.2, 0.2), 0.7, "foot_big"),
+                 Hold("F2", 1.8 + rng.uniform(-0.2, 0.2), 0.8, "foot_chip")]
+        lp = solve(b, route(holds=holds), State("H1", "H2", "F1", "F2"))
+        if not lp["ok"]:
+            continue
+        done += 1
+        assert lp["t_exact"] - 1e-7 <= lp["t"] <= lp["t_exact"] / coverage() + 1e-7
+    assert done > 40
 
 
 def test_lp_rejects_a_force_outside_the_cone():
@@ -350,15 +352,82 @@ def test_lp_rejects_a_force_outside_the_cone():
     assert not lp["ok"]
 
 
-def test_lp_without_balance_carries_no_weight_yet():
-    # with only reach, direction and strength, nothing forces a limb to carry the body: t* = 0
-    lp = solve(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
-    assert lp["ok"] and lp["t"] == pytest.approx(0.0, abs=1e-9)
-
-
 def test_lp_size_matches_plan():
     # section 3.7: about 17 variables and 180 constraints for a four-limb state
-    lay, G, h, owners = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
-    assert lay.size == 17 and G.shape == (len(h), 17)
-    assert {o[0] for o in owners} == {"reach", "direction", "strength"}
-    assert 150 <= len(h) <= 180
+    P = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
+    assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (3, 17)
+    assert {o[0] for o in P.owners} == {"reach", "direction", "strength"}
+    assert {o[0] for o in P.eq_owners} == {"inplane"}
+    assert 150 <= len(P.h) + len(P.b) <= 180
+
+
+# ------------------------------------------------------------ ④ in-plane balance
+from betasolver.stance import balance_rows, moment  # noqa: E402
+
+
+def _hang(x=1.5, y=2.3, kind="jug", **kw):
+    return route(holds=[Hold("H1", x, y, kind, **kw), Hold("H3", 1.5, 3.6, "jug"),
+                        Hold("F1", 1.5, 1.2, "foot_big")], start_hands=("H1", "H1"))
+
+
+def test_one_hand_hang_puts_the_body_below_the_hand():
+    # step 10: one hand on a jug, no feet: x_c equals the hand's x, the hand force is (0, 1)
+    for climber in (AVA, BEN, CAL):
+        b = make_body(climber)
+        lp = solve(b, _hang(), State("H1", "H1"), no_force="RH")
+        assert lp["ok"]
+        assert lp["torso"][0] == pytest.approx(1.5, abs=1e-7)
+        assert lp["forces"]["LH"]["f"] == pytest.approx((0.0, 1.0), abs=1e-7)
+        assert lp["forces"]["LH"]["n"] == pytest.approx(0.0, abs=1e-7)
+        assert lp["t_exact"] == pytest.approx(1 / climber.F["jug"])
+
+
+def test_body_to_the_side_of_one_hand_cannot_balance():
+    b, r, s = make_body(AVA), _hang(), State("H1", "H1")
+    below = solve(b, r, s, no_force="RH")
+    y = below["torso"][1]
+    assert solve(b, r, s, no_force="RH", torso=(1.5, y))["ok"]
+    for dx in (-0.1, -0.02, 0.02, 0.1):
+        assert not solve(b, r, s, no_force="RH", torso=(1.5 + dx, y))["ok"]
+
+
+def test_two_jugs_share_the_weight():
+    # step 10: two jugs at the same height, no feet: half each, t = 0.5 / F_jug, body in the middle
+    lp = solve(make_body(AVA), _two_jugs(), State("H1", "H2"))
+    assert lp["ok"] and lp["torso"][0] == pytest.approx(1.5, abs=1e-7)
+    assert lp["forces"]["LH"]["f"][1] == pytest.approx(0.5, abs=1e-7)
+    assert lp["forces"]["RH"]["f"][1] == pytest.approx(0.5, abs=1e-7)
+    assert lp["t_exact"] == pytest.approx(0.5 / AVA.F["jug"], abs=1e-6)
+
+
+def test_sidepull_or_undercling_alone_cannot_balance():
+    # step 10: one sidepull and no feet fails; so does an undercling, until a foot is added
+    b = make_body(AVA)
+    assert not solve(b, _hang(1.6, 2.2, "sidepull", dir=0), State("H1", "H1"))["ok"]
+    assert not solve(b, _hang(1.5, 2.0, "undercling"), State("H1", "H1"))["ok"]
+    assert solve(b, _hang(1.5, 2.0, "undercling"), State("H1", "H1", "F1"))["ok"]
+
+
+def test_solution_satisfies_balance_about_any_point():
+    # the moment is taken about the origin; with zero net force it is the same about the centre of mass
+    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
+    lp = solve(b, r, s)
+    F = lp["forces"]
+    assert sum(v["f"][0] for v in F.values()) == pytest.approx(0.0, abs=1e-7)
+    assert sum(v["f"][1] for v in F.values()) == pytest.approx(1.0, abs=1e-7)
+    assert moment(r, s, F) == pytest.approx(lp["torso"][0], abs=1e-7)
+    xc, yc = lp["torso"]
+    about_com = sum((r.hold(s.hold(l)).x - xc) * v["f"][1] - (r.hold(s.hold(l)).y - yc) * v["f"][0] for l, v in F.items())
+    assert about_com == pytest.approx(0.0, abs=1e-7)
+
+
+def test_balance_rows_ignore_the_resting_limb():
+    r, s = _two_jugs(), State("H1", "H2", "F1", "F2")
+    A_, AF = limb_sets(s, no_force="LF")
+    lay = layout(AF)
+    A, bvec, names = balance_rows(r, s, AF, lay)
+    assert A.shape == (3, lay.size) and list(bvec) == [0.0, 1.0, 0.0] and len(names) == 3
+    assert A[2, lay[("x", None)].start] == -1.0
+    used = set(np.flatnonzero(np.any(A != 0, axis=0)))
+    allowed = {i for l in AF for i in range(lay[("f", l)].start, lay[("f", l)].stop)} | {lay[("x", None)].start}
+    assert used == allowed

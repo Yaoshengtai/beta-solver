@@ -91,3 +91,30 @@ def test_strength_example_forces_are_physical():
     assert abs(sum(v["f"][0] for v in f.values())) < 1e-9
     assert abs(sum(v["f"][1] for v in f.values()) - 1.0) < 1e-9
     assert abs(sum(v.get("n", 0) for v in f.values()) - sum(v.get("m", 0) for v in f.values())) < 1e-9
+
+
+def test_balance_figure_matches_the_solver():
+    B = legend.balance_figure()
+    hang, off, side = B["panels"]
+    assert hang["ok"] and abs(hang["torso"][0] - hang["hold_x"]) < TOL
+    assert hang["forces"]["LH"]["f"] == [0.0, 1.0] or max(abs(a - b) for a, b in zip(hang["forces"]["LH"]["f"], (0, 1))) < TOL
+    assert not off["ok"] and abs(off["shift"] - 0.2) < TOL
+    assert side["ok"] and abs(side["moment"] - side["torso"][0]) < TOL
+    f = side["forces"].values()
+    assert abs(sum(v["f"][0] for v in f)) < TOL and abs(sum(v["f"][1] for v in f) - 1) < TOL
+    # the sidepull pulls the hand outward, the foot pushes back
+    assert side["forces"]["RH"]["f"][0] > 0.1 and side["forces"]["RF"]["f"][0] < -0.1
+
+
+def test_solver_beats_the_fixed_strength_example():
+    for r in legend.balance_figure()["strength_again"]:
+        assert r["t"] < r["t_fixed"]
+        assert r["t"] - TOL <= r["t_lp"]
+
+
+def test_strength_figure_torso_is_balanced():
+    from betasolver.stance import State, moment
+    S = legend.strength_figure()
+    m = moment(legend.strength_route(), State(**S["state"]), legend.STRENGTH_FORCES)
+    for r in S["runs"]:
+        assert abs(r["frame"]["torso"][0] - m) < TOL

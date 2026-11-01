@@ -318,6 +318,19 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .t-read b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .t-read .easy { color: var(--easy); } .t-read .hard { color: var(--hard); } .t-read .limit, .t-read .fail { color: var(--limit); }
 .t-note { margin: 6px 0 0; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
+.bal-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.bal-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.bal-cell svg { width: 100%; height: auto; }
+.bal-cell .st { font-size: 0.85rem; font-weight: 600; }
+.bal-cell .st.ok { color: var(--easy); }
+.bal-cell .st.bad { color: var(--limit); }
+.bal-cell .note { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+.limb-rest { stroke: var(--muted); fill: var(--muted); stroke-dasharray: 5 4; opacity: 0.8; }
+.gravity { stroke: var(--force); fill: var(--force); stroke-width: 1.8; stroke-dasharray: 5 3; }
+.swing { stroke: var(--limit); fill: none; stroke-width: 2; }
+.swing-head { stroke: var(--limit); fill: var(--limit); stroke-width: 1; }
+.poly-f { stroke: var(--accent); fill: var(--accent); stroke-width: 2; }
+@media (max-width: 640px) { .bal-row { grid-template-columns: minmax(0, 1fr); } .bal-cell svg { max-width: 230px; } }
 details.impl { margin: 8px 0 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
 details.impl summary { cursor: pointer; font-weight: 600; }
 details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
@@ -638,7 +651,26 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>strength_rows</code>, <code>coverage</code>, <code>effort</code>, <code>solve</code>.</p>
   </details>
   <h3 id="check-inplane">In-plane balance</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.4</span><p>No falling, no sliding, no swinging.</p></div>
+  <p><b>The idea.</b> Seen from the front, the forces from the holds and gravity must cancel: no net force, so the climber neither falls nor slides sideways, and no net turning, so the body does not swing. Gravity is \((0, -1)\) in body weights, acting at the centre of mass \(x\).</p>
+  <p><b>The math.</b> Summing over the limbs that push:</p>
+  <div class="math-block">\[ \sum_{k \in A_F} f_k = (0,\ 1) \qquad \text{(no falling, no sliding)} \]</div>
+  <div class="math-block">\[ \sum_{k \in A_F} \big( p_{k,x}\, f_{k,y} - p_{k,y}\, f_{k,x} \big) = x_c \qquad \text{(no swinging)} \]</div>
+  <p><b>Force balance.</b> The holds together push up by exactly one body weight, and the sideways pushes cancel. A right hand on a sidepull that pulls the hand to the right needs another limb pushing to the left, such as a foot, or the body slides off sideways.</p>
+  <p><b>Moment balance.</b> The clearest case is hanging from one hand. Force balance makes that hand carry everything, \(f = (0, 1)\). The moment equation then reads \(p_x = x_c\): <b>the centre of mass must be right below the hand</b>. Anywhere else, the body swings back like a pendulum. With more limbs on, the idea is the same: together they must hold the body up without turning it.</p>
+  <p><b>Why moments about the wall origin.</b> About the origin, the hold positions \(p_k\) are known numbers, so the equation is linear in the unknowns \(f\) and \(x\). About the centre of mass it would contain \((p_k - x) \times f_k\), a product of two unknowns, and the problem would no longer be convex. The two give the same answer: when the forces add up to zero, the total moment is the same about every point.</p>
+
+  <figure class="fig" id="fig-balance">
+    <div class="bal-row" data-draw="balance"></div>
+    <figcaption><b>Balance in three cases, each solved by the state check.</b> Solid arrows: forces from the holds. Dashed arrow: gravity at the centre of mass. A dashed grey arm only touches its hold and carries nothing (<code>no_force</code>). In the third panel the arrows are also drawn head to tail: they close up, which is what "no net force" looks like.</figcaption>
+  </figure>
+
+  <h4 class="sub-h">Back to the strength example</h4>
+  <p data-text="balance-strength"></p>
+
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>The three equations are added as equality rows <code>A z = b</code>: one each for the sideways force, the vertical force and the moment, with \(-x_c\) moved to the left side. They are exact, with no approximation. Because the strength polyhedron has flat faces, several force splits can share the same optimal \(t\); some of them have two limbs squeezing sideways against each other for no reason. A second linear program therefore holds \(t\) at its optimum and minimises \(\sum_k |f_{k,x}| + \sum_k N_k + \sum_k M_k\). It never changes \(t\), only which of the equally good solutions is reported. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>balance_rows</code>, <code>moment</code>, <code>solve</code>, <code>_tidy</code>.</p>
+  </details>
   <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
   <div class="planned"><span class="chip">Planned · unit 2.5</span><p>The hands must pull the body in toward the wall; the pull-in force grows as the feet come up.</p></div>
   <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
@@ -1949,6 +1981,84 @@ var Draw = (function () {
     draw(S.runs[0]);
   }
   if (DATA.figures && DATA.figures.strength) renderStrength(DATA.figures.strength, DATA.stance.strength, DATA.stance.effort_bands);
+
+  /* ---------- #check: in-plane balance (unit 2.4) ---------- */
+  function renderBalance(B) {
+    var row = document.querySelector('[data-draw="balance"]');
+    if (!row) return;
+    var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    var v = B.view, C = B.climber, s = B.force_scale;
+    function pct(u) { return Math.round(u * 100 + 1e-6) + "%"; }
+    function m2(x) { return x.toFixed(2); }
+    var titles = { hang: "One hand", off: "Body to the side", sidepull: "Sidepull and foot" };
+
+    B.panels.forEach(function (P) {
+      var cell = document.createElement("div"); cell.className = "bal-cell";
+      var b = document.createElement("b"); b.textContent = titles[P.key]; cell.appendChild(b);
+      var sc = Draw.scene(cell, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 190, pad: 4, title: titles[P.key] });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      P.holds.forEach(function (h) { Draw.hold(sc, h, { used: true }); });
+      var cls = {}; cls[P.rest] = "limb-rest";
+      var frame = { torso: P.torso, joints: P.joints, forces: P.forces };
+      Draw.figure(sc, frame, { key: C.key, head: C.head }, { limbClass: cls });
+      Draw.forces(sc, frame, s);
+      var cx = sc.X(P.torso[0]), cy = sc.Y(P.torso[1]);
+      Draw.arrowPx(sc.layers.forces, cx, cy, cx, cy + s * sc.k, "gravity", 8);
+      Draw.com(sc, P.torso);
+
+      var st = document.createElement("span"), note = document.createElement("span");
+      st.className = "st " + (P.ok ? "ok" : "bad"); note.className = "note";
+      if (P.key === "hang") {
+        st.textContent = "✓ Holds";
+        note.textContent = "Centre of mass right below the hand: x_c = " + m2(P.torso[0]) + " m, hand at x = " + m2(P.hold_x) +
+          " m. The left hand carries (" + m2(P.forces.LH.f[0]) + ", " + m2(P.forces.LH.f[1]) + "), " + pct(P.share.LH) + " of its limit.";
+      } else if (P.key === "off") {
+        // the body would swing back toward the point below the hand
+        var hx = P.hold_x, hy = P.joints.LH.end[1];
+        var dx = P.torso[0] - hx, dy = P.torso[1] - hy, R = Math.hypot(dx, dy), a0 = Math.atan2(dy, dx), a1 = -Math.PI / 2 - 0.12;
+        var pts = [];
+        for (var i = 0; i <= 16; i++) { var a = a0 + (a1 - a0) * i / 16; pts.push([sc.X(hx + R * Math.cos(a)), sc.Y(hy + R * Math.sin(a))]); }
+        Draw.el(sc.layers.over, "path", { d: "M" + pts.map(function (p) { return p.join(" "); }).join("L") }, "swing");
+        var q = pts[pts.length - 2], e = pts[pts.length - 1];
+        Draw.arrowPx(sc.layers.over, q[0], q[1], e[0], e[1], "swing-head", 9);
+        // lever arm: from the line below the hand to the centre of mass
+        Draw.el(sc.layers.over, "line", { x1: sc.X(hx), y1: sc.Y(hy), x2: sc.X(hx), y2: sc.Y(P.torso[1] - 0.25) }, "anno-line");
+        Draw.el(sc.layers.over, "line", { x1: sc.X(hx), y1: sc.Y(P.torso[1] - 0.2), x2: sc.X(P.torso[0]), y2: sc.Y(P.torso[1] - 0.2) }, "anno-line");
+        Draw.el(sc.layers.over, "text", { x: sc.X((hx + P.torso[0]) / 2), y: sc.Y(P.torso[1] - 0.2) + 13, "text-anchor": "middle" }, "anno-strong").textContent = m2(P.shift) + " m";
+        st.textContent = "✗ Swings";
+        note.textContent = "The same hang with the centre of mass held " + m2(P.shift) + " m to the side. The hand force and gravity are equal and opposite but not in line, so they turn the body. The solver finds no forces that balance it.";
+      } else {
+        // head-to-tail: f_RH, f_RF, gravity, back to the start
+        var vecs = [], o = [v.x1 - 0.22, v.y0 + 0.1];
+        Object.keys(P.forces).forEach(function (l) { vecs.push([P.forces[l].f, "poly-f"]); });
+        vecs.push([[0, -1], "gravity"]);
+        // put the polygon's lowest point at o
+        var lo = 0, acc = 0;
+        vecs.forEach(function (w) { acc += w[0][1]; lo = Math.min(lo, acc); });
+        var cur = [o[0], o[1] - lo * s];
+        vecs.forEach(function (w) {
+          var nx = cur[0] + w[0][0] * s, ny = cur[1] + w[0][1] * s;
+          Draw.arrowPx(sc.layers.over, sc.X(cur[0]), sc.Y(cur[1]), sc.X(nx), sc.Y(ny), w[1], 7);
+          cur = [nx, ny];
+        });
+        Draw.el(sc.layers.over, "text", { x: sc.X(v.x1) - 6, y: sc.Y(o[1]) + 14, "text-anchor": "end" }, "anno").textContent = "head to tail: closed";
+        var lim = P.limiting;
+        st.textContent = "✓ Holds";
+        note.textContent = "The sidepull pulls the hand right, (" + m2(P.forces.RH.f[0]) + ", " + m2(P.forces.RH.f[1]) + "), and the foot pushes left, (" +
+          m2(P.forces.RF.f[0]) + ", " + m2(P.forces.RF.f[1]) + "). Sidepull " + pct(P.share.RH) + ", foot " + pct(P.share.RF) +
+          " of their limits. Moment " + m2(P.moment) + " = x_c " + m2(P.torso[0]) + ".";
+      }
+      cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+    });
+
+    var A = B.strength_again;
+    document.querySelector('[data-text="balance-strength"]').textContent =
+      "In the strength figure above, the forces were fixed by hand. With balance in, the solver chooses them. On the same four holds it spreads the load until every limb uses the same share of its limit: t = " +
+      A.map(function (r) { return m2(r.t) + " for " + r.name + " (" + m2(r.t_fixed) + " with the fixed forces)"; }).join(", ") +
+      ". Nothing yet makes the hands pull the body in toward the wall; they carry load only because sharing it lowers t. The out-of-wall balance in the next section changes that.";
+  }
+  if (DATA.figures && DATA.figures.balance) renderBalance(DATA.figures.balance);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

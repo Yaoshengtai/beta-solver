@@ -126,3 +126,11 @@ def test_strength_figure_embedded(html):
     for slot in ("strength", "strength-bars", "strength-switch", "effort-table"):
         assert f'data-draw="{slot}"' in html
     assert "Planned · unit 2.3" not in html
+
+
+def test_balance_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    B = json.loads(raw)["figures"]["balance"]
+    assert [p["key"] for p in B["panels"]] == ["hang", "off", "sidepull"]
+    assert 'data-draw="balance"' in html and 'data-text="balance-strength"' in html
+    assert "Planned · unit 2.4" not in html
