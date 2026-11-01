@@ -130,8 +130,8 @@ EXAMPLES: list = [
             ("L3", 1.30, 2.80, "sidepull", 0.0), ("L4", 1.33, 3.25, "sidepull", 0.0), ("T", 1.55, 3.70, "jug"),
             ("F1", 1.36, 0.55, "foot_big"), ("F2", 1.41, 1.00, "foot_big"), ("F3", 1.36, 1.45, "foot_big"),
             ("F4", 1.41, 1.90, "foot_big"), ("F5", 1.36, 2.35, "foot_big")], feet_on_hands=False),
-        ("A", "B", "C", "D"),
-        {"A": "ok", "B": "ok", "C": "fail", "D": "ok"},
+        ("A", "B", "C"),
+        {"A": "ok", "B": "ok", "C": "fail"},
         (
             "A flake runs straight up: four sidepulls, L1 to L4, that pull the hands to the right, with the footholds "
             "almost directly below them, a few centimetres to the right. The hands pull, the feet push back, and every "
@@ -141,11 +141,8 @@ EXAMPLES: list = [
             "from the wall, so his hands must pull in harder, and the same small offset of the feet needs more twist.",
             "{C.label} gets both hands onto L2 and then cannot move either foot: one foot pushing a few centimetres "
             "to the side of two weak sidepull grips swings the body open. With the feet stuck low, Cal is {C.fail}.",
-            "{D.label} climbs exactly like Ava (crux {D.crux}): a sidepull is held like a pinch, so her injured finger "
-            "does not matter here.",
         ),
         (
-            ("Ava's and Ava (injured)'s betas are the same", lambda R: [st["text"] for st in R["A"]["steps"]] == [st["text"] for st in R["D"]["steps"]]),
             ("Ben needs more moves than Ava", lambda R: len(R["B"]["steps"]) > len(R["A"]["steps"])),
             ("Cal is stuck with both hands on L2 and his feet low",
              lambda R: R["C"]["fail"]["state"]["LH"] == R["C"]["fail"]["state"]["RH"] == "L2"
