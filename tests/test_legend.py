@@ -77,8 +77,8 @@ def test_strength_figure_matches_the_solver():
         t, share, limiting = effort(b, route, state, legend.STRENGTH_FORCES)
         assert abs(r["t"] - t) < TOL and r["limiting"] == limiting
         assert all(abs(r["frame"]["util"][l] - share[l]) < TOL for l in share)
-        assert abs(r["t_lp"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES, upto="inplane")["t"]) < TOL
-        assert r["t"] - TOL <= r["t_lp"] <= r["t"] / S["coverage"] + TOL
+        assert abs(r["t_solver"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES, upto="inplane")["t"]) < TOL
+        assert abs(r["t_solver"] - r["t"]) < TOL
     by = {r["name"]: r for r in S["runs"]}
     # the three readings of t: Ava near the limit on the sloper, Ben on the crimp, Cal too weak
     assert by["Ava"]["band"] == "limit" and by["Ava"]["limiting"] == "RH"
@@ -109,7 +109,6 @@ def test_balance_figure_matches_the_solver():
 def test_solver_beats_the_fixed_strength_example():
     for r in legend.balance_figure()["strength_again"]:
         assert r["t"] < r["t_fixed"]
-        assert r["t"] - TOL <= r["t_lp"]
 
 
 def test_strength_figure_torso_is_balanced():

@@ -84,7 +84,7 @@ import math  # noqa: E402
 
 import numpy as np  # noqa: E402
 
-from betasolver.stance import REACH_SIDES, centres, reach_rows, reaches_all, torso_region  # noqa: E402
+from betasolver.stance import centres, reach_cones, reach_rows, reaches_all, torso_region  # noqa: E402
 
 
 def _region_contains(poly, p):
@@ -96,31 +96,31 @@ def _region_contains(poly, p):
     return True
 
 
-def test_reach_rows_are_the_inscribed_polygon():
+def test_reach_cones_are_the_discs():
+    # the solver uses the discs themselves: (L_k, p_k - o_k - x) in a second-order cone
     b, r, s = make_body(AVA), route(), State("H1", "H2", "F1", "F2")
-    G, h, owner = reach_rows(b, r, s)
-    assert G.shape == (4 * REACH_SIDES, 2) and len(owner) == 4 * REACH_SIDES
-    c = centres(b, r, s)["LH"]
-    L = b.L["LH"]
-    rows = [i for i, o in enumerate(owner) if o == "LH"]
-    # the polygon's vertices lie on the circle, its edge midpoints at L cos(pi/n)
-    for i in rows:
-        a = 2 * math.pi * rows.index(i) / REACH_SIDES
-        mid = (c[0] - L * math.cos(math.pi / REACH_SIDES) * math.cos(a), c[1] - L * math.cos(math.pi / REACH_SIDES) * math.sin(a))
-        assert G[i] @ mid == pytest.approx(h[i])
-    vert = (c[0] + L * math.cos(math.pi / REACH_SIDES), c[1] + L * math.sin(math.pi / REACH_SIDES))
-    assert np.all(G[rows] @ vert <= h[rows] + 1e-9)
+    lay = layout(limb_sets(s)[1])
+    blocks, owner = reach_cones(b, r, s, lay)
+    assert owner == ["LH", "RH", "LF", "RF"]
+    rng = np.random.default_rng(0)
+    for (A, bb), limb in zip(blocks, owner):
+        for x in rng.uniform([0.8, 0.2], [2.2, 1.8], size=(200, 2)):
+            z = np.zeros(lay.size)
+            z[lay[("x", None)]] = x
+            sv = bb - A @ z
+            assert (sv[0] >= np.hypot(sv[1], sv[2]) - 1e-12) == reaches_all(b, r, s, x)[limb]
 
 
-def test_polygon_is_conservative():
-    # every torso the polygon allows is truly within reach (never the other way round)
+def test_drawing_polygon_is_inside_the_discs():
+    # the polygon is only for drawing; every point it allows is truly within reach
     b, r, s = make_body(AVA), route(), State("H1", "H2", "F1", "F2")
-    G, h, _ = reach_rows(b, r, s)
+    G, h, owner = reach_rows(b, r, s, 16)
+    assert G.shape == (64, 2) and len(owner) == 64
     rng = np.random.default_rng(0)
     pts = rng.uniform([0.8, 0.2], [2.2, 1.8], size=(3000, 2))
-    inside_poly = np.all(pts @ G.T <= h, axis=1)
-    assert inside_poly.any()
-    for p in pts[inside_poly]:
+    inside = np.all(pts @ G.T <= h, axis=1)
+    assert inside.any()
+    for p in pts[inside]:
         assert all(reaches_all(b, r, s, p).values())
 
 
@@ -230,39 +230,7 @@ def test_direction_rows_act_on_force_variables_only():
 
 # ------------------------------------------------------------ ③ strength
 from betasolver.model import BEN, CAL  # noqa: E402
-from betasolver.stance import (  # noqa: E402
-    EFFORT_BANDS, STRENGTH_AZIMUTHS, STRENGTH_ELEVATIONS, _corners, assemble, band, coverage, effort, solve,
-    strength_directions, strength_limit, strength_rows,
-)
-
-
-def test_polyhedron_has_24_faces_of_unit_length():
-    U = strength_directions()
-    assert U.shape == (STRENGTH_AZIMUTHS * len(STRENGTH_ELEVATIONS), 3) == (24, 3)
-    assert np.allclose(np.linalg.norm(U, axis=1), 1.0)
-    assert np.all(U[:, 2] > 0)  # every face leans toward the wall side
-
-
-def test_coverage_puts_the_polyhedron_inside_the_ball():
-    c = coverage()
-    corners = _corners(strength_directions()) * c
-    assert np.max(np.linalg.norm(corners, axis=1)) == pytest.approx(1.0)
-    # section 3.7: strength is understated by about 8% at most, never overstated
-    assert 0.07 < 1 - c < 0.09
-
-
-def test_polyhedron_is_between_two_balls():
-    # every force the rows allow is within the true limit; every force within c times the limit is allowed
-    U, c = strength_directions(), coverage()
-    rng = np.random.default_rng(3)
-    v = rng.normal(size=(20000, 3))
-    v[:, 2] = np.abs(v[:, 2])
-    v /= np.linalg.norm(v, axis=1)[:, None]
-    v *= rng.uniform(0, 1.2, size=(len(v), 1))
-    allowed = np.all(v @ U.T <= c + 1e-12, axis=1)
-    r = np.linalg.norm(v, axis=1)
-    assert np.all(r[allowed] <= 1 + 1e-9)
-    assert np.all(allowed[r <= c])
+from betasolver.stance import EFFORT_BANDS, assemble, band, effort, solve, strength_cones, strength_limit  # noqa: E402
 
 
 def test_strength_limit_follows_the_grip():
@@ -276,18 +244,25 @@ def test_strength_limit_follows_the_grip():
     assert strength_limit(b, r, s, "RF") == AVA.F["foot"]
 
 
-def test_strength_rows_touch_own_force_and_t_only():
+def test_strength_cones_are_the_balls():
+    # (t F_k, f_k, N_k) in a second-order cone is exactly |(f_k, N_k)| <= t F_k
     b, r, s = make_body(AVA), route(), State("H1", "H2", "F1", "F2")
-    A, AF = limb_sets(s, no_force="RH")
+    A_, AF = limb_sets(s, no_force="RH")
     lay = layout(AF)
-    G, h, owner = strength_rows(b, r, s, AF, lay)
-    assert G.shape == (24 * len(AF), lay.size) and "RH" not in owner and np.all(h == 0)
-    for limb in AF:
-        rows = G[[i for i, o in enumerate(owner) if o == limb]]
+    blocks, owner = strength_cones(b, r, s, AF, lay)
+    assert owner == ["LH", "LF", "RF"]
+    rng = np.random.default_rng(3)
+    for (A, bb), limb in zip(blocks, owner):
         out = "N" if limb[1] == "H" else "M"
-        cols = set(range(lay[("f", limb)].start, lay[("f", limb)].stop)) | {lay[(out, limb)].start, lay[("t", None)].start}
-        assert set(np.flatnonzero(np.any(rows != 0, axis=0))) == cols
-        assert np.allclose(rows[:, lay[("t", None)]], -coverage() * strength_limit(b, r, s, limb))
+        F = strength_limit(b, r, s, limb)
+        for _ in range(200):
+            z = np.zeros(lay.size)
+            z[lay[("f", limb)]] = rng.normal(size=2)
+            z[lay[(out, limb)]] = abs(rng.normal())
+            z[lay[("t", None)]] = abs(rng.normal())
+            sv = bb - A @ z
+            total = np.linalg.norm([z[lay[("f", limb)].start], z[lay[("f", limb)].start + 1], z[lay[(out, limb)].start]])
+            assert (sv[0] >= np.linalg.norm(sv[1:]) - 1e-12) == (total <= z[lay[("t", None)].start] * F + 1e-12)
 
 
 def test_effort_of_the_plan_example():
@@ -314,54 +289,49 @@ def _two_jugs():
     return route(holds=holds)
 
 
-def test_lp_with_fixed_forces_is_a_little_conservative():
-    # step 10 preview: hanging evenly from two jugs, each hand takes 0.5, t = 0.5 / F_jug.
-    # Balance arrives in unit 2.4; here the forces are fixed and the LP only measures them.
+def test_solver_measures_fixed_forces_exactly():
+    # with the forces held fixed, the solver's t is exactly the largest share
     r, s = _two_jugs(), State("H1", "H2")
     for climber in (AVA, BEN, CAL):
         b = make_body(climber)
         forces = {"LH": {"f": (0.0, 0.5)}, "RH": {"f": (0.0, 0.5)}}
-        exact = 0.5 / climber.F["jug"]
-        assert effort(b, r, s, forces)[0] == pytest.approx(exact)
-        lp = solve(b, r, s, fixed=forces)
-        assert lp["ok"] and exact - 1e-9 <= lp["t"] <= exact / coverage() + 1e-9
+        res = solve(b, r, s, fixed=forces)
+        assert res["ok"] and res["t"] == pytest.approx(0.5 / climber.F["jug"], abs=1e-6)
 
 
-def test_lp_never_below_exact_effort():
-    # the polyhedron sits between the balls of radius c F and F, so for the LP's own forces
-    # exact share <= t_lp <= exact share / c
+def test_solver_t_is_the_largest_share():
     rng = np.random.default_rng(4)
     b = make_body(AVA)
     done = 0
-    for _ in range(60):
+    for _ in range(40):
         dx, dy = rng.uniform(-0.25, 0.25), rng.uniform(-0.15, 0.15)
         holds = [Hold("H1", 1.25 + dx, 2.0 + dy, "crimp"), Hold("H2", 1.75 + dx, 2.0 - dy, "jug"),
                  Hold("H3", 1.5, 3.6, "jug"), Hold("F1", 1.2 + rng.uniform(-0.2, 0.2), 0.7, "foot_big"),
                  Hold("F2", 1.8 + rng.uniform(-0.2, 0.2), 0.8, "foot_chip")]
-        lp = solve(b, route(holds=holds), State("H1", "H2", "F1", "F2"))
-        if not lp["ok"]:
+        res = solve(b, route(holds=holds), State("H1", "H2", "F1", "F2"))
+        if not res["ok"]:
             continue
         done += 1
-        assert lp["t_exact"] - 1e-7 <= lp["t"] <= lp["t_exact"] / coverage() + 1e-7
-    assert done > 40
+        assert max(res["share"].values()) == pytest.approx(res["t"], abs=1e-5)
+    assert done > 25
 
 
-def test_lp_rejects_a_force_outside_the_cone():
+def test_solver_rejects_a_force_outside_the_cone():
     r, s = _two_jugs(), State("H1", "H2")
-    lp = solve(make_body(AVA), r, s, fixed={"LH": {"f": (0.5, 0.0)}, "RH": {"f": (0.0, 0.5)}})  # sideways on a jug
-    assert not lp["ok"]
+    res = solve(make_body(AVA), r, s, fixed={"LH": {"f": (0.5, 0.0)}, "RH": {"f": (0.0, 0.5)}})  # sideways on a jug
+    assert not res["ok"]
 
 
-def test_lp_size_matches_plan():
-    # section 3.7: about 17 variables and 180 constraints for a four-limb state
+def test_program_size():
+    # 17 unknowns for a four-limb state; 6 balance equations; one reach cone per limb, one strength cone per pushing limb
     P = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"))
-    assert P.layout.size == 17 and P.G.shape == (len(P.h), 17) and P.A.shape == (6, 17)
-    assert {o[0] for o in P.owners} == {"reach", "direction", "strength", "outofwall", "barndoor", "flex"}
+    assert P.layout.size == 17 and P.A.shape == (6, 17) and P.G.shape == (len(P.h), 17)
+    assert [o[0] for o in P.cone_owners] == ["reach"] * 4 + ["strength"] * 4
+    assert {o[0] for o in P.owners} == {"sign", "direction", "outofwall", "barndoor", "flex"}
     assert {o[0] for o in P.eq_owners} == {"inplane", "outofwall", "barndoor"}
-    assert 150 <= len(P.h) + len(P.b) <= 185
     # a figure can ask for the model as it stood in an earlier section
     Q = assemble(make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2"), upto="inplane")
-    assert Q.A.shape == (3, 17) and {o[0] for o in Q.owners} == {"reach", "direction", "strength"}
+    assert Q.A.shape == (3, 17) and {o[0] for o in Q.owners} == {"sign", "direction"}
 
 
 # ------------------------------------------------------------ ④ in-plane balance
@@ -379,10 +349,10 @@ def test_one_hand_hang_puts_the_body_below_the_hand():
         b = make_body(climber)
         lp = solve(b, _hang(), State("H1", "H1"), no_force="RH")
         assert lp["ok"]
-        assert lp["torso"][0] == pytest.approx(1.5, abs=1e-7)
-        assert lp["forces"]["LH"]["f"] == pytest.approx((0.0, 1.0), abs=1e-7)
-        assert lp["forces"]["LH"]["n"] == pytest.approx(0.0, abs=1e-7)
-        assert lp["t_exact"] == pytest.approx(1 / climber.F["jug"])
+        assert lp["torso"][0] == pytest.approx(1.5, abs=1e-6)
+        assert lp["forces"]["LH"]["f"] == pytest.approx((0.0, 1.0), abs=1e-6)
+        assert lp["forces"]["LH"]["n"] == pytest.approx(0.0, abs=1e-6)
+        assert lp["t"] == pytest.approx(1 / climber.F["jug"])
 
 
 def test_body_to_the_side_of_one_hand_cannot_balance():
@@ -397,10 +367,10 @@ def test_body_to_the_side_of_one_hand_cannot_balance():
 def test_two_jugs_share_the_weight():
     # step 10: two jugs at the same height, no feet: half each, t = 0.5 / F_jug, body in the middle
     lp = solve(make_body(AVA), _two_jugs(), State("H1", "H2"))
-    assert lp["ok"] and lp["torso"][0] == pytest.approx(1.5, abs=1e-7)
-    assert lp["forces"]["LH"]["f"][1] == pytest.approx(0.5, abs=1e-7)
-    assert lp["forces"]["RH"]["f"][1] == pytest.approx(0.5, abs=1e-7)
-    assert lp["t_exact"] == pytest.approx(0.5 / AVA.F["jug"], abs=1e-6)
+    assert lp["ok"] and lp["torso"][0] == pytest.approx(1.5, abs=1e-6)
+    assert lp["forces"]["LH"]["f"][1] == pytest.approx(0.5, abs=1e-6)
+    assert lp["forces"]["RH"]["f"][1] == pytest.approx(0.5, abs=1e-6)
+    assert lp["t"] == pytest.approx(0.5 / AVA.F["jug"], abs=1e-6)
 
 
 def test_sidepull_or_undercling_alone_cannot_balance():
@@ -416,12 +386,12 @@ def test_solution_satisfies_balance_about_any_point():
     b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
     lp = solve(b, r, s)
     F = lp["forces"]
-    assert sum(v["f"][0] for v in F.values()) == pytest.approx(0.0, abs=1e-7)
-    assert sum(v["f"][1] for v in F.values()) == pytest.approx(1.0, abs=1e-7)
-    assert moment(r, s, F) == pytest.approx(lp["torso"][0], abs=1e-7)
+    assert sum(v["f"][0] for v in F.values()) == pytest.approx(0.0, abs=1e-6)
+    assert sum(v["f"][1] for v in F.values()) == pytest.approx(1.0, abs=1e-6)
+    assert moment(r, s, F) == pytest.approx(lp["torso"][0], abs=1e-6)
     xc, yc = lp["torso"]
     about_com = sum((r.hold(s.hold(l)).x - xc) * v["f"][1] - (r.hold(s.hold(l)).y - yc) * v["f"][0] for l, v in F.items())
-    assert about_com == pytest.approx(0.0, abs=1e-7)
+    assert about_com == pytest.approx(0.0, abs=1e-6)
 
 
 def test_balance_rows_ignore_the_resting_limb():
@@ -456,12 +426,12 @@ def test_pull_in_is_d_over_h(climber):
         assert lp["ok"], h
         N, M = lp["forces"]["LH"]["n"], lp["forces"]["LF"]["m"]
         assert N == pytest.approx(b.d_wall / h, rel=0.01)
-        assert M == pytest.approx(N, abs=1e-9)
+        assert M == pytest.approx(N, abs=1e-6)
 
 
 def test_no_feet_means_no_pull_in():
     lp = solve(make_body(AVA), _two_jugs(), State("H1", "H2"))
-    assert lp["ok"] and all(v["n"] == pytest.approx(0.0, abs=1e-9) for v in lp["forces"].values())
+    assert lp["ok"] and all(v["n"] == pytest.approx(0.0, abs=1e-6) for v in lp["forces"].values())
 
 
 def test_a_resting_foot_does_not_hold_the_body_off_the_wall():
@@ -470,7 +440,7 @@ def test_a_resting_foot_does_not_hold_the_body_off_the_wall():
     assert wall_distance(b, limb_sets(s)[1]) == b.d_wall
     assert wall_distance(b, limb_sets(s, no_force="LF")[1]) == 0.0
     lp = solve(b, r, s, no_force="LF")
-    assert lp["ok"] and all(v["n"] == pytest.approx(0.0, abs=1e-9) for v in lp["forces"].values())
+    assert lp["ok"] and all(v["n"] == pytest.approx(0.0, abs=1e-6) for v in lp["forces"].values())
 
 
 def test_solution_does_not_tip():
@@ -479,10 +449,10 @@ def test_solution_does_not_tip():
     F = lp["forces"]
     pull = sum(F[l]["n"] for l in ("LH", "RH"))
     push = sum(F[l]["m"] for l in ("LF", "RF"))
-    assert pull == pytest.approx(push, abs=1e-9) and pull > 0
+    assert pull == pytest.approx(push, abs=1e-6) and pull > 0
     y = {l: r.hold(s.hold(l)).y for l in s.on()}
     tip = sum(y[l] * F[l]["n"] for l in ("LH", "RH")) - sum(y[l] * F[l]["m"] for l in ("LF", "RF"))
-    assert tip == pytest.approx(b.d_wall, abs=1e-9)
+    assert tip == pytest.approx(b.d_wall, abs=1e-6)
 
 
 def test_pull_in_limit_of_each_hold():
@@ -494,7 +464,7 @@ def test_pull_in_limit_of_each_hold():
         if not lp["ok"]:
             continue
         f, N = lp["forces"]["LH"]["f"], lp["forces"]["LH"]["n"]
-        assert N <= HOLD_TYPES[kind].beta * f[1] + 1e-9
+        assert N <= HOLD_TYPES[kind].beta * f[1] + 1e-6
 
 
 def test_jug_to_sloper_makes_it_harder():
@@ -551,7 +521,7 @@ def test_grip_torque_allows_a_small_offset():
     b, s = make_body(AVA), State("H1", "H1", "F1", "F2")
     near = solve(b, _one_hand_two_feet(1.5, 1.6), s, no_force="RH")
     assert near["ok"] and abs(near["forces"]["LH"]["tau"]) > 1e-6
-    assert abs(near["forces"]["LH"]["tau"]) <= HOLD_TYPES["jug"].r * AVA.F["jug"] + 1e-9
+    assert abs(near["forces"]["LH"]["tau"]) <= HOLD_TYPES["jug"].r * AVA.F["jug"] + 1e-6
     assert not solve(b, _one_hand_two_feet(1.95, 2.05), s, no_force="RH")["ok"]
     # without the barn-door rows the far case would pass
     assert solve(b, _one_hand_two_feet(1.95, 2.05), s, no_force="RH", upto="outofwall")["ok"]
@@ -563,7 +533,7 @@ def test_solution_does_not_swing_open():
     F = lp["forces"]
     x = {l: r.hold(s.hold(l)).x for l in s.on()}
     total = sum(x[l] * F[l]["n"] + F[l]["tau"] for l in ("LH", "RH")) - sum(x[l] * F[l]["m"] for l in ("LF", "RF"))
-    assert total == pytest.approx(0.0, abs=1e-9)
+    assert total == pytest.approx(0.0, abs=1e-6)
 
 
 def test_barndoor_rows_shape():
@@ -606,7 +576,7 @@ def test_solution_keeps_feet_below_the_limit():
         lp = solve(b, r, s)
         assert lp["ok"]
         for limb in ("LF", "RF"):
-            assert r.hold(s.hold(limb)).y <= b.foot_limit(lp["torso"]) + 1e-9
+            assert r.hold(s.hold(limb)).y <= b.foot_limit(lp["torso"]) + 1e-6
 
 
 def test_a_resting_foot_must_also_get_there():
@@ -626,9 +596,7 @@ def test_flex_rows_shape():
 
 
 # ------------------------------------------------------------ the full check and its diagnosis
-from betasolver.stance import diagnose, solve_exact  # noqa: E402
-
-cp = pytest.importorskip("cvxpy")
+from betasolver.stance import diagnose  # noqa: E402
 
 
 def test_check_strength_failure_names_the_limb():
@@ -661,31 +629,13 @@ def test_no_force_limb_carries_nothing_but_must_reach():
     assert not bad.ok and bad.reason == "reach"
 
 
-def test_exact_is_never_above_the_lp():
-    b, r, s = make_body(AVA), _two_jugs(), State("H1", "H2", "F1", "F2")
-    lp, ex = solve(b, r, s), solve_exact(b, r, s)
-    assert lp["ok"] and ex["ok"] and ex["t"] <= lp["t"] + 1e-6
-    assert check(b, r, s, exact=True).ok
-
-
-def test_exact_agrees_on_the_failure_examples():
-    assert check(make_body(AVA), _hang(1.6, 2.2, "sidepull", dir=0), State("H1", "H1"), exact=True).reason == "balance"
-    assert check(make_body(VARIANTS["A_stiff"]), _high_foot(1.45), State("H1", "H2", "F2", "F1"), exact=True).reason == "reach"
-
-
-
-# ------------------------------------------------------------ the linear program against the exact one
+# ------------------------------------------------------------ cross-check against cvxpy
 from betasolver.compare import compare, summary  # noqa: E402
 
 
-def test_lp_against_exact_on_500_random_states():
-    # step 10: 500 random states; the LP's t* within 10% of the exact one, and the LP never
-    # holds a state the exact problem rejects
-    records = compare()  # n = 500 by default; same cache as the site build
-    S = summary(records)
-    assert S["n"] == 500 and S["both"] > 200
-    assert S["lp_only"] == 0
-    assert S["max_gap"] < 0.10 and S["min_gap"] >= -1e-6
-    for r in records:
-        if r["lp_ok"] and r["exact_ok"]:
-            assert r["lp_t"] >= r["exact_t"] - 1e-6
+def test_hand_built_program_matches_cvxpy():
+    # the cone program built row by row agrees with the same problem written directly in cvxpy
+    pytest.importorskip("cvxpy")
+    S = summary(compare())
+    assert S["n"] == 300 and S["both"] > 100
+    assert S["disagree"] == 0 and S["max_diff"] < 1e-4

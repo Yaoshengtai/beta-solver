@@ -1,9 +1,9 @@
-"""The linear program against the exact cone program (section 3.7, unit 2.9).
+"""Cross-checking the state check (unit 2.9).
 
-Random states on random holds, each checked both ways. The linear program
-replaces every disc and ball by a polygon or polyhedron inside it, so it can
-only be more cautious: it should never hold a state the exact program
-rejects, and its t* should stay within 10% of the exact one.
+Random states on random holds, each solved twice: by `stance.solve`, which
+builds the cone program by hand and calls Clarabel, and by
+`reference.solve_reference`, the same problem written directly in cvxpy.
+They should agree on every verdict and on t*.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ import numpy as np
 
 from .body import make_body
 from .model import PROFILES, VARIANTS, Hold, Route
-from .stance import State, precheck, solve, solve_exact
+from .reference import solve_reference
+from .stance import State, precheck, solve
 
 HAND_TYPES = ("jug", "crimp", "sloper", "pinch", "sidepull", "undercling")
 FOOT_TYPES = ("foot_big", "foot_chip")
@@ -53,10 +54,12 @@ def random_case(rng: np.random.Generator):
 
 
 @lru_cache(maxsize=4)
-def compare(n: int = 500, seed: int = 7) -> tuple:
-    """Check n random states (that pass the prechecks) with both programs.
+def compare(n: int = 300, seed: int = 7) -> tuple:
+    """Check n random states (that pass the prechecks) both ways.
 
-    Each record: climber key, lp_ok, lp_t, exact_ok, exact_t.
+    Each record: climber key, ok and t from the solver, ok and t from the
+    cvxpy reference, and the solver's time in milliseconds (one solve with
+    the second stage, as the site uses it, and one without).
     """
     rng = np.random.default_rng(seed)
     out = []
@@ -66,28 +69,28 @@ def compare(n: int = 500, seed: int = 7) -> tuple:
         if precheck(body, route, state, no_force) is not None:
             continue
         t0 = time.perf_counter()
-        lp = solve(body, route, state, no_force, tidy=False)
+        ours = solve(body, route, state, no_force, tidy=False)
         t1 = time.perf_counter()
-        ex = solve_exact(body, route, state, no_force)
+        solve(body, route, state, no_force)
         t2 = time.perf_counter()
-        out.append({"climber": climber.key, "lp_ok": lp["ok"], "lp_t": lp["t"] if lp["ok"] else None,
-                    "exact_ok": ex["ok"], "exact_t": ex["t"] if ex["ok"] else None,
-                    "lp_ms": 1000 * (t1 - t0), "exact_ms": 1000 * (t2 - t1)})
+        ref = solve_reference(body, route, state, no_force)
+        t3 = time.perf_counter()
+        out.append({"climber": climber.key, "ok": ours["ok"], "t": ours["t"] if ours["ok"] else None,
+                    "ref_ok": ref["ok"], "ref_t": ref["t"] if ref["ok"] else None,
+                    "ms": 1000 * (t1 - t0), "ms_tidy": 1000 * (t2 - t1), "ref_ms": 1000 * (t3 - t2)})
     return tuple(out)
 
 
 def summary(records) -> dict:
-    both = [r for r in records if r["lp_ok"] and r["exact_ok"]]
-    gaps = [(r["lp_t"] - r["exact_t"]) / r["exact_t"] for r in both if r["exact_t"] > 1e-9]
+    both = [r for r in records if r["ok"] and r["ref_ok"]]
+    diffs = [abs(r["t"] - r["ref_t"]) for r in both]
+    med = lambda k: float(np.median([r[k] for r in records]))
     return {
         "n": len(records),
         "both": len(both),
-        "neither": sum(1 for r in records if not r["lp_ok"] and not r["exact_ok"]),
-        "lp_only": sum(1 for r in records if r["lp_ok"] and not r["exact_ok"]),
-        "exact_only": sum(1 for r in records if r["exact_ok"] and not r["lp_ok"]),
-        "max_gap": max(gaps) if gaps else 0.0,
-        "mean_gap": float(np.mean(gaps)) if gaps else 0.0,
-        "min_gap": min(gaps) if gaps else 0.0,
-        "lp_ms": float(np.median([r["lp_ms"] for r in records])) if records and "lp_ms" in records[0] else None,
-        "exact_ms": float(np.median([r["exact_ms"] for r in records])) if records and "exact_ms" in records[0] else None,
+        "neither": sum(1 for r in records if not r["ok"] and not r["ref_ok"]),
+        "disagree": sum(1 for r in records if r["ok"] != r["ref_ok"]),
+        "max_diff": max(diffs) if diffs else 0.0,
+        "held": sum(1 for r in both if r["t"] <= 1.0),
+        "ms": med("ms"), "ms_tidy": med("ms_tidy"), "ref_ms": med("ref_ms"),
     }

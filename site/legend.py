@@ -220,12 +220,12 @@ def strength_figure() -> dict:
     """Data for the strength figure in #check: one state, fixed forces, three climbers.
 
     For each climber: the strength limit of every contact, each limb's share
-    of it, the effort t (exact), and t from the linear program with the forces
-    held fixed, which can only be a little higher (the polyhedron sits inside
-    the ball). Balance beyond the in-plane equations is left out: the fixed
-    forces are an illustration, and the wall distance differs per climber.
+    of it, and the effort t, both from the formula and from the solver with
+    the forces held fixed. Balance beyond the in-plane equations is left out:
+    the fixed forces are an illustration, and the wall distance differs per
+    climber.
     """
-    from betasolver.stance import EFFORT_BANDS, State, band, coverage, effort, solve, strength_limit, torso_region
+    from betasolver.stance import EFFORT_BANDS, State, band, effort, solve, strength_limit, torso_region
 
     route = strength_route()
     state = State("H1", "H2", "F1", "F2")
@@ -250,21 +250,26 @@ def strength_figure() -> dict:
                                  for l, F in STRENGTH_FORCES.items()},
                       "util": share},
             "limits": {l: strength_limit(body, route, state, l) for l in state.on()},
-            "t": t, "t_lp": lp["t"], "limiting": limiting, "band": band(t)["key"],
+            "t": t, "t_solver": lp["t"], "limiting": limiting, "band": band(t)["key"],
         })
     return _round({
         "holds": [{**h, "role": "normal"} for h in route.to_dict()["holds"] if h["id"] != "H3"],
         "state": state.as_dict(),
         "runs": runs,
         "bands": EFFORT_BANDS,
-        "coverage": coverage(),
         "force_scale": 0.25,
         "view": {"x0": 0.68, "y0": 0.4, "x1": 2.32, "y1": 2.42},
     })
 
 
 def mid_y(region, x: float, frac: float = 0.5) -> float:
-    """A point of the vertical extent of a convex polygon at a given x: 0 bottom, 0.5 middle, 1 top."""
+    """A point of the vertical extent of a convex polygon at a given x: 0 bottom, 0.5 middle, 1 top.
+
+    The solver can put the body right on the edge of a reach disc, a hair
+    outside the polygon drawn inside it, so x is clamped to the polygon.
+    """
+    xs = [q[0] for q in region]
+    x = min(max(x, min(xs) + 1e-6), max(xs) - 1e-6)
     ys = []
     n = len(region)
     for i in range(n):
@@ -318,7 +323,7 @@ def balance_figure() -> dict:
             "key": key, "ok": res is not None, "state": s1.as_dict(), "rest": "RH",
             "holds": [{**hang.to_dict()["holds"][0], "role": "normal"}],
             "torso": list(torso), "joints": body.joints(torso, ends1), "forces": forces,
-            "share": res["share"] if res else None, "t": res["t_exact"] if res else None,
+            "share": res["share"] if res else None, "t": res["t"] if res else None,
             "moment": moment(hang, s1, forces), "hold_x": hold1.x, "shift": torso[0] - hold1.x,
         })
 
@@ -334,7 +339,7 @@ def balance_figure() -> dict:
         "key": "sidepull", "ok": True, "state": s3.as_dict(), "rest": "LH",
         "holds": [{**h, "role": "normal"} for h in side.to_dict()["holds"] if h["id"] != "T"],
         "torso": list(torso3), "joints": body.joints(torso3, ends3), "forces": r3["forces"],
-        "share": r3["share"], "t": r3["t_exact"], "limiting": r3["limiting"],
+        "share": r3["share"], "t": r3["t"], "limiting": r3["limiting"],
         "moment": moment(side, s3, r3["forces"]),
     })
 
@@ -346,7 +351,7 @@ def balance_figure() -> dict:
         b = make_body(c)
         res = solve(b, route, state, upto=UPTO)
         again.append({"climber": key, "name": c.name, "t_fixed": effort(b, route, state, STRENGTH_FORCES)[0],
-                      "t": res["t_exact"], "t_lp": res["t"], "share": res["share"], "limiting": res["limiting"]})
+                      "t": res["t"], "share": res["share"], "limiting": res["limiting"]})
 
     return _round({
         "climber": {"key": AVA.key, "H": AVA.H, "head": list(body.head), "name": AVA.name},
@@ -403,7 +408,7 @@ def tipping_figure() -> dict:
         b = make_body(c)
         before = solve(b, route, s4, upto="inplane")
         after = solve(b, route, s4, upto="outofwall")
-        again.append({"climber": key, "name": c.name, "t_before": before["t_exact"], "t": after["t_exact"],
+        again.append({"climber": key, "name": c.name, "t_before": before["t"], "t": after["t"],
                       "pull": after["forces"]["LH"]["n"] + after["forces"]["RH"]["n"],
                       "share": after["share"], "limiting": after["limiting"]})
 
@@ -425,34 +430,29 @@ def _twist_needed(body, route, state, no_force):
     """Smallest grip torque that would hold the body, over every solution of the
     other constraints with t <= 1: min |sum p_x N - sum p_x M|."""
     import numpy as np
-    from scipy.optimize import linprog
 
     from betasolver.model import HANDS
-    from betasolver.stance import assemble, variable_bounds
+    from betasolver.stance import assemble, run
 
-    P = assemble(body, route, state, no_force, upto="outofwall")
-    lay, n = P.layout, P.layout.size
-    e = np.zeros(n)
+    P = assemble(body, route, state, no_force, upto="outofwall").add_columns(1)
+    lay, n = P.layout, P.n - 1
+    e = np.zeros(n + 1)
     for limb in state.on():
         if limb == no_force:
             continue
         x = route.hold(state.hold(limb)).x
-        if limb in HANDS:
-            e[lay[("N", limb)].start] = x
-        else:
-            e[lay[("M", limb)].start] = -x
-    G = np.hstack([P.G, np.zeros((len(P.G), 1))])
-    extra = np.zeros((3, n + 1))
-    extra[0, :n], extra[0, n] = e, -1.0
-    extra[1, :n], extra[1, n] = -e, -1.0
-    extra[2, lay[("t", None)].start] = 1.0
-    G = np.vstack([G, extra])
-    h = np.concatenate([P.h, [0.0, 0.0, 1.0]])
-    A = np.hstack([P.A, np.zeros((len(P.A), 1))])
+        e[lay[("N", limb)].start if limb in HANDS else lay[("M", limb)].start] = x if limb in HANDS else -x
+    for sign in (1.0, -1.0):
+        row = sign * e
+        row[n] = -1.0
+        P.add_ineq(row, 0.0, [("twist", None)])
+    row = np.zeros(n + 1)
+    row[lay[("t", None)].start] = 1.0
+    P.add_ineq(row, 1.0, [("twist", None)])
     c = np.zeros(n + 1)
     c[n] = 1.0
-    res = linprog(c, A_ub=G, b_ub=h, A_eq=A, b_eq=P.b, bounds=variable_bounds(lay) + [(0.0, None)], method="highs")
-    return float(res.x[n]) if res.status == 0 else None
+    z = run(P, c)
+    return None if z is None else max(0.0, float(z[n]))
 
 
 def barndoor_figure() -> dict:
@@ -482,7 +482,7 @@ def barndoor_figure() -> dict:
             "key": key, "ok": full["ok"],
             "holds": [{**h, "role": "normal"} for h in r.to_dict()["holds"] if h["id"] != "T"],
             "state": state.as_dict(), "rest": "RH", "torso": list(torso), "joints": body.joints(torso, ends),
-            "forces": base["forces"], "t": full["t_exact"] if full["ok"] else None,
+            "forces": base["forces"], "t": full["t"] if full["ok"] else None,
             "tau": full["forces"]["LH"]["tau"] if full["ok"] else None,
             "needed": _twist_needed(body, r, state, "RH"), "cap": cap,
             "hand_x": 1.50, "feet_x": list(feet),
@@ -534,7 +534,7 @@ def flex_figure() -> dict:
             "climber": c.key, "name": c.name, "flex": c.flex, "H": c.H, "ok": full["ok"],
             "torso": [x, y], "joints": body.joints(torso, ends), "head": list(body.head),
             "hip": y + body.offsets["LF"][1], "limit": body.foot_limit(torso), "foot": high,
-            "best_limit": body.foot_limit((x, hi)), "t": full["t_exact"] if full["ok"] else None,
+            "best_limit": body.foot_limit((x, hi)), "t": full["t"] if full["ok"] else None,
         })
     return _round({
         "holds": [{**h, "role": "normal"} for h in r.to_dict()["holds"] if h["id"] != "T"],
@@ -547,7 +547,7 @@ def flex_figure() -> dict:
 # ------------------------------------------------------------ the full problem: result cards
 
 def result_cards() -> list:
-    """A few preset states with the exact check's verdict: one that holds and one per failure reason."""
+    """A few preset states with the check's verdict: one that holds and one per failure reason."""
     from betasolver.model import VARIANTS
     from betasolver.stance import State, check
 
@@ -575,7 +575,7 @@ def result_cards() -> list:
     for key, climber, holds, state, no_force, text in cases:
         r = _route("card", holds + [Hold("T", 1.5, 3.6, "jug")], (state.LH, state.RH))
         body = make_body(climber)
-        res = check(body, r, state, no_force, exact=True)
+        res = check(body, r, state, no_force)
         if (res.reason or "holds") != key:
             raise ValueError(f"card {key}: got {res.reason}")
         ends = {l: (r.hold(h).x, r.hold(h).y) for l, h in state.as_dict().items() if h}
@@ -610,26 +610,19 @@ CAL_ = PROFILES["C"]
 
 
 
-# ------------------------------------------------------------ the linear program against the exact one
+# ------------------------------------------------------------ how the check is solved
 
-def lp_figure() -> dict:
-    """Data for the comparison in #check: 500 random states, LP against the exact cone program."""
+def solver_figure() -> dict:
+    """Data for the solver section in #check: problem size, solve time, and the cross-check against cvxpy."""
     from betasolver.compare import compare, summary
-    from betasolver.stance import REACH_SIDES, State, assemble, coverage
+    from betasolver.stance import State, assemble
 
-    records = compare()
-    both = [r for r in records if r["lp_ok"] and r["exact_ok"]]
-    pts = [[r["exact_t"], (r["lp_t"] - r["exact_t"]) / r["exact_t"]] for r in both if r["exact_t"] > 1e-9]
     P = assemble(make_body(AVA), _route("size", [Hold("H1", 1.25, 2.0, "jug"), Hold("H2", 1.75, 2.0, "jug"),
                                                   Hold("F1", 1.3, 0.9, "foot_big"), Hold("F2", 1.7, 0.95, "foot_big"),
                                                   Hold("T", 1.5, 3.6, "jug")], ("H1", "H2")),
                  State("H1", "H2", "F1", "F2"))
-    import math
     return _round({
-        "summary": summary(records),
-        "points": pts,
-        "reach_loss": 1 - math.cos(math.pi / REACH_SIDES),
-        "strength_loss": 1 - coverage(),
-        "size": {"variables": P.layout.size, "inequalities": len(P.h), "equalities": len(P.b)},
-        "limit": 0.10,
-    })
+        "summary": summary(compare()),
+        "size": {"variables": P.layout.size, "equalities": len(P.b), "inequalities": len(P.h),
+                 "cones": len(P.cones), "cone_sizes": sorted({len(Ak) for Ak, _ in P.cones})},
+    }) | {"max_diff": summary(compare())["max_diff"]}

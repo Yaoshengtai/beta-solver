@@ -121,7 +121,6 @@ def test_strength_figure_embedded(html):
     data = json.loads(raw)
     S = data["figures"]["strength"]
     assert [r["climber"] for r in S["runs"]] == ["A", "B", "C"]
-    assert data["stance"]["strength"]["faces"] == 24
     assert [b["key"] for b in data["stance"]["effort_bands"]] == ["easy", "hard", "limit", "fail"]
     for slot in ("strength", "strength-bars", "strength-switch", "effort-table"):
         assert f'data-draw="{slot}"' in html
@@ -161,9 +160,10 @@ def test_full_problem_and_cards(html):
 
 
 
-def test_lp_comparison_embedded(html):
+def test_solver_section_embedded(html):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
-    L = json.loads(raw)["figures"]["lp"]
-    assert L["summary"]["n"] == 500 and L["summary"]["lp_only"] == 0 and L["summary"]["max_gap"] < 0.10
-    assert 'data-draw="lp-chart"' in html and "Planned · unit 2.9" not in html
+    S = json.loads(raw)["figures"]["solver"]
+    assert S["summary"]["n"] == 300 and S["summary"]["disagree"] == 0
+    assert S["size"]["variables"] == 17 and S["size"]["cones"] == 8
+    assert 'data-draw="solver-stats"' in html
     assert "Planned · unit 2." not in html  # chapter 2 is complete

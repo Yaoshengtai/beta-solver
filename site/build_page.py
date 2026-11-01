@@ -57,13 +57,6 @@ def collect_data() -> dict:
             "unknowns": stance.UNKNOWNS,
             "constraints": stance.CONSTRAINTS,
             "reasons": stance.REASONS,
-            "reach_sides": stance.REACH_SIDES,
-            "strength": {
-                "azimuths": stance.STRENGTH_AZIMUTHS,
-                "elevations": list(stance.STRENGTH_ELEVATIONS),
-                "faces": len(stance.strength_directions()),
-                "coverage": round(stance.coverage(), 4),
-            },
             "effort_bands": stance.EFFORT_BANDS,
             "sizes": {
                 "four": stance.layout(("LH", "RH", "LF", "RF")).size,
@@ -83,7 +76,7 @@ def collect_data() -> dict:
             "barndoor": legend.barndoor_figure(),
             "flex": legend.flex_figure(),
             "cards": legend.result_cards(),
-            "lp": legend.lp_figure(),
+            "solver": legend.solver_figure(),
             # the four typical holds of section 3.2; a sidepull faces right here
             "direction_picks": [{"type": "jug"}, {"type": "sloper"}, {"type": "sidepull", "dir": 0}, {"type": "undercling"}],
         },

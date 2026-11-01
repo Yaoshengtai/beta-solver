@@ -6,10 +6,9 @@ find a body position and contact forces that satisfy six constraints, with
 the smallest effort t.
 
 This module holds the framework (states, unknowns, result type, checks done
-before any solving) and the constraints built so far: reach, direction,
-strength, in-plane balance, no tipping, no barn-door and flexibility,
-the linear program that puts them together, the exact cone program it
-approximates, and the check with its diagnosis of failures.
+before any solving), the six constraints, the second-order cone program that
+puts them together (solved with Clarabel), and the check with its diagnosis
+of failures.
 """
 
 from __future__ import annotations
@@ -195,9 +194,6 @@ def precheck(body: Body, route: Route, state: State, no_force: str | None = None
 
 # ------------------------------------------------------------ ① reach
 
-REACH_SIDES = 16  # the disc of each limb is replaced by an inscribed regular 16-gon
-
-
 def targets(body: Body, route: Route, state: State) -> dict:
     """Position of the hold each limb is on."""
     return {l: (route.hold(state.hold(l)).x, route.hold(state.hold(l)).y) for l in state.on()}
@@ -215,12 +211,13 @@ def reaches_all(body: Body, route: Route, state: State, torso, tol: float = 1e-9
     return {l: body.reaches(l, torso, pts[l], tol) for l in pts}
 
 
-def reach_rows(body: Body, route: Route, state: State, sides: int = REACH_SIDES):
-    """① as linear inequalities G x <= h in the torso position x = (x_c, y_c).
+def reach_rows(body: Body, route: Route, state: State, sides: int):
+    """The reach discs as polygons, for drawing only: G x <= h in the torso position x.
 
     For every limb k on a hold and every direction u_i of the polygon:
         u_i . (p_k - x - o_k) <= L_k cos(pi / sides)
     which is the inscribed regular polygon of the disc |p_k - x - o_k| <= L_k.
+    The state check itself uses the discs (`reach_cones`).
     """
     c = math.cos(math.pi / sides)
     rows, rhs, owner = [], [], []
@@ -232,6 +229,24 @@ def reach_rows(body: Body, route: Route, state: State, sides: int = REACH_SIDES)
             rhs.append(body.L[limb] * c - (u[0] * cx + u[1] * cy))
             owner.append(limb)
     return np.array(rows, dtype=float), np.array(rhs, dtype=float), owner
+
+
+def reach_cones(body: Body, route: Route, state: State, lay: Layout, skip: str | None = None):
+    """① as second-order cones: (L_k, p_k - o_k - x) in the cone, one block per limb on a hold.
+
+    In the solver's form a cone block is s = b - A z with s_0 >= |s_1..|; here
+    A puts +1 on x_c and y_c and b = (L_k, p_k - o_k).
+    """
+    blocks, owner = [], []
+    sx = lay[("x", None)].start
+    for limb, (cx, cy) in centres(body, route, state).items():
+        if limb == skip:
+            continue
+        A = np.zeros((3, lay.size))
+        A[1, sx], A[2, sx + 1] = 1.0, 1.0
+        blocks.append((A, np.array([body.L[limb], cx, cy])))
+        owner.append(limb)
+    return blocks, owner
 
 
 # ------------------------------------------------------------ ② direction
@@ -293,10 +308,10 @@ def _clip(poly, a, b, c):
 
 
 def torso_region(body: Body, route: Route, state: State, sides: int = 128) -> list:
-    """Every torso position from which all limbs reach their holds, as a polygon.
+    """Every torso position from which all limbs reach their holds, as a polygon, for drawing.
 
     This is the intersection of one disc per limb (centre p_k - o_k, radius
-    L_k), each replaced by an inscribed polygon with `sides` sides. An empty
+    L_k), each drawn as an inscribed polygon with `sides` sides. An empty
     list means no position reaches every hold. The intersection of discs is
     convex, which section 4.2 relies on.
     """
@@ -314,15 +329,6 @@ def torso_region(body: Body, route: Route, state: State, sides: int = 128) -> li
 
 # ------------------------------------------------------------ ③ strength
 
-# The ball |(f_k, N_k)| <= t F_k is replaced by a polyhedron: 8 directions in
-# the wall plane times 3 elevations toward the wall, with every other layer
-# turned by half a step. Each direction u gives one row u . (f_k, N_k) <= c t F_k.
-# Alone, those rows describe a polyhedron slightly larger than the ball; the
-# coverage factor c shrinks it until its farthest corner touches the ball, so
-# the solver never credits a limb with more strength than it has.
-STRENGTH_AZIMUTHS = 8
-STRENGTH_ELEVATIONS = (5.0, 35.0, 70.0)
-
 # Reading the effort t (section 3.3): upper end of each band and its name.
 EFFORT_BANDS = [
     {"upto": 0.5, "key": "easy", "name": "easy"},
@@ -330,48 +336,6 @@ EFFORT_BANDS = [
     {"upto": 1.0, "key": "limit", "name": "near the limit"},
     {"upto": None, "key": "fail", "name": "cannot hold: not strong enough"},
 ]
-
-
-def strength_directions(azimuths: int = STRENGTH_AZIMUTHS, elevations=STRENGTH_ELEVATIONS) -> np.ndarray:
-    """Unit vectors u = (in-wall x, in-wall y, toward/away from the wall) of the polyhedron's faces."""
-    out = []
-    for j, e in enumerate(elevations):
-        e = math.radians(e)
-        turn = math.pi / azimuths if j % 2 else 0.0
-        for i in range(azimuths):
-            a = 2 * math.pi * i / azimuths + turn
-            out.append((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)))
-    return np.array(out)
-
-
-def _corners(U: np.ndarray) -> np.ndarray:
-    """Corners of {v : U v <= 1, v_z >= 0} (the out-of-wall part is never negative)."""
-    A = np.vstack([U, [0.0, 0.0, -1.0]])
-    b = np.r_[np.ones(len(U)), 0.0]
-    pts = []
-    n = len(A)
-    for i in range(n):
-        for j in range(i + 1, n):
-            for k in range(j + 1, n):
-                M = A[[i, j, k]]
-                if abs(np.linalg.det(M)) < 1e-9:
-                    continue
-                v = np.linalg.solve(M, b[[i, j, k]])
-                if np.all(A @ v <= b + 1e-9):
-                    pts.append(v)
-    return np.array(pts)
-
-
-_COVERAGE: dict = {}
-
-
-def coverage(azimuths: int = STRENGTH_AZIMUTHS, elevations=STRENGTH_ELEVATIONS) -> float:
-    """Coverage factor c: with rows U v <= c the polyhedron's farthest corner is exactly at |v| = 1."""
-    key = (azimuths, tuple(elevations))
-    if key not in _COVERAGE:
-        U = strength_directions(azimuths, elevations)
-        _COVERAGE[key] = 1.0 / float(np.max(np.linalg.norm(_corners(U), axis=1)))
-    return _COVERAGE[key]
 
 
 def strength_limit(body: Body, route: Route, state: State, limb: str) -> float:
@@ -385,22 +349,22 @@ def _normal(limb: str) -> str:
     return "N" if limb in HANDS else "M"
 
 
-def strength_rows(body: Body, route: Route, state: State, AF: tuple[str, ...], lay: Layout):
-    """③ as linear inequalities G z <= 0: u . (f_k, N_k or M_k) - c F_k t <= 0 for every face u."""
-    U, c = strength_directions(), coverage()
-    rows, owner = [], []
+def strength_cones(body: Body, route: Route, state: State, AF: tuple[str, ...], lay: Layout):
+    """③ as second-order cones: (t F_k, f_k, N_k or M_k) in the cone, one block per pushing limb.
+
+    In the solver's form s = b - A z: A = -(F_k on t, 1 on f_kx, f_ky and the
+    out-of-wall unknown), b = 0.
+    """
+    blocks, owner = [], []
     for limb in AF:
-        F = strength_limit(body, route, state, limb)
-        sf, sn, st = lay[("f", limb)], lay[(_normal(limb), limb)], lay[("t", None)]
-        for u in U:
-            row = np.zeros(lay.size)
-            row[sf] = u[:2]
-            row[sn] = u[2]
-            row[st] = -c * F
-            rows.append(row)
-            owner.append(limb)
-    G = np.array(rows, dtype=float).reshape(len(rows), lay.size)
-    return G, np.zeros(len(rows)), owner
+        A = np.zeros((4, lay.size))
+        A[0, lay[("t", None)].start] = -strength_limit(body, route, state, limb)
+        sf = lay[("f", limb)]
+        A[1, sf.start], A[2, sf.start + 1] = -1.0, -1.0
+        A[3, lay[(_normal(limb), limb)].start] = -1.0
+        blocks.append((A, np.zeros(4)))
+        owner.append(limb)
+    return blocks, owner
 
 
 def effort(body: Body, route: Route, state: State, forces: dict) -> tuple[float, dict, str | None]:
@@ -533,16 +497,15 @@ def flex_rows(body: Body, route: Route, state: State, lay: Layout):
     return G, np.array(rhs, dtype=float), owner
 
 
-# ------------------------------------------------------- the linear program
+# ------------------------------------------------------- sign of the unknowns
 
-def variable_bounds(lay: Layout) -> list:
-    """N, M and t are never negative; the body position, forces and grip torques are free."""
-    b = [(None, None)] * lay.size
-    for (name, _), sl in lay.index.items():
-        if name in ("N", "M", "t"):
-            for i in range(sl.start, sl.stop):
-                b[i] = (0.0, None)
-    return b
+def sign_rows(lay: Layout):
+    """N, M and t are never negative: -z_i <= 0. The body position, forces and grip torques are free."""
+    cols = [i for (name, _), sl in lay.index.items() if name in ("N", "M", "t") for i in range(sl.start, sl.stop)]
+    G = np.zeros((len(cols), lay.size))
+    for r, i in enumerate(cols):
+        G[r, i] = -1.0
+    return G, np.zeros(len(cols))
 
 
 # ------------------------------------------------------------ ④ in-plane balance
@@ -581,19 +544,63 @@ def moment(route: Route, state: State, forces: dict) -> float:
     return out
 
 
-# ------------------------------------------------------- the linear program
+# ------------------------------------------------------- the cone program
 
-@dataclass(frozen=True)
+@dataclass
 class Program:
-    """The state check as a linear program: minimise t subject to G z <= h and A z = b."""
+    """The state check as a second-order cone program over z (and any extra columns):
+
+        minimise c . z   subject to   A z = b,   G z <= h,   b_k - A_k z in a second-order cone
+    """
 
     layout: Layout
-    G: np.ndarray
-    h: np.ndarray
-    owners: list  # (constraint, limb) of each row of G
+    n: int
     A: np.ndarray
     b: np.ndarray
-    eq_owners: list  # (constraint, name) of each row of A
+    eq_owners: list   # (constraint, name) of each row of A
+    G: np.ndarray
+    h: np.ndarray
+    owners: list      # (constraint, limb) of each row of G
+    cones: list       # (A_k, b_k) blocks
+    cone_owners: list  # (constraint, limb) of each block
+
+    def add_columns(self, k: int) -> "Program":
+        pad = lambda M: np.hstack([M, np.zeros((len(M), k))])
+        return Program(self.layout, self.n + k, pad(self.A), self.b, list(self.eq_owners), pad(self.G), self.h,
+                       list(self.owners), [(pad(Ak), bk) for Ak, bk in self.cones], list(self.cone_owners))
+
+    def add_eq(self, A, b, owners) -> None:
+        self.A = np.vstack([self.A, np.atleast_2d(A)])
+        self.b = np.concatenate([self.b, np.atleast_1d(b)])
+        self.eq_owners += owners
+
+    def add_ineq(self, G, h, owners) -> None:
+        self.G = np.vstack([self.G, np.atleast_2d(G)])
+        self.h = np.concatenate([self.h, np.atleast_1d(h)])
+        self.owners += owners
+
+
+def run(P: Program, c: np.ndarray):
+    """Solve with Clarabel. Returns the solution z, or None if the program has no solution."""
+    import clarabel
+    from scipy import sparse
+
+    blocks, rhs, cones = [], [], []
+    if len(P.A):
+        blocks.append(P.A); rhs.append(P.b); cones.append(clarabel.ZeroConeT(len(P.A)))
+    if len(P.G):
+        blocks.append(P.G); rhs.append(P.h); cones.append(clarabel.NonnegativeConeT(len(P.G)))
+    for Ak, bk in P.cones:
+        blocks.append(Ak); rhs.append(bk); cones.append(clarabel.SecondOrderConeT(len(Ak)))
+    A = sparse.csc_matrix(np.vstack(blocks))
+    settings = clarabel.DefaultSettings()
+    settings.verbose = False
+    solver = clarabel.DefaultSolver(sparse.csc_matrix((P.n, P.n)), np.asarray(c, dtype=float), A,
+                                    np.concatenate(rhs), cones, settings)
+    sol = solver.solve()
+    if str(sol.status) not in ("Solved", "AlmostSolved"):
+        return None
+    return np.array(sol.x)
 
 
 # The constraint families in the order they are built; `upto` stops after one of them.
@@ -601,7 +608,7 @@ BUILT = ("reach", "direction", "strength", "inplane", "outofwall", "barndoor", "
 
 
 def assemble(body: Body, route: Route, state: State, no_force: str | None = None, upto: str | None = None) -> Program:
-    """The constraints built so far, as one linear program.
+    """The state check as one cone program.
 
     upto: stop after this constraint family (one of BUILT), so a figure can
     show the model as it stood in its own section. None means all of them.
@@ -609,223 +616,143 @@ def assemble(body: Body, route: Route, state: State, no_force: str | None = None
     keep = BUILT if upto is None else BUILT[: BUILT.index(upto) + 1]
     A_, AF = limb_sets(state, no_force)
     lay = layout(AF)
-    Gs, hs, owners = [], [], []
-    Aeq, beq, eq_owners = [], [], []
+    n = lay.size
+    Gs, P = sign_rows(lay)
+    P = Program(lay, n, np.zeros((0, n)), np.zeros(0), [], Gs, P, [("sign", None)] * len(Gs), [], [])
     if "reach" in keep:
-        Gr, hr, orr = reach_rows(body, route, state)
-        G1 = np.zeros((len(Gr), lay.size))
-        G1[:, lay[("x", None)]] = Gr
-        Gs.append(G1); hs.append(hr); owners += [("reach", l) for l in orr]
+        blocks, own = reach_cones(body, route, state, lay)
+        P.cones += blocks; P.cone_owners += [("reach", l) for l in own]
     if "direction" in keep:
-        G2, h2, o2 = direction_rows(route, state, AF, lay)
-        Gs.append(G2); hs.append(h2); owners += [("direction", l) for l in o2]
+        G, h, own = direction_rows(route, state, AF, lay)
+        P.add_ineq(G, h, [("direction", l) for l in own])
     if "strength" in keep:
-        G3, h3, o3 = strength_rows(body, route, state, AF, lay)
-        Gs.append(G3); hs.append(h3); owners += [("strength", l) for l in o3]
+        blocks, own = strength_cones(body, route, state, AF, lay)
+        P.cones += blocks; P.cone_owners += [("strength", l) for l in own]
     if "inplane" in keep:
-        Ab, bb, ob = balance_rows(route, state, AF, lay)
-        Aeq.append(Ab); beq.append(bb); eq_owners += [("inplane", n) for n in ob]
+        A, b, own = balance_rows(route, state, AF, lay)
+        P.add_eq(A, b, [("inplane", o) for o in own])
     if "outofwall" in keep:
-        At, bt, ot, Gt, ht, gt = tipping_rows(body, route, state, AF, lay)
-        Aeq.append(At); beq.append(bt); eq_owners += [("outofwall", n) for n in ot]
-        Gs.append(Gt); hs.append(ht); owners += [("outofwall", l) for l in gt]
+        A, b, own, G, h, gown = tipping_rows(body, route, state, AF, lay)
+        P.add_eq(A, b, [("outofwall", o) for o in own])
+        P.add_ineq(G, h, [("outofwall", l) for l in gown])
     if "barndoor" in keep:
-        Ad, bd, od, Gd, hd, gd = barndoor_rows(body, route, state, AF, lay)
-        Aeq.append(Ad); beq.append(bd); eq_owners += [("barndoor", n) for n in od]
-        Gs.append(Gd); hs.append(hd); owners += [("barndoor", l) for l in gd]
+        A, b, own, G, h, gown = barndoor_rows(body, route, state, AF, lay)
+        P.add_eq(A, b, [("barndoor", o) for o in own])
+        P.add_ineq(G, h, [("barndoor", l) for l in gown])
     if "flex" in keep:
-        Gf, hf, of = flex_rows(body, route, state, lay)
-        Gs.append(Gf); hs.append(hf); owners += [("flex", l) for l in of]
-    A = np.vstack(Aeq) if Aeq else np.zeros((0, lay.size))
-    b = np.concatenate(beq) if beq else np.zeros(0)
-    return Program(lay, np.vstack(Gs), np.concatenate(hs), owners, A, b, eq_owners)
+        G, h, own = flex_rows(body, route, state, lay)
+        P.add_ineq(G, h, [("flex", l) for l in own])
+    return P
 
 
-def _tidy(P: Program, bounds: list, t_star: float, AF: tuple[str, ...]):
+def _fix(P: Program, cols, values, name) -> None:
+    for i, v in zip(cols, values):
+        row = np.zeros(P.n)
+        row[i] = 1.0
+        P.add_eq(row, v, [(name, None)])
+
+
+def _tidy(P: Program, t_star: float, AF: tuple[str, ...]):
     """Second stage: keep t at its optimum and remove force that does nothing.
 
-    The polyhedron has flat faces, so many force splits share the optimal t;
-    some of them have two limbs squeezing sideways against each other, or a
-    hand twisting, for no reason. Holding t <= t*, minimise
-    sum |f_kx| + sum |tau_k| + sum N_k + sum M_k. This never changes t, only
-    which of the equally good solutions is reported.
+    Only the most loaded limb is pinned down by the optimal t; the others can
+    often carry several force splits that are all as good, some of them with
+    two limbs squeezing sideways against each other or a hand twisting for no
+    reason. Holding t <= t*, minimise sum |f_kx| + sum |tau_k| + sum N_k + sum M_k.
+    This never changes t, only which of the equally good solutions is reported.
     """
-    from scipy.optimize import linprog
-
-    lay, n = P.layout, P.layout.size
+    lay, n = P.layout, P.n
     absolute = [lay[("f", l)].start for l in AF] + [sl.start for (name, _), sl in lay.index.items() if name == "tau"]
     k = len(absolute)
-    G = np.hstack([P.G, np.zeros((len(P.G), k))])
-    extra, rhs = [], []
+    Q = P.add_columns(k)
     for i, col in enumerate(absolute):
         for sign in (1.0, -1.0):
             row = np.zeros(n + k)
             row[col], row[n + i] = sign, -1.0
-            extra.append(row)
-            rhs.append(0.0)
+            Q.add_ineq(row, 0.0, [("tidy", None)])
+        row = np.zeros(n + k)
+        row[n + i] = -1.0
+        Q.add_ineq(row, 0.0, [("tidy", None)])
     row = np.zeros(n + k)
     row[lay[("t", None)].start] = 1.0
-    extra.append(row)
-    rhs.append(t_star * (1 + 1e-9) + 1e-12)
-    G = np.vstack([G, np.array(extra)])
-    h = np.concatenate([P.h, rhs])
-    A = np.hstack([P.A, np.zeros((len(P.A), k))])
+    Q.add_ineq(row, t_star * (1 + 1e-6) + 1e-9, [("tidy", None)])
     c = np.zeros(n + k)
     c[n:] = 1.0
     for limb in AF:
         c[lay[(_normal(limb), limb)].start] = 1.0
-    res = linprog(c, A_ub=G, b_ub=h, A_eq=A if len(A) else None, b_eq=P.b if len(A) else None,
-                  bounds=bounds + [(0.0, None)] * k, method="highs")
-    return res.x[:n] if res.status == 0 else None
+    z = run(Q, c)
+    return None if z is None else z[:n]
 
 
 def solve(body: Body, route: Route, state: State, no_force: str | None = None,
           fixed: dict | None = None, torso=None, tidy: bool = True, upto: str | None = None) -> dict:
-    """Minimise t subject to the constraints built so far, with scipy's HiGHS.
+    """Minimise t subject to the constraints, with Clarabel.
 
     fixed: optional forces held at given values, in the format of `effort`.
     torso: optional body position (x_c, y_c) held fixed.
     tidy: run the second stage (`_tidy`) that removes useless squeezing.
     upto: use only the constraints up to this family (see `assemble`).
     Returns ok, t, the body position, every pushing limb's forces, each
-    limb's exact share of its strength and the limiting limb.
+    limb's share of its strength and the limiting limb.
     """
-    from scipy.optimize import linprog
-
     P = assemble(body, route, state, no_force, upto)
     lay = P.layout
-    bounds = variable_bounds(lay)
     for limb, F in (fixed or {}).items():
-        sf = lay[("f", limb)]
-        bounds[sf.start], bounds[sf.start + 1] = (F["f"][0],) * 2, (F["f"][1],) * 2
+        sf, sn = lay[("f", limb)], lay[(_normal(limb), limb)]
         v = F.get("n", 0.0) if limb in HANDS else F.get("m", 0.0)
-        sn = lay[(_normal(limb), limb)]
-        bounds[sn.start] = (v, v)
+        _fix(P, [sf.start, sf.start + 1, sn.start], [F["f"][0], F["f"][1], v], "fixed")
     if torso is not None:
         sx = lay[("x", None)]
-        bounds[sx.start], bounds[sx.start + 1] = (torso[0],) * 2, (torso[1],) * 2
-    c = np.zeros(lay.size)
-    c[lay[("t", None)]] = 1.0
-    eq = len(P.A) > 0
-    res = linprog(c, A_ub=P.G, b_ub=P.h, A_eq=P.A if eq else None, b_eq=P.b if eq else None, bounds=bounds, method="highs")
-    if res.status != 0:
-        return {"ok": False, "status": res.status, "message": res.message}
-    z = res.x
+        _fix(P, [sx.start, sx.start + 1], torso, "torso")
+    c = np.zeros(P.n)
+    c[lay[("t", None)].start] = 1.0
+    z = run(P, c)
+    if z is None:
+        return {"ok": False}
     AF = limb_sets(state, no_force)[1]
+    t_star = float(z[lay[("t", None)].start])
     if tidy:
-        z2 = _tidy(P, bounds, float(z[lay[("t", None)]][0]), AF)
+        z2 = _tidy(P, t_star, AF)
         if z2 is not None:
             z = z2
     forces = {}
     for limb in AF:
         f = z[lay[("f", limb)]]
-        out = float(z[lay[(_normal(limb), limb)]][0])
+        out = max(0.0, float(z[lay[(_normal(limb), limb)].start]))
         forces[limb] = {"f": (float(f[0]), float(f[1])), ("n" if limb in HANDS else "m"): out}
         if limb in HANDS:
-            forces[limb]["tau"] = float(z[lay[("tau", limb)]][0])
-    t_exact, share, limiting = effort(body, route, state, forces)
-    return {"ok": True, "t": float(z[lay[("t", None)]][0]), "torso": tuple(float(v) for v in z[lay[("x", None)]]),
-            "forces": forces, "share": share, "t_exact": t_exact, "limiting": limiting, "z": z, "layout": lay}
-
-
-# ------------------------------------------------------- the exact problem
-
-def solve_exact(body: Body, route: Route, state: State, no_force: str | None = None) -> dict:
-    """The state check as the exact second-order cone program of section 3.7, solved with cvxpy and Clarabel.
-
-    Discs instead of polygons for reach, balls instead of polyhedra for
-    strength; everything else is the same as the linear program. Used to
-    measure how far the linear program is from the exact answer.
-    """
-    import cvxpy as cp
-
-    A, AF = limb_sets(state, no_force)
-    x = cp.Variable(2)
-    t = cp.Variable(nonneg=True)
-    f = {l: cp.Variable(2) for l in AF}
-    out = {l: cp.Variable(nonneg=True) for l in AF}  # N for hands, M for feet
-    tau = {l: cp.Variable() for l in AF if l in HANDS}
-    p = {l: route.hold(state.hold(l)) for l in A}
-    cons = []
-    for l in A:  # 1 reach
-        o = body.offsets[l]
-        cons.append(cp.norm(np.array([p[l].x - o[0], p[l].y - o[1]]) - x) <= body.L[l])
-    for l in AF:  # 2 direction (exact in 2D), 3 strength
-        theta, alpha = cone(route, state, l)
-        for n in cone_normals(theta, alpha):
-            cons.append(n[0] * f[l][0] + n[1] * f[l][1] >= 0)
-        cons.append(cp.norm(cp.hstack([f[l], out[l]])) <= t * strength_limit(body, route, state, l))
-    if AF:  # 4 in-plane balance
-        cons.append(sum(f[l][0] for l in AF) == 0)
-        cons.append(sum(f[l][1] for l in AF) == 1)
-        cons.append(sum(p[l].x * f[l][1] - p[l].y * f[l][0] for l in AF) == x[0])
-    else:
-        return {"ok": False, "status": "no limb carries force"}
-    d = wall_distance(body, AF)  # 5 out-of-wall balance
-    hands, feet = [l for l in AF if l in HANDS], [l for l in AF if l in FEET]
-    cons.append(sum(out[l] for l in feet) - sum(out[l] for l in hands) == 0)
-    cons.append(sum(p[l].y * out[l] for l in hands) - sum(p[l].y * out[l] for l in feet) == d)
-    cons.append(sum(p[l].x * out[l] for l in hands) - sum(p[l].x * out[l] for l in feet) + sum(tau[l] for l in hands) == 0)
-    for l in hands:
-        kind, theta = p[l].contact(l)
-        dk = (math.cos(math.radians(theta)), math.sin(math.radians(theta)))
-        cons.append(out[l] <= kind.beta * (dk[0] * f[l][0] + dk[1] * f[l][1]))
-        cons.append(cp.abs(tau[l]) <= kind.r * strength_limit(body, route, state, l))
-    top = body.foot_limit((0.0, 0.0))  # 6 flexibility
-    for l in A:
-        if l in FEET:
-            cons.append(p[l].y <= x[1] + top)
-    prob = cp.Problem(cp.Minimize(t), cons)
-    try:
-        prob.solve(solver=cp.CLARABEL)
-    except cp.error.SolverError as e:
-        return {"ok": False, "status": f"solver error: {e}"}
-    if prob.status not in ("optimal", "optimal_inaccurate"):
-        return {"ok": False, "status": prob.status}
-    forces = {}
-    for l in AF:
-        forces[l] = {"f": (float(f[l].value[0]), float(f[l].value[1])), ("n" if l in HANDS else "m"): float(out[l].value)}
-        if l in HANDS:
-            forces[l]["tau"] = float(tau[l].value)
-    t_exact, share, limiting = effort(body, route, state, forces)
-    return {"ok": True, "t": float(t.value), "torso": (float(x.value[0]), float(x.value[1])), "forces": forces,
-            "share": share, "limiting": limiting}
+            forces[limb]["tau"] = float(z[lay[("tau", limb)].start])
+    _, share, limiting = effort(body, route, state, forces)
+    return {"ok": True, "t": t_star, "torso": tuple(float(v) for v in z[lay[("x", None)]]),
+            "forces": forces, "share": share, "limiting": limiting, "z": z, "layout": lay}
 
 
 # --------------------------------------------------------------------- check
 
-def _geometry_ok(body: Body, route: Route, state: State, skip: str | None = None, exact: bool = False,
+def _geometry_ok(body: Body, route: Route, state: State, skip: str | None = None,
                  flex: bool = True, skip_flex: str | None = None) -> bool:
     """Can some body position meet reach (1) and flexibility (6) alone?
 
     skip drops one limb's reach (and, for a foot, its flexibility row);
     flex=False drops every flexibility row; skip_flex drops only that foot's.
     """
-    from scipy.optimize import linprog
-
+    lay = layout(())
     pts = targets(body, route, state)
     top = body.foot_limit((0.0, 0.0))
-    feet = [l for l in pts if l in FEET and flex and l != skip and l != skip_flex]
-    if exact:
-        import cvxpy as cp
-        x = cp.Variable(2)
-        cons = [cp.norm(np.array([pts[l][0] - body.offsets[l][0], pts[l][1] - body.offsets[l][1]]) - x) <= body.L[l]
-                for l in pts if l != skip]
-        cons += [pts[l][1] <= x[1] + top for l in feet]
-        prob = cp.Problem(cp.Minimize(0), cons)
-        prob.solve(solver=cp.CLARABEL)
-        return prob.status in ("optimal", "optimal_inaccurate")
-    G, h, owner = reach_rows(body, route, state)
-    keep = [i for i, o in enumerate(owner) if o != skip]
-    G, h = G[keep], h[keep]
-    for l in feet:
-        G = np.vstack([G, [0.0, -1.0]])
-        h = np.append(h, top - pts[l][1])
-    res = linprog(np.zeros(2), A_ub=G, b_ub=h, bounds=[(None, None)] * 2, method="highs")
-    return res.status == 0
+    blocks, _ = reach_cones(body, route, state, lay, skip=skip)
+    G, h = [], []
+    for l in pts:
+        if l in FEET and flex and l != skip and l != skip_flex:
+            row = np.zeros(lay.size)
+            row[lay[("x", None)].start + 1] = -1.0
+            G.append(row)
+            h.append(top - pts[l][1])
+    P = Program(lay, lay.size, np.zeros((0, lay.size)), np.zeros(0), [],
+                np.array(G).reshape(len(G), lay.size), np.array(h), [], blocks, [])
+    return run(P, np.zeros(lay.size)) is not None
 
 
-def diagnose(body: Body, route: Route, state: State, exact: bool = False) -> tuple[str, str | None]:
+def diagnose(body: Body, route: Route, state: State) -> tuple[str, str | None]:
     """Why does a state have no solution? (section 3.7)
 
     Solve again with only reach and flexibility. If that has a solution, the
@@ -836,15 +763,13 @@ def diagnose(body: Body, route: Route, state: State, exact: bool = False) -> tup
     limb whose hold, if dropped, makes the rest reachable, the one farthest
     out of reach from where the other holds put the body.
     """
-    if _geometry_ok(body, route, state, exact=exact):
+    if _geometry_ok(body, route, state):
         return "balance", None
     pts = targets(body, route, state)
-    if _geometry_ok(body, route, state, exact=exact, flex=False):
-        feet = [l for l in pts if l in FEET and _geometry_ok(body, route, state, exact=exact, skip_flex=l)]
-        if feet:
-            return "reach", max(feet, key=lambda l: pts[l][1])
-        return "reach", None
-    cands = [l for l in pts if _geometry_ok(body, route, state, skip=l, exact=exact)]
+    if _geometry_ok(body, route, state, flex=False):
+        feet = [l for l in pts if l in FEET and _geometry_ok(body, route, state, skip_flex=l)]
+        return ("reach", max(feet, key=lambda l: pts[l][1])) if feet else ("reach", None)
+    cands = [l for l in pts if _geometry_ok(body, route, state, skip=l)]
     if not cands:
         return "reach", None
 
@@ -857,22 +782,20 @@ def diagnose(body: Body, route: Route, state: State, exact: bool = False) -> tup
     return "reach", max(cands, key=gap)
 
 
-def check(body: Body, route: Route, state: State, no_force: str | None = None, exact: bool = False) -> Result:
+def check(body: Body, route: Route, state: State, no_force: str | None = None) -> Result:
     """Check one state: can the climber hold still here, and with what effort t?
 
-    Cheap prechecks first, then the linear program (or, with exact=True, the
-    exact cone program). With a solution, the state holds if t <= 1; above 1
-    the reason is strength and the limb is the most loaded one. With no
-    solution, `diagnose` tells reach from balance.
+    Cheap prechecks first, then the cone program. With a solution, the state
+    holds if t <= 1; above 1 the reason is strength and the limb is the most
+    loaded one. With no solution, `diagnose` tells reach from balance.
     """
     validate(body, route, state)
-    A, AF = limb_sets(state, no_force)
     early = precheck(body, route, state, no_force)
     if early is not None:
         return early
-    res = solve_exact(body, route, state, no_force) if exact else solve(body, route, state, no_force)
+    res = solve(body, route, state, no_force)
     if not res["ok"]:
-        reason, limb = diagnose(body, route, state, exact=exact)
+        reason, limb = diagnose(body, route, state)
         return Result(ok=False, reason=reason, limb=limb, hold=state.hold(limb) if limb else None)
     t = res["t"]
     forces = {l: {k: (list(v) if isinstance(v, tuple) else v) for k, v in F.items()} for l, F in res["forces"].items()}
