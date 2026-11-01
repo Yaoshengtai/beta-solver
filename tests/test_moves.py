@@ -67,3 +67,71 @@ def test_cut_and_place_need_one_check_each():
     assert place.release is None and place.catch is not None and place.ok == place.catch.ok
     assert "describe" and Move(S, "LF", None).describe(r) == "Left foot off F1"
     assert Move(S, "RH", "H3").describe(r) == "Right hand → H3 (jug)"
+
+
+# ------------------------------------------------------------ convexity, checked numerically (unit 3.2)
+from betasolver.compare import path_sweep  # noqa: E402
+from betasolver.moves import path_check, segments  # noqa: E402
+from betasolver.stance import assemble, satisfies, solve, vector  # noqa: E402
+
+
+def test_swing_moves():
+    # the last foot coming off, or the first going on, swings the body in or out
+    assert Move(State("H1", "H2", "F1"), "LF", None).swing           # last foot off
+    assert Move(State("H1", "H2", "F1"), "LF", "F2").swing           # the only foot changes hold
+    assert Move(State("H1", "H2"), "LF", "F1").swing                 # first foot on
+    assert not Move(S, "LF", "F2").swing                             # the other foot stays
+    assert not Move(S, "RH", "H3").swing
+
+
+def test_three_slides_stay_below_the_difficulty():
+    # section 4.2: along x0 -> x1 -> x2 -> x3 every sampled position holds with t <= max(t_release, t_catch),
+    # and the blended end solutions meet every constraint
+    b, r = make_body(AVA), route(GOOD)
+    m = Move(S, "RH", "H3")
+    e = evaluate(b, r, m)
+    assert [seg[0] for seg in segments(m, e)] == [1, 3, 5]
+    pts = path_check(b, r, m, e, n=20)
+    assert len(pts) == 63
+    for p in pts:
+        assert p["ok_mix"] and p["t_min"] is not None
+        assert p["t_min"] <= e.difficulty + 1e-5 and p["t_mix"] <= e.difficulty + 1e-6
+        assert p["t_min"] <= p["t_mix"] + 1e-5   # a fresh solve can only do better than the blend
+
+
+def test_path_check_refuses_swing_and_failed_moves():
+    b = make_body(AVA)
+    with pytest.raises(ValueError):
+        path_check(b, route(LAYBACK), Move(S, "RH", "H3"))
+    holds = GOOD[:4] + [Hold("F2", 1.75, 1.00, "foot_big")]
+    with pytest.raises(ValueError):
+        path_check(b, route(holds), Move(State("H1", "H2", "F1"), "LF", "F2"))
+
+
+def test_convexity_on_random_moves():
+    # step 10: the same check on 100 random moves that work (swing moves set aside)
+    S_ = path_sweep()
+    assert S_["moves"] == 100 and S_["all_feasible"]
+    assert S_["worst_min"] < 1e-5 and S_["worst_mix"] < 1e-5
+
+
+def test_a_limb_in_the_air_neither_pushes_nor_reaches():
+    b = make_body(AVA)
+    far = route([Hold("H1", 1.25, 2.05, "jug"), Hold("H2", 2.9, 0.2, "jug"), Hold("H3", 1.85, 2.45, "jug"),
+                 Hold("F1", 1.30, 0.90, "foot_big"), Hold("F2", 1.75, 1.00, "foot_big")])
+    assert not solve(b, far, S, no_force="RH")["ok"]                 # resting on a hold out of reach
+    assert solve(b, far, S, no_force="RH", off="RH")["ok"]           # in the air: no reach needed
+    P = assemble(b, far, S, no_force="RH", off="RH")
+    assert [o for o in P.cone_owners if o[0] == "reach"] == [("reach", "LH"), ("reach", "LF"), ("reach", "RF")]
+    with pytest.raises(ValueError):
+        assemble(b, far, S, off="RH")                                # in the air means no force too
+
+
+def test_solution_vector_satisfies_its_program():
+    b, r = make_body(AVA), route(GOOD)
+    res = solve(b, r, S)
+    P = assemble(b, r, S)
+    z = vector(P.layout, res["torso"], res["forces"], res["t"])
+    assert satisfies(P, z, tol=1e-5)
+    z[P.layout[("t", None)]] = 0.5 * res["t"]                        # too little strength
+    assert not satisfies(P, z, tol=1e-5)

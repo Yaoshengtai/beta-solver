@@ -94,3 +94,58 @@ def summary(records) -> dict:
         "held": sum(1 for r in both if r["t"] <= 1.0),
         "ms": med("ms"), "ms_tidy": med("ms_tidy"), "ref_ms": med("ref_ms"),
     }
+
+
+
+# ------------------------------------------------------------ moves along straight lines (section 4.2)
+
+def random_move(rng: np.random.Generator):
+    """A random state (as in random_case, without a resting limb) and a move of one limb to a new hold nearby."""
+    from .moves import Move
+
+    climber, route, state, _ = random_case(rng)
+    limb = str(rng.choice(state.on()))
+    old = route.hold(state.hold(limb))
+    t = ("foot_big" if limb in ("LF", "RF") else HAND_TYPES[rng.integers(len(HAND_TYPES))])
+    d = float(rng.choice([0.0, 180.0])) if t == "sidepull" else None
+    new = Hold("N", round(min(2.9, max(0.1, old.x + float(rng.uniform(-0.35, 0.35)))), 3),
+               round(min(4.1, max(0.1, old.y + float(rng.uniform(-0.15, 0.45)))), 3), t, dir=d)
+    route = Route(route.id, route.title, route.lesson, list(route.holds) + [new], route.start_hands, route.finish)
+    return climber, route, Move(state, limb, "N")
+
+
+@lru_cache(maxsize=4)
+def path_sweep(n_moves: int = 100, seed: int = 11, samples: int = 10) -> dict:
+    """Check the straight-line slides of n_moves random moves that work.
+
+    Swing moves (last foot off or first foot on) are counted and left out:
+    the body swings in or out there, which is not a straight slide.
+    """
+    from .moves import evaluate, path_check
+
+    rng = np.random.default_rng(seed)
+    done, points, worst_min, worst_mix, all_ok, tried, swings = 0, 0, -np.inf, -np.inf, True, 0, 0
+    while done < n_moves:
+        tried += 1
+        climber, route, move = random_move(rng)
+        body = make_body(climber)
+        if precheck(body, route, move.state) is not None or precheck(body, route, move.new_state) is not None:
+            continue
+        res = evaluate(body, route, move)
+        if not res.ok:
+            continue
+        if move.swing:
+            swings += 1
+            continue
+        pts = path_check(body, route, move, res, n=samples)
+        done += 1
+        points += len(pts)
+        for p in pts:
+            if p["t_min"] is None:
+                all_ok = False
+                continue
+            worst_min = max(worst_min, p["t_min"] - res.difficulty)
+            worst_mix = max(worst_mix, p["t_mix"] - res.difficulty)
+            all_ok = all_ok and p["ok_mix"]
+    return {"moves": done, "tried": tried, "swing_moves": swings, "points": points, "all_feasible": all_ok,
+            "worst_min": float(worst_min), "worst_mix": float(worst_mix)}

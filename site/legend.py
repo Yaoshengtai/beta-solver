@@ -696,3 +696,27 @@ def move_figure() -> dict:
         "force_scale": 0.3,
         "view": {"x0": 0.8, "y0": 0.5, "x1": 2.4, "y1": 2.75},
     })
+
+
+# ------------------------------------------------------------ one move: convexity, checked numerically
+
+def convex_figure() -> dict:
+    """Data for the convexity section in #move: the move of the animation sampled along its three
+    slides, and the same check on many random moves."""
+    from betasolver.compare import path_sweep
+    from betasolver.moves import Move, evaluate, path_check
+    from betasolver.stance import State
+
+    body = make_body(AVA)
+    holds = [Hold("H1", 1.25, 2.05, "jug"), Hold("H2", 1.75, 2.00, "jug"), Hold("H3", 1.85, 2.45, "jug"),
+             Hold("F1", 1.30, 0.90, "foot_big"), Hold("F2", 1.75, 1.00, "foot_big")]
+    r = _route("move", holds + [Hold("T", 1.5, 3.6, "jug")], ("H1", "H2"))
+    m = Move(State("H1", "H2", "F1", "F2"), "RH", "H3")
+    e = evaluate(body, r, m)
+    pts = path_check(body, r, m, e, n=20)
+    return _round({
+        "describe": m.describe(r),
+        "difficulty": e.difficulty,
+        "t": {"start": e.start.t, "release": e.t_release, "catch": e.t_catch, "end": e.end.t},
+        "points": [{"phase": p["phase"], "u": p["u"], "t_min": p["t_min"], "t_mix": p["t_mix"], "ok": p["ok_mix"]} for p in pts],
+    }) | {"sweep": path_sweep()}  # not rounded: the worst excess is of order 1e-7

@@ -348,6 +348,10 @@ pre.code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px sol
 .chart-hit { fill: transparent; }
 .chart-pt:hover .chart-dot, .chart-pt:focus .chart-dot { fill: var(--accent); }
 .chart-svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+.chart-dash { stroke-dasharray: 6 4; }
+.chart-dot-hover { opacity: 0; }
+.chart-pt:hover .chart-dot-hover, .chart-pt:focus .chart-dot-hover { opacity: 1; }
+.chart-ink { stroke: var(--ink); stroke-width: 1.6; }
 .phase-strip { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .phase-strip li { border: 1px solid var(--line); border-radius: 6px; padding: 6px 6px 5px; font-size: 0.78rem; line-height: 1.3; background: var(--bg); color: var(--muted); cursor: pointer; }
 .phase-strip li b { display: block; color: var(--ink); font-size: 0.82rem; }
@@ -766,7 +770,30 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p><code>Move</code> holds the state, the moving limb and the new hold (or none for a foot coming off) and knows its kind: swap, match, cut or place. <code>evaluate</code> runs the start, release, catch and end checks and reports the difficulty, or which check fails first and why. Code: <a data-src="src/betasolver/moves.py">moves.py</a>.</p>
   </details>
   <h3 id="move-convex">Why the feasible region is convex</h3>
-  <div class="planned"><span class="chip">Planned · unit 3.2</span><p>Averaging two ways of holding a state gives another valid way.</p></div>
+  <p>The core fact: <b>in one state, the average of two valid solutions is again valid.</b> A solution is a body position \(x\) with every force \(f_k, N_k, M_k, \tau_k\); valid means it meets ① to ⑥ with \(t \le 1\). Mix two of them, \((1-s)\cdot\text{solution}_1 + s\cdot\text{solution}_2\) for \(s \in [0, 1]\):</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Constraint</th><th>Why the mix still meets it</th></tr></thead>
+    <tbody>
+      <tr><td>① Reach</td><td>both positions are in the disc, and a disc has no dents</td></tr>
+      <tr><td>② Direction</td><td>both forces are in the sector, which is narrower than 180°</td></tr>
+      <tr><td>③ Strength</td><td>the size of a mix is at most the mix of the sizes (triangle inequality)</td></tr>
+      <tr><td>④ ⑤ Balance</td><td>linear equations: two solutions equal to the same constant, so is their mix</td></tr>
+      <tr><td>⑤ Pull-in and twist limits, ⑥ Flexibility</td><td>linear inequalities</td></tr>
+    </tbody>
+  </table></div>
+  <p>So the valid solutions form a convex set, and so do the valid body positions. The effort of the mix is at most \((1-s)\,t_1 + s\,t_2 \le \max(t_1, t_2)\). <b>A climber can slide the body in a straight line between two valid positions while blending the forces, and hold still at every instant.</b></p>
+  <p>Two modelling choices keep this true: moments are taken about the wall origin (about the centre of mass, mixing would break the balance equations), and limbs fold completely (a shortest length would turn each disc into a ring with a hole). It assumes slow, static movement within one state; how the states hand over is the next section. Real bodies, with joint limits, are not convex.</p>
+  <p><b>The exception: swing moves.</b> With no foot pushing, the body hangs flat against the wall (\(d = 0\)); with one, it stands \(d\) off it. Taking off the last foot, or putting on the first, makes the body swing in or out at that moment, so those moves are not straight slides.</p>
+
+  <figure class="fig" id="fig-convex">
+    <div class="fig-main" data-draw="convex-chart"></div>
+    <figcaption><b>Effort along the move of the animation</b>, sampled at 21 points on each slide. Dashed: the two end solutions blended, body and forces together, whose effort is the straight line between the ends. Solid: the smallest effort with the body held at that point, which can only be lower. Neither crosses the move's difficulty (red). Hover a dot for its values.</figcaption>
+  </figure>
+  <ul data-draw="convex-stats"></ul>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>For each slide, the two end solutions are packed into vectors of that phase's program and mixed; <code>satisfies</code> checks every equation, inequality and cone. The travel phase uses the three-limb program, with the moving hand neither pushing nor reaching (<code>off</code>). The same check runs on random moves in the test suite. Code: <a data-src="src/betasolver/moves.py">moves.py</a>, <code>segments</code>, <code>path_check</code>; <a data-src="src/betasolver/compare.py">compare.py</a>, <code>path_sweep</code>.</p>
+  </details>
   <h3 id="move-twochecks">Why two checks are enough</h3>
   <div class="planned"><span class="chip">Planned · unit 3.3</span><p>The release and catch positions live in the same convex region, so a straight slide connects them.</p></div>
   <h3 id="move-cost">Move cost and move types</h3>
@@ -2557,6 +2584,63 @@ var Draw = (function () {
     select(F.moves[0]);
   }
   if (DATA.figures && DATA.figures.move) renderMove(DATA.figures.move);
+
+  /* ---------- #move: convexity, checked (unit 3.2) ---------- */
+  function renderConvex(X) {
+    var slot = document.querySelector('[data-draw="convex-chart"]');
+    if (!slot) return;
+    var W = 560, H = 250, mL = 46, mR = 16, mT = 26, mB = 40, gap = 0.18;
+    var phases = [1, 3, 5], names = { 1: "1 Unload", 3: "3 Travel", 5: "5 Load" };
+    var span = phases.length + gap * (phases.length - 1);
+    function X0(ph) { return phases.indexOf(ph) * (1 + gap); }
+    function Xp(ph, u) { return mL + (X0(ph) + u) / span * (W - mL - mR); }
+    var ymax = Math.ceil(X.difficulty * 1.25 * 20) / 20;
+    function Y(t) { return H - mB - t / ymax * (H - mT - mB); }
+    var svg = Draw.el(slot, "svg", { viewBox: "0 0 " + W + " " + H, role: "img" }, "chart-svg");
+    Draw.el(svg, "title").textContent = "Effort along the three slides of a move";
+    for (var g = 0; g <= ymax + 1e-9; g += 0.05) {
+      Draw.el(svg, "line", { x1: mL, y1: Y(g), x2: W - mR, y2: Y(g) }, "chart-grid");
+      Draw.el(svg, "text", { x: mL - 8, y: Y(g) + 4, "text-anchor": "end" }, "chart-tick").textContent = g.toFixed(2);
+    }
+    Draw.el(svg, "line", { x1: mL, y1: H - mB, x2: W - mR, y2: H - mB }, "chart-axis");
+    Draw.el(svg, "text", { x: 12, y: (mT + H - mB) / 2, "text-anchor": "middle", transform: "rotate(-90 12 " + (mT + H - mB) / 2 + ")" }, "chart-tick").textContent = "effort t";
+    phases.forEach(function (ph) {
+      Draw.el(svg, "text", { x: (Xp(ph, 0) + Xp(ph, 1)) / 2, y: H - mB + 16, "text-anchor": "middle" }, "chart-tick").textContent = names[ph];
+      var pts = X.points.filter(function (p) { return p.phase === ph; });
+      Draw.el(svg, "path", { d: "M" + pts.map(function (p) { return Xp(ph, p.u).toFixed(1) + " " + Y(p.t_mix).toFixed(1); }).join("L") }, "chart-line chart-dash");
+      Draw.el(svg, "path", { d: "M" + pts.map(function (p) { return Xp(ph, p.u).toFixed(1) + " " + Y(p.t_min).toFixed(1); }).join("L") }, "chart-line chart-ink");
+      pts.forEach(function (p) {
+        var gg = Draw.el(svg, "g", { tabindex: "0" }, "chart-pt");
+        Draw.el(gg, "title").textContent = names[ph] + ", " + Math.round(p.u * 100) + "% along: smallest t " + p.t_min.toFixed(3) + ", blended t " + p.t_mix.toFixed(3) + (p.ok ? ", blend valid" : ", blend INVALID");
+        Draw.el(gg, "circle", { cx: Xp(ph, p.u), cy: Y(p.t_min), r: 4 }, "chart-dot chart-dot-hover");
+        Draw.el(gg, "circle", { cx: Xp(ph, p.u), cy: Y(p.t_min), r: 8 }, "chart-hit");
+      });
+    });
+    [[2, "let go"], [4, "touch"]].forEach(function (h, i) {
+      var x = (Xp(phases[i], 1) + Xp(phases[i + 1], 0)) / 2;
+      Draw.el(svg, "line", { x1: x, y1: mT - 4, x2: x, y2: H - mB }, "anno-line");
+      Draw.el(svg, "text", { x: x, y: mT - 8, "text-anchor": "middle" }, "chart-tick").textContent = h[0] + " " + h[1];
+    });
+    Draw.el(svg, "line", { x1: mL, y1: Y(X.difficulty), x2: W - mR, y2: Y(X.difficulty) }, "limit-line");
+    Draw.el(svg, "text", { x: W - mR, y: Y(X.difficulty) - 5, "text-anchor": "end" }, "limit-text").textContent = "difficulty " + X.difficulty.toFixed(3);
+    var lx = mL + 10, ly = Y(ymax) + 12;
+    Draw.el(svg, "line", { x1: lx, y1: ly, x2: lx + 20, y2: ly }, "chart-line chart-dash");
+    Draw.el(svg, "text", { x: lx + 26, y: ly + 4 }, "chart-label").textContent = "blended solution";
+    Draw.el(svg, "line", { x1: lx + 150, y1: ly, x2: lx + 170, y2: ly }, "chart-line chart-ink");
+    Draw.el(svg, "text", { x: lx + 176, y: ly + 4 }, "chart-label").textContent = "smallest t at that position";
+
+    var S = X.sweep, st = document.querySelector('[data-draw="convex-stats"]');
+    function exp(v) { return v <= 1e-9 ? "none" : v.toExponential(0); }
+    [["Random moves that work, checked", String(S.moves) + " (" + S.points + " sampled positions)"],
+     ["Swing moves set aside", String(S.swing_moves)],
+     ["Every blended solution valid", S.all_feasible ? "yes" : "no"],
+     ["Largest effort above the difficulty", exp(Math.max(S.worst_min, S.worst_mix)) + " (solver precision)"]
+    ].forEach(function (r) {
+      var li = document.createElement("li"); var b = document.createElement("b"); b.textContent = r[0] + ": ";
+      li.appendChild(b); li.appendChild(document.createTextNode(r[1])); st.appendChild(li);
+    });
+  }
+  if (DATA.figures && DATA.figures.convex) renderConvex(DATA.figures.convex);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
