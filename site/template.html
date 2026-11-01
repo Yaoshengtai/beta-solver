@@ -515,64 +515,27 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <h2>Holds, routes and climbers</h2>
     <p class="lede">The inputs: holds, routes, and the four climbers who try them.</p>
   </header>
-  <h3 id="data-wall">The wall</h3>
-  <figure class="fig" id="fig-wall">
-    <div class="fig-row">
-      <div class="fig-main" data-draw="wall"></div>
-      <div class="fig-key">
-        <p class="key-h">The wall</p>
-        <p class="key-note">Flat and vertical, seen from the front. Metres, origin bottom left, \(x\) right, \(y\) up, half-metre grid.</p>
-      </div>
-    </div>
-    <figcaption><b>Wall.</b> <span data-text="wall-size"></span></figcaption>
-  </figure>
-
-  <h3 id="data-holds">Hold types</h3>
-  <p>A hold is a point with a type. The type fixes the directions it can push a limb in, which strength limit applies, and for hands, how well it holds you in to the wall and resists twisting.</p>
+  <h3 id="data-holds">Holds</h3>
+  <p><span data-text="wall-size"></span> Lengths are in metres, forces in body weights. A hold is a point with a type, and the type decides three things: the directions it can push a limb in (the shaded sector), which strength limit applies, and for hands how well it holds you in to the wall (\(\beta\)) and resists twisting (\(r\)).</p>
   <figure class="fig" id="fig-holds">
     <div class="hold-grid" data-draw="hold-types"></div>
-    <figcaption><b>The eight hold types.</b> Shaded sector: the directions the hold can push in, \(\alpha\) either side of its direction \(\theta\) (dashed). A small arrow marks a one-way hold.</figcaption>
   </figure>
   <div class="tbl-wrap"><table class="tbl" data-draw="hold-table"></table></div>
-  <ul>
-    <li><b>\(\theta\), \(\alpha\):</b> the sector; it becomes the <a href="#check-direction">direction</a> constraint.</li>
-    <li><b>Strength limit:</b> which of the climber's limits applies. A sidepull counts as a pinch, an undercling as a crimp.</li>
-    <li><b>\(\beta\), \(r\)</b> (hands only): the pull toward the wall is at most \(\beta\) times the force along \(\theta\), the twist at most \(r\) times the strength (<a href="#check-tipping">no tipping</a>, <a href="#check-barndoor">no barn-door</a>). First guesses, open to tuning.</li>
-    <li>A foot on a hand hold counts as a <code data-text="foot-on-handhold"></code>.</li>
-  </ul>
+  <p>A sidepull counts as a pinch and an undercling as a crimp. A foot on a hand hold counts as a <code data-text="foot-on-handhold"></code>.</p>
 
-  <h3 id="data-routes">Route format</h3>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
-    <tbody>
-      <tr><td class="mono">id, title, lesson</td><td>Name, and the one idea the route shows.</td></tr>
-      <tr><td class="mono">holds</td><td>Each with <code>id</code>, <code>x</code>, <code>y</code>, <code>type</code>, <code>dir</code> (from the type unless given; a sidepull gives 0 for right or 180 for left) and <code>use</code>: <code>hand</code>, <code>foot</code> or <code>both</code>.</td></tr>
-      <tr><td class="mono">start_hands</td><td>The two start holds.</td></tr>
-      <tr><td class="mono">finish</td><td>The top hold; done when both hands are on it.</td></tr>
-      <tr><td class="mono">allow_feet_on_handholds</td><td>True unless the route says otherwise (a campus route).</td></tr>
-    </tbody>
-  </table></div>
+  <h3 id="data-routes">Routes</h3>
+  <p>A route is its holds, the two start holds, and the top hold, which both hands must reach. A campus route also bars feet from hand holds.</p>
   <figure class="fig" id="fig-route">
     <div class="fig-stack">
       <div class="fig-main" data-draw="route-example"></div>
       <pre class="code" data-draw="route-json"></pre>
     </div>
-    <figcaption><b>A route and how it is written.</b> <span data-text="route-lesson"></span> Loading checks that holds are on the wall, ids are unique, and start and top are hand holds.</figcaption>
-  </figure>
-  <figure class="fig" id="fig-marks">
-    <div data-draw="markings"></div>
-    <figcaption><b>Markings.</b> <b>S</b>: start. <b>TOP</b>: finish. Heavy outline: used by the beta. Faded: never touched.</figcaption>
+    <figcaption><b>A route and how it is written.</b> <span data-text="route-lesson"></span></figcaption>
   </figure>
 
-  <h3 id="data-climbers">The climbers</h3>
+  <h3 id="data-climbers">Climbers</h3>
   <div class="cards" data-draw="climber-cards"></div>
-  <ul>
-    <li><b>Strength</b> is in body weights: <span data-text="strength-example"></span> Forces and limits both scale with weight, so weight itself never matters (a deliberate simplification).</li>
-    <li>A limit of zero rules a hold out before any solving; no crimps also means no underclings.</li>
-    <li><b>\(\text{flex}\):</b> how far a foot can go above the hip, as a fraction of height \(H\). Negative means below the hip.</li>
-    <li><b>\(w_{\text{cross}}\):</b> a small style cost for crossing the hands.</li>
-  </ul>
-  <p>Variants that change exactly one attribute:</p>
+  <p><b>Strength</b> is in body weights: <span data-text="strength-example"></span> Weight itself therefore never matters. <b>flex</b> is how far a foot can go above the hip, as a fraction of height. <b>Crossing penalty</b> is a small style cost for crossing the hands. Some examples use variants that change one attribute:</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="variant-table"></table></div>
 
   <h3 id="data-figures">Reading the figures</h3>
@@ -581,7 +544,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-main" data-draw="climber"></div>
       <div class="fig-key" data-draw="climber-key"></div>
     </div>
-    <figcaption><b>The climber.</b> Limbs coloured by the share of strength used; arrows are the in-wall forces from the holds; the inset is a side view (hands pulled in, feet pushed out). Forces here are example values.</figcaption>
+    <figcaption><b>The climber.</b> Limbs coloured by the share of strength used, arrows for the forces from the holds, and a side view inset. Example values.</figcaption>
   </figure>
 </section>
 
@@ -591,35 +554,16 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <h2>The body model</h2>
     <p class="lede">A torso that slides but does not turn, with four limbs of fixed greatest length.</p>
   </header>
-  <h3 id="body-anchors">Shoulders, hips and limb lengths</h3>
-  <p>The check only needs to know which holds each limb can reach from a given torso position. So the body is a torso \(x = (x_c, y_c)\), which is also the centre of mass, with two shoulders and two hips at fixed offsets (multiples of height \(H\), from standard body proportions; left is negative \(x\)):</p>
-  <div class="tbl-wrap"><table class="tbl" data-draw="anchor-table"></table></div>
-  <p>An arm reaches from the shoulder to the middle of the palm; a leg is half the height:</p>
+  <h3 id="body-anchors">Shoulders, hips and limbs</h3>
+  <p>The body is a point \(x = (x_c, y_c)\), the centre of mass, with <span data-text="anchors-text"></span> An arm reaches from the shoulder to the middle of the palm; a leg is half the height. A foot can go at most \(\text{flex}\cdot H\) above the hip.</p>
   <div class="math-block" data-math="limb-lengths"></div>
-  <p>A foot must stay below the hip plus \(\text{flex}\cdot H\):</p>
   <div class="math-block" data-math="foot-limit"></div>
-
-  <figure class="fig" id="fig-anchors">
-    <div class="seg" role="group" aria-label="Climber" data-draw="anchor-switch"></div>
-    <div class="fig-main" data-draw="anchors"></div>
-    <figcaption><b>Attachment points and reach.</b> Each dashed circle is one limb's reach around its shoulder or hip. Red line: the highest foot. Same scale for every climber.</figcaption>
-  </figure>
-
   <div class="tbl-wrap"><table class="tbl" data-draw="length-table"></table></div>
-
   <figure class="fig" id="fig-scale">
     <div class="fig-main" data-draw="to-scale"></div>
-    <figcaption><b>To scale,</b> arms up at full length: the hands mark the highest grip from the ground. <span data-text="same-body"></span></figcaption>
+    <figcaption><b>To scale,</b> arms up at full length. <span data-text="same-body"></span></figcaption>
   </figure>
-
-  <h3 id="body-simplifications">What it leaves out</h3>
-  <ul>
-    <li><b>No turning:</b> no twisting the hips in for reach.</li>
-    <li><b>Limbs fold completely:</b> a greatest length but no shortest one.</li>
-    <li><b>Fixed distance from the wall:</b> <span data-text="d-wall"></span> It matters for <a href="#check-tipping">no tipping</a>.</li>
-    <li><b>Elbows and knees are for drawing only</b> (elbows down and out, knees out).</li>
-    <li><b>Static moves only:</b> no momentum, no dynos (<a href="#limits">limits</a>).</li>
-  </ul>
+  <p><b>Left out:</b> the torso never turns; limbs fold completely; the body stays <span data-text="d-wall"></span>; elbows and knees are drawn only; moves are static, no dynos.</p>
 </section>
 
 <section class="chapter" id="check" data-group="The model" data-short="Checking a state" hidden>
@@ -628,55 +572,32 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <h2>Checking a state</h2>
     <p class="lede">With every limb on a fixed hold, can the climber hold still, and how hard is the most loaded limb working?</p>
   </header>
-  <h3 id="check-unknowns">Knowns and unknowns</h3>
-  <p>A <b>state</b> \(\sigma = (\text{LH}, \text{RH}, \text{LF}, \text{RF})\) says which hold each limb is on; a foot may hang. The holds do not fix the body, so the check looks for a body position and forces that work, and the least tiring ones.</p>
-  <figure class="fig" id="fig-state">
-    <div class="fig-main" data-draw="state-example"></div>
-    <figcaption><b>One state, several body positions.</b> <span data-text="state-caption"></span> All three reach every hold.</figcaption>
-  </figure>
+  <h3 id="check-unknowns">The question</h3>
+  <p>A <b>state</b> says which hold each limb is on; a foot may hang. The holds do not fix the body, so the check looks for a body position and forces that satisfy six constraints, and among those the smallest <b>effort</b> \(t\), the largest share of strength any limb uses. The state holds if \(t \le 1\).</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="unknowns-table"></table></div>
-  <p data-text="unknown-count"></p>
-  <p>\(A\) is the set of limbs on a hold, \(A_F\) those that push, and \(\Sigma_H\), \(\Sigma_F\) sum over the pushing hands and feet. Six constraints, one section each:</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="constraints-table"></table></div>
-  <p>The check finds the smallest effort subject to all six, and the state holds if it is at most 1:</p>
-  <div class="math-block">\[ t^\star(\sigma) = \min\, t, \qquad t^\star \le 1 \]</div>
-  <p><b>A resting limb.</b> During a move one limb lets go (step 4). With <code>no_force=k</code>, limb \(k\) must still reach its hold but carries nothing, so \(A_F = A \setminus \{k\}\).</p>
-  <p><b>Output:</b> \(t^\star\), the body position, every force and the limiting limb, or one reason for failing:</p>
+  <p>\(A\) is the set of limbs on a hold and \(A_F\) those that push; during a move one limb rests on its hold without force (<code>no_force</code>). \(\Sigma_H\) and \(\Sigma_F\) sum over pushing hands and feet. A failed check gives one reason:</p>
   <ul data-draw="reasons-list"></ul>
 
-  <h3 id="check-reach">Reach</h3>
-  <p>Each hold must be within reach of its shoulder or hip, which moves with the body:</p>
-  <div class="math-block">\[ \| p_k - (x + o_k) \|_2 \le L_k, \qquad k \in A \]</div>
-  <p>with \(p_k\) the hold, \(o_k\) the shoulder or hip offset and \(L_k\) the limb length. So the body must lie in a disc of radius \(L_k\) around \(p_k - o_k\) for every limb; the overlap of the discs is convex.</p>
+  <h3 id="check-reach">Reach and flexibility</h3>
+  <p>Each hold must be within reach of its shoulder or hip, and a foot cannot be too far above the hip. Both limit where the body can be:</p>
+  <div class="math-block">\[ \| p_k - (x + o_k) \|_2 \le L_k \]</div>
+  <div class="math-block" data-math="flex-row"></div>
   <figure class="fig" id="fig-reach">
     <div class="seg" role="group" aria-label="Start from" data-draw="reach-presets"></div>
     <div class="reach-row" data-draw="reach"></div>
     <p class="reach-status" data-text="reach-status" aria-live="polite"></p>
-    <figcaption><b>Reach, two ways.</b> Drag the centre of mass (or use the arrow keys). Left: reach circles on the body; a limb that misses turns red. Right: one disc of body positions per hold, and their overlap.</figcaption>
+    <figcaption><b>Reach.</b> Drag the centre of mass. Left: reach circles on the body. Right: one disc of body positions per hold; the body must be in their overlap, which is convex.</figcaption>
   </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>Each disc is a second-order cone, used as is. A pair of holds farther apart than both limbs plus the gap between their attachment points is ruled out before solving. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>reach_cones</code>, <code>precheck</code>.</p>
-  </details>
+  <div class="tbl-wrap"><table class="tbl" data-draw="flex-table"></table></div>
 
   <h3 id="check-direction">Direction</h3>
-  <p>A hold pushes a limb only within its sector: \(f_k\), the force from the hold on the limb, may be at most \(\alpha_k\) from the hold's direction \(d_k = (\cos\theta_k, \sin\theta_k)\):</p>
-  <div class="math-block">\[ d_k^\top f_k \ge \|f_k\|_2 \cos\alpha_k, \qquad k \in A_F \]</div>
-  <p>Every \(\alpha_k < 90^\circ\), so this is a convex cone. A foot on a hand hold uses the foothold sector.</p>
-  <figure class="fig" id="fig-direction">
-    <div class="dir-row" data-draw="direction"></div>
-    <div class="seg" role="group" aria-label="Reset"><button type="button" data-draw="direction-reset">Reset: just hanging</button></div>
-    <figcaption><b>Which forces a hold can give.</b> Drag an arrow tip (or use the arrow keys). Green holds, red slips. Hanging straight down works on a jug or a sloper; a sidepull or undercling needs another limb pushing back.</figcaption>
-  </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>In the plane a cone is exactly the space between its two edges: two linear inequalities per limb, \(n_k^{\pm} \cdot f_k \ge 0\). Code: <code>direction_rows</code>.</p>
-  </details>
+  <p>A hold pushes a limb only within its sector (the shaded sectors in <a href="#data-holds">Holds</a>): the force \(f_k\) from the hold is at most \(\alpha_k\) from its direction \(d_k\). Hanging straight down works on a jug or a sloper; a sidepull or undercling needs another limb pushing back.</p>
+  <div class="math-block">\[ d_k^\top f_k \ge \|f_k\|_2 \cos\alpha_k \]</div>
 
   <h3 id="check-strength">Strength and effort</h3>
-  <p>No limb may exceed its limit \(F_k\) on its hold. The total counts the in-wall force and the pull toward the wall (\(N_k\), hands) or push from it (\(M_k\), feet):</p>
+  <p>No limb may exceed its limit \(F_k\) on its hold, counting the in-wall force and the pull toward the wall (\(N_k\), hands) or push from it (\(M_k\), feet):</p>
   <div class="math-block">\[ \begin{aligned} \|(f_k, N_k)\|_2 &\le t\, F_k && \text{hands} \\ \|(f_k, M_k)\|_2 &\le t\, F_{\text{foot}} && \text{feet} \end{aligned} \]</div>
-  <p>So \(t\) is the largest share of strength any limb uses, and minimising it moves load off the limb closest to letting go.</p>
   <p data-text="effort-example"></p>
   <div class="tbl-wrap"><table class="tbl" data-draw="effort-table"></table></div>
   <figure class="fig" id="fig-strength">
@@ -685,197 +606,69 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-main" data-draw="strength"></div>
       <div class="fig-key" data-draw="strength-bars"></div>
     </div>
-    <figcaption><b>Same holds and forces, three climbers.</b> Dashed circle: the limit. Filled disc: the total force, so the ratio of radii is the share used. Arrow: the in-wall force. The forces are fixed examples here; from <a href="#check-inplane">balance</a> on, the solver chooses them.</figcaption>
+    <figcaption><b>Same holds and forces, three climbers.</b> Dashed circle: the limit; filled disc: the total force, so the ratio of radii is the share used. The forces here are fixed examples.</figcaption>
   </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>One second-order cone per pushing limb, \((t F_k, f_k, N_k)\), used as is. Code: <code>strength_cones</code>, <code>effort</code>.</p>
-  </details>
 
-  <h3 id="check-inplane">In-plane balance</h3>
-  <p>Seen from the front, the hold forces and gravity \((0, -1)\) at the centre of mass must cancel: no falling or sliding, and no swinging.</p>
-  <div class="math-block">\[ \begin{gathered} \textstyle\sum_{k \in A_F} f_k = (0,\ 1) \\ \textstyle\sum_{k \in A_F} \big( p_{k,x} f_{k,y} - p_{k,y} f_{k,x} \big) = x_c \end{gathered} \]</div>
-  <p>Hanging from one hand, that hand carries \(f = (0, 1)\), and the moment equation reads \(p_x = x_c\): <b>the centre of mass must be right below the hand</b>. Moments are taken about the wall origin, where \(p_k\) are known numbers, so the equation stays linear; about the centre of mass it would multiply two unknowns. With zero net force both give the same answer.</p>
+  <h3 id="check-balance">Balance</h3>
+  <p>The forces from the holds must cancel gravity, \((0, -1)\) at the centre of mass, which stands a distance \(d\) out from the wall. A rigid body needs six equations: three in the wall plane (no falling, sliding or swinging) and three out of it (no moving off the wall, tipping back, or swinging open like a door). Moments are taken about the wall origin, so all are linear.</p>
+  <div class="math-block">\[ \begin{aligned} & \textstyle\sum f_k = (0,\ 1), \qquad \sum \big(p_{k,x} f_{k,y} - p_{k,y} f_{k,x}\big) = x_c \\ & \Sigma_F M_k = \Sigma_H N_k, \qquad \Sigma_H\, p_{k,y} N_k - \Sigma_F\, p_{k,y} M_k = d \\ & \Sigma_H\, p_{k,x} N_k - \Sigma_F\, p_{k,x} M_k + \Sigma_H\, \tau_k = 0 \\ & N_k \le \beta_k\, d_k^\top f_k, \qquad |\tau_k| \le r_k F_k \end{aligned} \]</div>
+  <p>\(\tau_k\) is how hard a hand twists on its hold. With no foot pushing, the body hangs flat against the wall: \(d = 0\). Three consequences:</p>
+  <ul>
+    <li><b>Hanging from one hand,</b> the centre of mass must be right below it.</li>
+    <li><b>Feet up high, hands work harder.</b> With one hand and one foot a height \(h\) apart, the hand must pull in \(N = d/h\). <span data-text="tip-facts"></span></li>
+    <li><b>Barn-door.</b> With one hand and two feet, the hand must sit between the feet, give or take what the grip can twist. <span data-text="door-facts"></span></li>
+  </ul>
   <figure class="fig" id="fig-balance">
     <div class="bal-row" data-draw="balance"></div>
-    <figcaption><b>Three cases, solved with constraints ① to ④.</b> Solid arrows: hold forces. Dashed: gravity. Dashed grey arm: touching only (<code>no_force</code>). Right: the forces drawn head to tail close up.</figcaption>
+    <figcaption><b>Three cases, solved by the check.</b> Solid arrows: hold forces. Dashed: gravity. Grey arm: touching only. Right: the forces drawn head to tail close up.</figcaption>
   </figure>
-  <p data-text="balance-strength"></p>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>Three exact equality rows. Only the most loaded limb is pinned down by the optimal \(t\), so a second solve keeps \(t\) at its optimum and minimises \(\sum |f_{k,x}| + \sum |\tau_k| + \sum N_k + \sum M_k\), dropping squeezes and twists that do nothing. Code: <code>balance_rows</code>, <code>_tidy</code>.</p>
-  </details>
 
-  <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
-  <p>The front view alone lets a climber stand on two footholds with idle hands. But the centre of mass is a distance <span data-text="tip-d"></span> out from the wall, so gravity tips the body back and the hands must pull it in. Treating forces as 3D adds three more balance equations, still linear because the wall is flat and \(d\) is fixed. Here are two; the third is the <a href="#check-barndoor">barn-door</a>.</p>
-  <div class="math-block">\[ \begin{aligned} \text{(a)}\ \ & \Sigma_F\, M_k = \Sigma_H\, N_k \\ \text{(b)}\ \ & \Sigma_H\, p_{k,y} N_k - \Sigma_F\, p_{k,y} M_k = d \\ & N_k \le \beta_k\, d_k^\top f_k \ \ \text{(hands)} \end{aligned} \]</div>
-  <p>(a): the feet push out as hard as the hands pull in. (b): their moments cancel gravity's. The pull-in is limited by the hold: a sloper (small \(\beta\)) can hardly hold you in. With both feet off, \(d = 0\) and every \(N_k, M_k\) is zero.</p>
-  <p><b>Feet up high, hands work harder.</b> One hand and one foot a height \(h\) apart: (a) gives \(M = N\), then (b) gives \(N = d / h\). <span data-text="tip-example"></span></p>
-  <figure class="fig" id="fig-tipping">
-    <div class="tip-row" data-draw="tipping"></div>
-    <div class="fig-main" data-draw="tipping-chart"></div>
-    <p class="t-note" data-text="tip-check"></p>
-    <figcaption><b>Side view, wall on the left.</b> Hand pulled in, foot pushed out, gravity at the centre of mass. Below: the check's pull-in at many foot heights (dots) against \(d/h\) (line).</figcaption>
-  </figure>
-  <p data-text="tip-strength"></p>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>Two equality rows and one inequality per hand, all exact. Earlier figures keep using the constraints of their own sections (the <code>upto</code> option). Code: <code>tipping_rows</code>, <code>wall_distance</code>.</p>
-  </details>
-
-  <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
-  <p>The pulls and pushes must also line up left to right, or they twist the body open about a vertical axis like a door. A hand can resist a little by gripping hard, a twist \(\tau_k\):</p>
-  <div class="math-block">\[ \begin{aligned} \text{(c)}\ \ & \Sigma_H\, p_{k,x} N_k - \Sigma_F\, p_{k,x} M_k + \Sigma_H\, \tau_k = 0 \\ & |\tau_k| \le r_k F_k \end{aligned} \]</div>
-  <p>With one hand and two feet, the middle of every hand move, the hand must sit at the push-weighted middle of the feet, give or take what the grip can twist. Both feet on one side and the body swings open.</p>
-  <figure class="fig" id="fig-barndoor">
-    <div class="tip-row" data-draw="barndoor"></div>
-    <figcaption><b>One hand, two feet.</b> \(\otimes\): hand pulled in; \(\odot\): foot pushed out; size follows force. Dashed: the vertical axis through the hand. Right: everything else balances, but only with more twist than the grip can give.</figcaption>
-  </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p data-text="door-impl"></p>
-  </details>
-
-  <h3 id="check-flex">Flexibility</h3>
-  <p>A foot cannot go too far above the hip, which moves with the body; a high foot means the body must come up. For every foot on a hold:</p>
-  <div class="math-block" data-math="flex-row"></div>
-  <div class="tbl-wrap"><table class="tbl" data-draw="flex-table"></table></div>
-  <figure class="fig" id="fig-flex">
-    <div class="tip-row" data-draw="flex"></div>
-    <figcaption><b>One high foothold, two versions of Ava.</b> Grey dashed: hip. Band and red line: the highest foot. With Ben's stiff hips, even standing as tall as the low foot allows leaves the foothold above the line.</figcaption>
-  </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>One linear inequality on the body height per foot on a hold, a resting foot included. Code: <code>flex_rows</code>.</p>
-  </details>
-
-  <h3 id="check-problem">The full problem and why it fails</h3>
+  <h3 id="check-problem">The whole problem</h3>
   <div class="math-block" data-math="full-problem"></div>
-  <p><b>Convex.</b> The objective is linear, reach and strength are second-order cones, direction is a convex cone, and the rest is linear: a second-order cone program. So \(t^\star\) is unique, and for any bound on \(t\) the workable body positions form a convex set, which makes moves safe (<a href="#move">One move</a>).</p>
-  <ul>
-    <li><b>Not strong enough:</b> a solution with \(t^\star > 1\); the report names the most loaded limb and its hold.</li>
-    <li><b>Cannot reach:</b> no solution, even with only reach and flexibility; the report blames a foot too high for the hip, or else the hold farthest out of reach.</li>
-    <li><b>Direction or balance:</b> no solution, though reach and flexibility alone can be met.</li>
-    <li><b>Unusable hold:</b> no strength for that hold type; found before solving.</li>
-  </ul>
+  <p>The objective is linear, reach and strength are second-order cones, direction is a convex cone and the rest is linear: a convex <b>second-order cone program</b>. So \(t^\star\) is unique, and for any bound on \(t\) the workable body positions form a convex set, which step 4 relies on. When it fails: a solution with \(t^\star > 1\) means <b>not strong enough</b>; no solution even with only reach and flexibility means <b>cannot reach</b>; otherwise <b>direction or balance</b> does not work.</p>
   <div class="cards" data-draw="result-cards"></div>
 
   <h3 id="check-solve">Solving it</h3>
   <p data-text="solver-size"></p>
   <ul data-draw="solver-stats"></ul>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>The program is assembled row by row in Clarabel's standard form (equalities, inequalities, then cones) and solved directly, which skips the modelling overhead of cvxpy. The cross-check writes the same problem straight from the formula above in cvxpy, on random states (four climbers, random hand holds of every type, zero to two footholds, sometimes a resting limb), and the test suite fails if the two ever disagree. Code: <code>run</code>, <code>assemble</code>, <a data-src="src/betasolver/reference.py">reference.py</a>, <a data-src="src/betasolver/compare.py">compare.py</a>.</p>
-  </details>
 </section>
 
 <section class="chapter" id="move" data-group="The model" data-short="One move" hidden>
   <header>
     <p class="eyebrow">Step 4</p>
     <h2>One move</h2>
-    <p class="lede">A move changes one limb's hold while the body slides continuously. Two state checks are enough to decide it.</p>
+    <p class="lede">A move changes one limb's hold while the body slides. Two state checks decide it.</p>
   </header>
-  <h3 id="move-phases">Five phases of a move</h3>
-  <p>A <b>state</b> is which hold each limb is on; a <b>body position</b> is where the centre of mass is. A move changes one limb's hold, from state \(\sigma\) to \(\sigma'\), while the body slides. Say the right hand goes from A to B:</p>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Phase</th><th>What happens</th><th>Body</th><th>Holds on</th></tr></thead>
-    <tbody>
-      <tr><td>1 Unload</td><td>the force on A drops to zero</td><td>\(x_0 \to x_1\)</td><td>\(\sigma\), four limbs</td></tr>
-      <tr><td>2 Let go</td><td>A carries nothing, so the hand can leave</td><td>\(x_1\)</td><td>\(\sigma\) hands over to three limbs</td></tr>
-      <tr><td>3 Travel</td><td>the hand moves to B while the body slides</td><td>\(x_1 \to x_2\)</td><td>three limbs</td></tr>
-      <tr><td>4 Touch</td><td>the hand reaches B, still carrying nothing</td><td>\(x_2\)</td><td>three limbs hand over to \(\sigma'\)</td></tr>
-      <tr><td>5 Load</td><td>the force on B rises</td><td>\(x_2 \to x_3\)</td><td>\(\sigma'\), four limbs</td></tr>
-    </tbody>
-  </table></div>
-  <p>The two handovers are where the move can fail, and each is one state check with the moving limb resting:</p>
+  <h3 id="move-phases">Five phases, two checks</h3>
+  <p>Say the right hand goes from hold A to hold B, from state \(\sigma\) to \(\sigma'\). The hand <b>unloads</b> A, <b>lets go</b>, <b>travels</b> while the body slides, <b>touches</b> B, and <b>loads</b> it. It can only fail at the two handovers, each a state check with the moving hand resting:</p>
   <ul>
-    <li><b>Release check</b> <code>check(σ, no_force=k)</code>: can the other three hold the body while the hand only touches A? It gives \(x_1\) and \(t_{\text{release}}\).</li>
-    <li><b>Catch check</b> <code>check(σ′, no_force=k)</code>: can they hold it while the hand only touches B? It gives \(x_2\) and \(t_{\text{catch}}\).</li>
+    <li><b>Release check</b> <code>check(σ, no_force=k)</code>: can the other three hold the body while the hand only touches A?</li>
+    <li><b>Catch check</b> <code>check(σ′, no_force=k)</code>: can they hold it while the hand only touches B?</li>
   </ul>
-  <p>The move works if both are at most 1, and its difficulty is \(\max(t_{\text{release}}, t_{\text{catch}})\). Plain checks of \(\sigma\) and \(\sigma'\) give \(x_0\) and \(x_3\) for the animation only. A foot coming off needs only the release check, a foot going on only the catch check.</p>
-
+  <p>The move works if both give \(t \le 1\); its difficulty is \(\max(t_{\text{release}}, t_{\text{catch}})\). A foot coming off needs only the release check, a foot going on only the catch check.</p>
   <figure class="fig" id="fig-move">
     <div class="seg" role="group" aria-label="Move" data-draw="move-switch"></div>
     <div class="fig-main" data-draw="move"></div>
     <ol class="phase-strip" data-draw="move-phases"></ol>
     <div class="seg move-ctl" role="group" aria-label="Playback" data-draw="move-controls"></div>
     <p class="t-read" data-text="move-status" aria-live="polite"></p>
-    <figcaption><b>A move in five phases.</b> Arrows: hold forces; the moving hand's arrow shrinks to zero before it lets go and grows from zero after it touches. Dashed arm: in the air. Faint line: the path \(x_0 \to x_1 \to x_2 \to x_3\) of the centre of mass. All positions and forces at the keyframes come from the four state checks; between them the page interpolates.</figcaption>
+    <figcaption><b>A move in five phases.</b> The moving hand's force shrinks to zero before it lets go; the dashed arm is in the air; the faint line is the path of the centre of mass. Keyframes come from the checks.</figcaption>
   </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p><code>Move</code> holds the state, the moving limb and the new hold (or none for a foot coming off) and knows its kind: swap, match, cut or place. <code>evaluate</code> runs the start, release, catch and end checks and reports the difficulty, or which check fails first and why. Code: <a data-src="src/betasolver/moves.py">moves.py</a>.</p>
-  </details>
-  <h3 id="move-convex">Why the feasible region is convex</h3>
-  <p>The core fact: <b>in one state, the average of two valid solutions is again valid.</b> A solution is a body position \(x\) with every force \(f_k, N_k, M_k, \tau_k\); valid means it meets ① to ⑥ with \(t \le 1\). Mix two of them, \((1-s)\cdot\text{solution}_1 + s\cdot\text{solution}_2\) for \(s \in [0, 1]\):</p>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Constraint</th><th>Why the mix still meets it</th></tr></thead>
-    <tbody>
-      <tr><td>① Reach</td><td>both positions are in the disc, and a disc has no dents</td></tr>
-      <tr><td>② Direction</td><td>both forces are in the sector, which is narrower than 180°</td></tr>
-      <tr><td>③ Strength</td><td>the size of a mix is at most the mix of the sizes (triangle inequality)</td></tr>
-      <tr><td>④ ⑤ Balance</td><td>linear equations: two solutions equal to the same constant, so is their mix</td></tr>
-      <tr><td>⑤ Pull-in and twist limits, ⑥ Flexibility</td><td>linear inequalities</td></tr>
-    </tbody>
-  </table></div>
-  <p>So the valid solutions form a convex set, and so do the valid body positions. The effort of the mix is at most \((1-s)\,t_1 + s\,t_2 \le \max(t_1, t_2)\). <b>A climber can slide the body in a straight line between two valid positions while blending the forces, and hold still at every instant.</b></p>
-  <p>Two modelling choices keep this true: moments are taken about the wall origin (about the centre of mass, mixing would break the balance equations), and limbs fold completely (a shortest length would turn each disc into a ring with a hole). It assumes slow, static movement within one state; how the states hand over is the next section. Real bodies, with joint limits, are not convex.</p>
-  <p><b>The exception: swing moves.</b> With no foot pushing, the body hangs flat against the wall (\(d = 0\)); with one, it stands \(d\) off it. Taking off the last foot, or putting on the first, makes the body swing in or out at that moment, so those moves are not straight slides.</p>
 
-  <figure class="fig" id="fig-convex">
-    <div class="fig-main" data-draw="convex-chart"></div>
-    <figcaption><b>Effort along the move of the animation</b>, sampled at 21 points on each slide. Dashed: the two end solutions blended, body and forces together, whose effort is the straight line between the ends. Solid: the smallest effort with the body held at that point, which can only be lower. Neither crosses the move's difficulty (red). Hover a dot for its values.</figcaption>
-  </figure>
-  <ul data-draw="convex-stats"></ul>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>For each slide, the two end solutions are packed into vectors of that phase's program and mixed; <code>satisfies</code> checks every equation, inequality and cone. The travel phase uses the three-limb program, with the moving hand neither pushing nor reaching (<code>off</code>). The same check runs on random moves in the test suite. Code: <a data-src="src/betasolver/moves.py">moves.py</a>, <code>segments</code>, <code>path_check</code>; <a data-src="src/betasolver/compare.py">compare.py</a>, <code>path_sweep</code>.</p>
-  </details>
-  <h3 id="move-twochecks">Why two checks are enough</h3>
-  <p>\(x_1\) and \(x_2\) come from two separate problems. They connect because both lie in one convex region, and the slide between them needs nothing else. Three sets of body positions:</p>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Region</th><th>Body positions where</th><th>Shape</th></tr></thead>
-    <tbody>
-      <tr><td>\(S_3\)</td><td>the other three limbs hold the body with \(t \le 1\); nothing asked of the moving hand</td><td>convex</td></tr>
-      <tr><td>\(D_A\)</td><td>the moving hand reaches A</td><td>disc</td></tr>
-      <tr><td>\(D_B\)</td><td>the moving hand reaches B</td><td>disc</td></tr>
-    </tbody>
-  </table></div>
-  <p>The release check is \(S_3 \cap D_A\) and the catch check \(S_3 \cap D_B\), so \(x_1\) and \(x_2\) are both in \(S_3\). In the travel phase the hand touches nothing, so only \(S_3\) matters, and the straight line from \(x_1\) to \(x_2\) stays in it. Reaching A and reaching B are just the start and end conditions.</p>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Slide</th><th>Both ends in</th><th>Why</th></tr></thead>
-    <tbody>
-      <tr><td>1 \(x_0 \to x_1\)</td><td>the region of \(\sigma\)</td><td>at \(x_1\) the three hold the body and A carries nothing, which \(\sigma\) allows</td></tr>
-      <tr><td>3 \(x_1 \to x_2\)</td><td>\(S_3\)</td><td>above</td></tr>
-      <tr><td>5 \(x_2 \to x_3\)</td><td>the region of \(\sigma'\)</td><td>at \(x_2\) the three hold the body and B carries nothing</td></tr>
-    </tbody>
-  </table></div>
-  <p><b>The difficulty is exactly \(\max(t_{\text{release}}, t_{\text{catch}})\).</b> Every way of making the move passes both handovers, so it cannot be easier; the three slides achieve it, so it is no harder. Nothing links \(x_1\) to \(x_2\) beyond both being in \(S_3\), so solving the two checks separately is the same as solving them together. It also follows that \(t(\sigma) \le t_{\text{release}}\) and \(t(\sigma') \le t_{\text{catch}}\): the plain checks never decide a move (swing moves aside).</p>
-  <p><b>Failures.</b> \(S_3 \cap D_A\) empty: with three limbs holding, the hand cannot stay on A, so it <b>cannot let go</b>. \(S_3 \cap D_B\) empty: it <b>cannot reach</b> B. \(D_A\) and \(D_B\) need not overlap; on a long move they never do.</p>
-
+  <h3 id="move-why">Why two checks are enough</h3>
+  <p>In one state, the average of two valid solutions is valid again: discs and sectors have no dents, the size of an average is at most the average of sizes, and the rest is linear. So the body can slide in a straight line between two valid positions, forces blending, with \(t\) never above the larger end.</p>
+  <p>Now let \(S_3\) be the body positions where the other three limbs hold the body with \(t \le 1\), and \(D_A\), \(D_B\) where the hand reaches A or B. The release check lands in \(S_3 \cap D_A\), the catch check in \(S_3 \cap D_B\), and in between the hand touches nothing, so the straight slide inside \(S_3\) connects them. Every way of making the move passes both handovers, so the difficulty is exactly \(\max(t_{\text{release}}, t_{\text{catch}})\).</p>
   <figure class="fig" id="fig-twochecks">
     <div class="tip-row" data-draw="twochecks"></div>
-    <figcaption><b>The two moves of the animation, in body-position space.</b> Shaded: \(S_3\), traced by the state check itself. Dashed circles: \(D_A\) and \(D_B\). Left: \(x_1 \in S_3 \cap D_A\), \(x_2 \in S_3 \cap D_B\), and the slide between them stays in \(S_3\). Right: the layback holds the body far to the left, so \(S_3\) and \(D_A\) do not meet.</figcaption>
+    <figcaption><b>The two moves above, in body-position space.</b> Shaded: \(S_3\), traced by the check. Dashed: \(D_A\), \(D_B\). Right: the layback holds the body too far left to stay on A.</figcaption>
   </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p>\(S_3\) is convex, so it is star-shaped about any point inside it: its boundary is found by bisection along 72 rays from \(x_1\) (or \(x_2\)), each point a state check with the body held there and the moving hand in the air. Code: <a data-src="src/betasolver/moves.py">moves.py</a>, <code>region</code>.</p>
-  </details>
-  <h3 id="move-cost">Move cost and move types</h3>
-  <p>A move that works costs its difficulty plus a few small style terms, all in the units of \(t\):</p>
+  <p><span data-text="convex-facts"></span> <b>Exception:</b> taking off the last foot or putting on the first swings the body in or out (\(d\) jumps between 0 and its full value), so those <b>swing moves</b> also need their start and end states to hold.</p>
+
+  <h3 id="move-cost">Cost and candidates</h3>
+  <p>A move that works costs its difficulty plus small style terms:</p>
   <div class="math-block">\[ \begin{aligned} w = {} & \max(t_{\text{release}}, t_{\text{catch}}) + c_0 + \lambda_d\, \|p_B - p_A\|_2 \\ & + w_{\text{cross}}\,[\text{enters crossed hands}] + c_{\text{cut}}\,[\text{a foot comes off}] \end{aligned} \]</div>
   <div class="tbl-wrap"><table class="tbl" data-draw="cost-table"></table></div>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Move</th><th>From \(\to\) to</th><th>Limbs</th><th>Checks</th></tr></thead>
-    <tbody>
-      <tr><td>Swap</td><td>hold \(\to\) another hold</td><td>hands, feet</td><td>release and catch</td></tr>
-      <tr><td>Match</td><td>hold \(\to\) a hold another limb is on</td><td>hands, feet</td><td>release and catch</td></tr>
-      <tr><td>Cut</td><td>hold \(\to\) hanging</td><td>feet</td><td>release</td></tr>
-      <tr><td>Place</td><td>hanging \(\to\) hold</td><td>feet</td><td>catch</td></tr>
-    </tbody>
-  </table></div>
-  <p>Two hands may share a hold, and two feet; a hand and a foot only if feet may use it. Hands never hang. <b>Candidates</b> for each limb are the holds it may use. Before any full check, a candidate is dropped if the new state fails the pairwise distance test or no body position meets reach and flexibility. The catch check runs first, since it fails most often; the release check depends only on the state and the limb, so it is done once and shared.</p>
-
+  <p>Moves are swaps, matches, cuts (foot off) and places (foot on). Two hands may share a hold, as may two feet; a hand and a foot only if feet may use it; hands never hang. Candidates that fail a cheap reach test are dropped before any full check.</p>
   <figure class="fig" id="fig-checker">
     <div class="seg" role="group" aria-label="Start state" data-draw="checker-presets"></div>
     <div class="seg" role="group" aria-label="Moving limb" data-draw="checker-limbs"></div>
@@ -884,12 +677,8 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-key" data-draw="checker-detail"></div>
     </div>
     <div class="cand-list" data-draw="checker-list"></div>
-    <figcaption><b>Every move from one state.</b> Pick a start state and a limb; each hold it could go to is ringed: green works, red fails a check, grey was ruled out before checking. Click a ring or a list entry for the checks and the cost term by term.</figcaption>
+    <figcaption><b>Every move from one state.</b> Pick a state and a limb: green works, red fails a check, grey was ruled out. Click one for its cost.</figcaption>
   </figure>
-  <details class="impl">
-    <summary>How it is implemented</summary>
-    <p data-text="checker-impl"></p>
-  </details>
 </section>
 
 <section class="chapter" id="search" data-group="The model" data-short="Finding the best beta" hidden>
@@ -1492,8 +1281,10 @@ var Draw = (function () {
       "Every route uses the same " + L.wall.w.toFixed(1) + " m by " + L.wall.h.toFixed(1) + " m wall.";
 
     // the whole wall
-    var sw = Draw.scene(slot("wall"), { x0: 0, y0: 0, x1: L.wall.w, y1: L.wall.h, k: 62, pad: 10, padTop: 26, padLeft: 40, padBottom: 40, title: "The wall with a half-metre grid" });
-    Draw.wall(sw, L.wall, { grid: 0.5, axes: true });
+    if (slot("wall")) {
+      var sw = Draw.scene(slot("wall"), { x0: 0, y0: 0, x1: L.wall.w, y1: L.wall.h, k: 62, pad: 10, padTop: 26, padLeft: 40, padBottom: 40, title: "The wall with a half-metre grid" });
+      Draw.wall(sw, L.wall, { grid: 0.5, axes: true });
+    }
 
     // the eight hold types
     var grid = slot("hold-types");
@@ -1524,15 +1315,17 @@ var Draw = (function () {
     });
 
     // markings: start, finish, used, unused
-    var mk = slot("markings");
-    var sm = Draw.scene(mk, { x0: 0, y0: 0, x1: 2.0, y1: 0.5, k: 170, pad: 0, padBottom: 26, title: "Hold markings" });
-    Draw.el(sm.layers.wall, "rect", { x: 0, y: 0, width: sm.W, height: sm.Y(0), rx: 8 }, "w-wall");
-    var names = { start: "start", finish: "finish", normal: "used" };
-    L.markings.forEach(function (h) {
-      Draw.hold(sm, h, { used: h.used });
-      var txt = h.used ? names[h.role] : "not used";
-      Draw.el(sm.layers.over, "text", { x: sm.X(h.x), y: sm.Y(0) + 18, "text-anchor": "middle" }, "w-axis").textContent = txt;
-    });
+    if (slot("markings")) {
+      var mk = slot("markings");
+      var sm = Draw.scene(mk, { x0: 0, y0: 0, x1: 2.0, y1: 0.5, k: 170, pad: 0, padBottom: 26, title: "Hold markings" });
+      Draw.el(sm.layers.wall, "rect", { x: 0, y: 0, width: sm.W, height: sm.Y(0), rx: 8 }, "w-wall");
+      var names = { start: "start", finish: "finish", normal: "used" };
+      L.markings.forEach(function (h) {
+        Draw.hold(sm, h, { used: h.used });
+        var txt = h.used ? names[h.role] : "not used";
+        Draw.el(sm.layers.over, "text", { x: sm.X(h.x), y: sm.Y(0) + 18, "text-anchor": "middle" }, "w-axis").textContent = txt;
+      });
+    }
 
     // the climber on a piece of wall
     var S = L.scene, F = S.frame, C = L.climber;
@@ -1734,23 +1527,10 @@ var Draw = (function () {
   /* ---------- #body: body model (unit 1.3) ---------- */
   function fx(v) { return (v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(3).replace(/0+$/, "").replace(/\.$/, ""); }
   function renderBody(B, bodies) {
-    if (!document.getElementById("fig-anchors")) return;
-    // anchor table
-    var at = document.querySelector('[data-draw="anchor-table"]');
-    var rows = [
-      ["Left shoulder", -B.shoulder[0], B.shoulder[1]], ["Right shoulder", B.shoulder[0], B.shoulder[1]],
-      ["Left hip", -B.hip[0], B.hip[1]], ["Right hip", B.hip[0], B.hip[1]],
-      ["Head centre (drawing only)", 0, B.head[0]]
-    ];
-    at.innerHTML = "<thead><tr><th>Point</th><th>Offset from the centre of mass</th></tr></thead>";
-    var tb = document.createElement("tbody");
-    rows.forEach(function (r) {
-      var tr = document.createElement("tr");
-      var a = document.createElement("td"); a.textContent = r[0];
-      var b = document.createElement("td"); b.className = "num"; b.textContent = "(" + fx(r[1]) + "H, " + fx(r[2]) + "H)";
-      tr.appendChild(a); tr.appendChild(b); tb.appendChild(tr);
-    });
-    at.appendChild(tb);
+    if (!document.querySelector('[data-math="limb-lengths"]')) return;
+    document.querySelector('[data-text="anchors-text"]').textContent =
+      "shoulders at (\u00b1" + fx(B.shoulder[0]) + "H, " + fx(B.shoulder[1]) + "H) and hips at (\u00b1" + fx(B.hip[0]) + "H, " +
+      fx(B.hip[1]) + "H) from it, scaled by height H.";
 
     // formulas, built from the constants so no number is typed twice
     document.querySelector('[data-math="limb-lengths"]').textContent =
@@ -1806,20 +1586,22 @@ var Draw = (function () {
       Draw.el(sc.layers.over, "text", { x: sc.X(-half), y: sc.Y(fl) - 5 }, "limit-text").textContent = "highest foot";
     }
     var sw = document.querySelector('[data-draw="anchor-switch"]');
-    var btns = [];
-    shown.forEach(function (b, i) {
-      var bt = document.createElement("button");
-      bt.type = "button"; bt.className = "cl-" + b.climber;
-      var s = document.createElement("span"); s.className = "swatch"; bt.appendChild(s);
-      bt.appendChild(document.createTextNode(b.name));
-      bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
-      bt.addEventListener("click", function () {
-        btns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
-        drawAnchors(b);
+    if (sw && document.querySelector('[data-draw="anchors"]')) {
+      var btns = [];
+      shown.forEach(function (b, i) {
+        var bt = document.createElement("button");
+        bt.type = "button"; bt.className = "cl-" + b.climber;
+        var s = document.createElement("span"); s.className = "swatch"; bt.appendChild(s);
+        bt.appendChild(document.createTextNode(b.name));
+        bt.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+        bt.addEventListener("click", function () {
+          btns.forEach(function (x) { x.setAttribute("aria-pressed", x === bt ? "true" : "false"); });
+          drawAnchors(b);
+        });
+        btns.push(bt); sw.appendChild(bt);
       });
-      btns.push(bt); sw.appendChild(bt);
-    });
-    drawAnchors(shown[0]);
+      drawAnchors(shown[0]);
+    }
 
     // limb length table
     var lt = document.querySelector('[data-draw="length-table"]');
@@ -1862,8 +1644,8 @@ var Draw = (function () {
     var same = bodies.filter(function (b) { return b.climber === "D"; })[0];
     if (same) document.querySelector('[data-text="same-body"]').textContent = same.name + " has the same body as Ava and is not drawn separately.";
     document.querySelector('[data-text="d-wall"]').textContent =
-      "the centre of mass stays " + B.d_wall.toFixed(2) + " H from the wall, " +
-      bodies.map(function (b) { return Math.round(b.d_wall * 100) + " cm for " + b.name; }).filter(function (t, i) { return bodies[i].climber !== "D"; }).join(", ") + ".";
+      B.d_wall.toFixed(2) + " H from the wall (" +
+      bodies.map(function (b) { return Math.round(b.d_wall * 100) + " cm for " + b.name; }).filter(function (t, i) { return bodies[i].climber !== "D"; }).join(", ") + ")";
   }
   if (DATA.model && DATA.model.body && DATA.figures.bodies) renderBody(DATA.model.body, DATA.figures.bodies);
 
@@ -1882,7 +1664,8 @@ var Draw = (function () {
       tb.appendChild(tr);
     });
     ut.appendChild(tb);
-    document.querySelector('[data-text="unknown-count"]').textContent =
+    var uc = document.querySelector('[data-text="unknown-count"]');
+    if (uc) uc.textContent =
       S.sizes.four + " numbers with all four limbs on, " + S.sizes.one_foot + " with one foot off, " + S.sizes.no_feet + " with both feet off.";
 
     var ct = document.querySelector('[data-draw="constraints-table"]');
@@ -1921,6 +1704,7 @@ var Draw = (function () {
     var used = {};
     Object.keys(ex.state).forEach(function (l) { if (ex.state[l]) used[ex.state[l]] = l; });
     var slot = document.querySelector('[data-draw="state-example"]');
+    if (!slot) return;
     slot.classList.add("pose-row");
     ex.poses.forEach(function (p, i) {
       var cell = document.createElement("div");
@@ -2273,8 +2057,8 @@ var Draw = (function () {
       row.appendChild(cell);
     });
 
-    var A = B.strength_again;
-    document.querySelector('[data-text="balance-strength"]').textContent =
+    var A = B.strength_again, bs = document.querySelector('[data-text="balance-strength"]');
+    if (bs) bs.textContent =
       "Back to the strength example: choosing the forces itself, the solver spreads the load evenly, t = " +
       A.map(function (r) { return m2(r.t) + " for " + r.name + " (" + m2(r.t_fixed) + " fixed)"; }).join(", ") +
       ". The hands carry load only because sharing lowers t; nothing yet makes them pull in. That comes next.";
@@ -2440,8 +2224,8 @@ var Draw = (function () {
 
   /* ---------- #check: flexibility (unit 2.7) ---------- */
   function renderFlex(X, B) {
+    if (!document.querySelector('[data-math="flex-row"]')) return;
     var row = document.querySelector('[data-draw="flex"]');
-    if (!row) return;
     function m2(x) { return x.toFixed(2); }
     function cm(x) { return Math.round(Math.abs(x) * 100) + " cm"; }
     var hip = Math.abs(B.hip[1]);
@@ -2460,6 +2244,7 @@ var Draw = (function () {
       body.appendChild(tr);
     });
     tb.appendChild(body);
+    if (!row) return;
 
     var v = X.view;
     X.panels.forEach(function (P) {
@@ -2487,6 +2272,29 @@ var Draw = (function () {
     });
   }
   if (DATA.figures && DATA.figures.flex) renderFlex(DATA.figures.flex, DATA.model.body);
+
+  /* ---------- facts that replace dropped figures ---------- */
+  (function renderFacts(F) {
+    function set(key, txt) { var e = document.querySelector('[data-text="' + key + '"]'); if (e) e.textContent = txt; }
+    function m2(x) { return x.toFixed(2); }
+    if (F.tipping) {
+      var T = F.tipping, lo = T.views[0], hi = T.views[1];
+      set("tip-facts", "For " + T.climber.name + " (d = " + m2(T.d) + " m), h = " + m2(lo.h) + " m gives N = " + m2(lo.N) + " and h = " + m2(hi.h) +
+        " m gives N = " + m2(hi.N) + "; at " + T.sweep.length + " foot heights the check matches d/h to " +
+        (T.max_error * 100 < 0.1 ? "within 0.1%" : (T.max_error * 100).toFixed(1) + "%") + ".");
+    }
+    if (F.barndoor) {
+      var D = F.barndoor, side = D.panels[1];
+      set("door-facts", "With both feet " + m2(side.feet_x[0] - side.hand_x) + "–" + m2(side.feet_x[1] - side.hand_x) +
+        " m to the right of " + D.climber.name + "'s hand, the grip would have to twist " + side.needed.toFixed(3) +
+        " but can give " + side.cap.toFixed(3) + ", so the check fails.");
+    }
+    if (F.convex) {
+      var S = F.convex.sweep;
+      set("convex-facts", "Checked on " + S.moves + " random moves (" + S.points.toLocaleString("en") + " positions along their slides): every blend is valid and t never exceeds the difficulty by more than " +
+        Math.max(S.worst_min, S.worst_mix).toExponential(0) + ".");
+    }
+  })(DATA.figures || {});
 
   /* ---------- #check: the full problem and result cards (unit 2.8) ---------- */
   function renderProblem(cards, B) {
@@ -2943,7 +2751,8 @@ var Draw = (function () {
       limbBtns.push(bt); lb.appendChild(bt);
     });
     var n = K.presets.map(function (q) { return q.moves.length; });
-    document.querySelector('[data-text="checker-impl"]').textContent =
+    var ci = document.querySelector('[data-text="checker-impl"]');
+    if (ci) ci.textContent =
       "A cached Checker per climber and route keeps every state check by (state, no_force), so each candidate costs at most its catch check and the check of its new state; " +
       K.presets.map(function (q) { return q.moves.length + " candidates from “" + q.label.toLowerCase() + "” took " + q.solves + " checks"; }).join(", ") +
       ". The search reuses the same Checker. Code: moves.py, Checker, cost, targets_for.";

@@ -94,11 +94,11 @@ CONSTRAINTS = [
      "climbing": "Each hold can only push you in certain directions.", "limits": "direction of the in-wall forces"},
     {"n": 3, "key": "strength", "name": "Strength", "section": "check-strength",
      "climbing": "No hand or foot goes over its strength.", "limits": "size of the forces; defines t"},
-    {"n": 4, "key": "inplane", "name": "In-plane balance", "section": "check-inplane",
+    {"n": 4, "key": "inplane", "name": "In-plane balance", "section": "check-balance",
      "climbing": "No falling, no sliding sideways, no swinging.", "limits": "in-wall forces and body position"},
-    {"n": 5, "key": "outofwall", "name": "Out-of-wall balance", "section": "check-tipping",
+    {"n": 5, "key": "outofwall", "name": "Out-of-wall balance", "section": "check-balance",
      "climbing": "No tipping backwards, no barn-door.", "limits": "hand pull, foot push, grip torque"},
-    {"n": 6, "key": "flex", "name": "Flexibility", "section": "check-flex",
+    {"n": 6, "key": "flex", "name": "Flexibility", "section": "check-reach",
      "climbing": "A foot cannot go too far above the hip.", "limits": "body position"},
 ]
 
