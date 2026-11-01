@@ -89,7 +89,7 @@ def collect_data() -> dict:
 
 
 RESULTS = ROOT / "site" / "results.json"
-N_EXAMPLES = 10
+N_EXAMPLES = 6
 
 
 def load_results() -> dict:
