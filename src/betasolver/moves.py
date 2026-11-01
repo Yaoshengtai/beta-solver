@@ -181,3 +181,35 @@ def path_check(body: Body, route: Route, move: Move, res: MoveResult | None = No
                         "t_min": fixed["t"] if fixed["ok"] else None,
                         "t_mix": float(z[P.layout[("t", None)].start]), "ok_mix": satisfies(P, z, tol=1e-5)})
     return out
+
+
+# ------------------------------------------------------------ why two checks are enough (section 4.3)
+
+def region(body: Body, route: Route, state: State, limb: str, inside, rays: int = 72, reach: float = 1.5,
+           tmax: float = 1.0, iters: int = 18) -> list:
+    """S3: every body position where the other limbs hold the body with t <= tmax, `limb` in the air.
+
+    It is convex (section 4.2), so it is star-shaped about any point inside
+    it; its boundary is found by bisection along `rays` rays from `inside`.
+    Returns the boundary as a polygon, or [] if `inside` is not inside.
+    """
+    import math
+
+    def holds(x):
+        r = solve(body, route, state, no_force=limb, off=limb, torso=x, tidy=False)
+        return r["ok"] and r["t"] <= tmax + 1e-9
+
+    if not holds(inside):
+        return []
+    poly = []
+    for i in range(rays):
+        a = 2 * math.pi * i / rays
+        lo, hi = 0.0, reach
+        for _ in range(iters):
+            mid = (lo + hi) / 2
+            if holds((inside[0] + mid * math.cos(a), inside[1] + mid * math.sin(a))):
+                lo = mid
+            else:
+                hi = mid
+        poly.append((inside[0] + lo * math.cos(a), inside[1] + lo * math.sin(a)))
+    return poly

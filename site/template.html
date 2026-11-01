@@ -795,7 +795,35 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
     <p>For each slide, the two end solutions are packed into vectors of that phase's program and mixed; <code>satisfies</code> checks every equation, inequality and cone. The travel phase uses the three-limb program, with the moving hand neither pushing nor reaching (<code>off</code>). The same check runs on random moves in the test suite. Code: <a data-src="src/betasolver/moves.py">moves.py</a>, <code>segments</code>, <code>path_check</code>; <a data-src="src/betasolver/compare.py">compare.py</a>, <code>path_sweep</code>.</p>
   </details>
   <h3 id="move-twochecks">Why two checks are enough</h3>
-  <div class="planned"><span class="chip">Planned · unit 3.3</span><p>The release and catch positions live in the same convex region, so a straight slide connects them.</p></div>
+  <p>\(x_1\) and \(x_2\) come from two separate problems. They connect because both lie in one convex region, and the slide between them needs nothing else. Three sets of body positions:</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Region</th><th>Body positions where</th><th>Shape</th></tr></thead>
+    <tbody>
+      <tr><td>\(S_3\)</td><td>the other three limbs hold the body with \(t \le 1\); nothing asked of the moving hand</td><td>convex</td></tr>
+      <tr><td>\(D_A\)</td><td>the moving hand reaches A</td><td>disc</td></tr>
+      <tr><td>\(D_B\)</td><td>the moving hand reaches B</td><td>disc</td></tr>
+    </tbody>
+  </table></div>
+  <p>The release check is \(S_3 \cap D_A\) and the catch check \(S_3 \cap D_B\), so \(x_1\) and \(x_2\) are both in \(S_3\). In the travel phase the hand touches nothing, so only \(S_3\) matters, and the straight line from \(x_1\) to \(x_2\) stays in it. Reaching A and reaching B are just the start and end conditions.</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Slide</th><th>Both ends in</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>1 \(x_0 \to x_1\)</td><td>the region of \(\sigma\)</td><td>at \(x_1\) the three hold the body and A carries nothing, which \(\sigma\) allows</td></tr>
+      <tr><td>3 \(x_1 \to x_2\)</td><td>\(S_3\)</td><td>above</td></tr>
+      <tr><td>5 \(x_2 \to x_3\)</td><td>the region of \(\sigma'\)</td><td>at \(x_2\) the three hold the body and B carries nothing</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>The difficulty is exactly \(\max(t_{\text{release}}, t_{\text{catch}})\).</b> Every way of making the move passes both handovers, so it cannot be easier; the three slides achieve it, so it is no harder. Nothing links \(x_1\) to \(x_2\) beyond both being in \(S_3\), so solving the two checks separately is the same as solving them together. It also follows that \(t(\sigma) \le t_{\text{release}}\) and \(t(\sigma') \le t_{\text{catch}}\): the plain checks never decide a move (swing moves aside).</p>
+  <p><b>Failures.</b> \(S_3 \cap D_A\) empty: with three limbs holding, the hand cannot stay on A, so it <b>cannot let go</b>. \(S_3 \cap D_B\) empty: it <b>cannot reach</b> B. \(D_A\) and \(D_B\) need not overlap; on a long move they never do.</p>
+
+  <figure class="fig" id="fig-twochecks">
+    <div class="tip-row" data-draw="twochecks"></div>
+    <figcaption><b>The two moves of the animation, in body-position space.</b> Shaded: \(S_3\), traced by the state check itself. Dashed circles: \(D_A\) and \(D_B\). Left: \(x_1 \in S_3 \cap D_A\), \(x_2 \in S_3 \cap D_B\), and the slide between them stays in \(S_3\). Right: the layback holds the body far to the left, so \(S_3\) and \(D_A\) do not meet.</figcaption>
+  </figure>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>\(S_3\) is convex, so it is star-shaped about any point inside it: its boundary is found by bisection along 72 rays from \(x_1\) (or \(x_2\)), each point a state check with the body held there and the moving hand in the air. Code: <a data-src="src/betasolver/moves.py">moves.py</a>, <code>region</code>.</p>
+  </details>
   <h3 id="move-cost">Move cost and move types</h3>
   <div class="planned"><span class="chip">Planned · unit 3.4</span><p>Swap, cut, place and match, and the small style penalties added to each move.</p></div>
 </section>
@@ -2641,6 +2669,51 @@ var Draw = (function () {
     });
   }
   if (DATA.figures && DATA.figures.convex) renderConvex(DATA.figures.convex);
+
+  /* ---------- #move: why two checks are enough (unit 3.3) ---------- */
+  function renderTwoChecks(T) {
+    var row = document.querySelector('[data-draw="twochecks"]');
+    if (!row) return;
+    T.panels.forEach(function (P) {
+      var xs = P.S3.map(function (q) { return q[0]; }).concat([P.DA.c[0] - P.DA.r, P.DA.c[0] + P.DA.r, P.DB.c[0] - P.DB.r, P.DB.c[0] + P.DB.r]);
+      var ys = P.S3.map(function (q) { return q[1]; }).concat([P.DA.c[1] - P.DA.r, P.DA.c[1] + P.DA.r, P.DB.c[1] - P.DB.r, P.DB.c[1] + P.DB.r]);
+      var x0 = Math.min.apply(null, xs) - 0.05, x1 = Math.max.apply(null, xs) + 0.05, y0 = Math.min.apply(null, ys) - 0.05, y1 = Math.max.apply(null, ys) + 0.05;
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var sc = Draw.scene(cell, { x0: x0, y0: y0, x1: x1, y1: y1, k: 200, pad: 4, title: P.ok ? "Two checks, one convex region" : "Cannot let go" });
+      Draw.el(sc.layers.wall, "rect", { x: 0, y: 0, width: sc.W, height: sc.H, rx: 6 }, "w-wall");
+      Draw.el(sc.layers.holds, "path", { d: "M" + P.S3.map(function (q) { return sc.X(q[0]) + " " + sc.Y(q[1]); }).join("L") + "Z" }, "region");
+      [["DA", "D_A: reach " + P.DA.hold], ["DB", "D_B: reach " + P.DB.hold]].forEach(function (d) {
+        var D = P[d[0]];
+        Draw.el(sc.layers.trail, "circle", { cx: sc.X(D.c[0]), cy: sc.Y(D.c[1]), r: (D.r * sc.k).toFixed(1) }, "disc");
+        Draw.el(sc.layers.over, "text", { x: sc.X(D.c[0]), y: sc.Y(D.c[1] + D.r) + 14, "text-anchor": "middle" }, "anno-strong").textContent = d[1];
+      });
+      var sxs = P.S3.map(function (q) { return q[0]; }), sys = P.S3.map(function (q) { return q[1]; });
+      var sxmin = Math.min.apply(null, sxs), sxmax = Math.max.apply(null, sxs), symin = Math.min.apply(null, sys), symax = Math.max.apply(null, sys);
+      var small = sxmax - sxmin <= 0.3;
+      if (!small) {  // a large region: label it inside, near the bottom
+        Draw.el(sc.layers.over, "text", { x: sc.X((sxmin + sxmax) / 2), y: sc.Y(symin + 0.08), "text-anchor": "middle" }, "anno-strong").textContent = "S₃";
+      } else {       // a small one: label it to the left
+        Draw.el(sc.layers.over, "text", { x: sc.X(sxmin) - 10, y: sc.Y((symin + symax) / 2) + 4, "text-anchor": "end" }, "anno-strong").textContent = "S₃";
+      }
+      if (P.x1 && P.x2) Draw.el(sc.layers.over, "line", { x1: sc.X(P.x1[0]), y1: sc.Y(P.x1[1]), x2: sc.X(P.x2[0]), y2: sc.Y(P.x2[1]), "stroke-width": 2.4 }, "force");
+      [["x1", "x₁"], ["x2", "x₂"]].forEach(function (q) {
+        var x = P[q[0]];
+        if (!x) return;
+        Draw.el(sc.layers.over, "circle", { cx: sc.X(x[0]), cy: sc.Y(x[1]), r: 4.5 }, "tip");
+        Draw.el(sc.layers.over, "text", { x: sc.X(x[0]) + (small ? 0 : 8), y: sc.Y(x[1]) + (small ? -9 : q[0] === "x1" ? 12 : -4), "text-anchor": small ? "middle" : "start" }, "anno-strong").textContent = q[1];
+      });
+      var st = document.createElement("span");
+      st.style.fontWeight = "600"; st.style.color = P.ok ? "var(--easy)" : "var(--limit)";
+      st.textContent = P.ok ? "✓ The move works" : "✗ Cannot let go";
+      var note = document.createElement("span");
+      note.textContent = P.ok
+        ? "Release t = " + P.t_release.toFixed(2) + " at x₁, catch t = " + P.t_catch.toFixed(2) + " at x₂; the slide stays in S₃."
+        : "S₃ and D_A do not meet, though S₃ meets D_B (catch t = " + P.t_catch.toFixed(2) + ").";
+      cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+    });
+  }
+  if (DATA.figures && DATA.figures.twochecks) renderTwoChecks(DATA.figures.twochecks);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {

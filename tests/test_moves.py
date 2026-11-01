@@ -135,3 +135,57 @@ def test_solution_vector_satisfies_its_program():
     assert satisfies(P, z, tol=1e-5)
     z[P.layout[("t", None)]] = 0.5 * res["t"]                        # too little strength
     assert not satisfies(P, z, tol=1e-5)
+
+
+# ------------------------------------------------------------ why two checks are enough (unit 3.3)
+import math  # noqa: E402
+
+from betasolver.moves import region  # noqa: E402
+
+
+def _inside(poly, p):
+    n = len(poly)
+    return all((poly[(i + 1) % n][0] - poly[i][0]) * (p[1] - poly[i][1])
+               - (poly[(i + 1) % n][1] - poly[i][1]) * (p[0] - poly[i][0]) >= -1e-9 for i in range(n))
+
+
+def _holds(b, r, x):
+    res = solve(b, r, S, no_force="RH", off="RH", torso=x, tidy=False)
+    return res["ok"] and res["t"] <= 1 + 1e-9
+
+
+def test_s3_boundary_is_traced_by_the_check():
+    b, r = make_body(AVA), route(GOOD)
+    e = evaluate(b, r, Move(S, "RH", "H3"))
+    poly = region(b, r, S, "RH", e.release.torso)
+    assert len(poly) == 72
+    c = e.release.torso
+    for p in poly[::9]:
+        dx, dy = p[0] - c[0], p[1] - c[1]
+        assert _holds(b, r, (c[0] + 0.97 * dx, c[1] + 0.97 * dy))       # just inside: holds
+        assert not _holds(b, r, (c[0] + 1.03 * dx, c[1] + 1.03 * dy))   # just outside: does not
+
+
+def test_release_and_catch_positions_share_s3():
+    # section 4.3: x1 in S3 and D_A, x2 in S3 and D_B, and the straight slide between them stays in S3
+    b, r = make_body(AVA), route(GOOD)
+    e = evaluate(b, r, Move(S, "RH", "H3"))
+    x1, x2 = e.release.torso, e.catch.torso
+    for i in range(11):
+        u = i / 10
+        assert _holds(b, r, (x1[0] + u * (x2[0] - x1[0]), x1[1] + u * (x2[1] - x1[1])))
+    for x, hid in ((x1, "H2"), (x2, "H3")):
+        h, o = r.hold(hid), b.offsets["RH"]
+        assert math.dist(x, (h.x - o[0], h.y - o[1])) <= b.L["RH"] + 1e-6
+
+
+def test_cannot_let_go_means_s3_misses_d_a():
+    b, r = make_body(AVA), route(LAYBACK)
+    e = evaluate(b, r, Move(S, "RH", "H3"))
+    poly = region(b, r, S, "RH", e.catch.torso)
+    o, L = b.offsets["RH"], b.L["RH"]
+    da = (r.hold("H2").x - o[0], r.hold("H2").y - o[1])
+    db = (r.hold("H3").x - o[0], r.hold("H3").y - o[1])
+    assert min(math.dist(p, da) for p in poly) > L          # S3 and D_A do not meet
+    assert min(math.dist(p, db) for p in poly) < L          # S3 and D_B do
+    assert region(b, r, S, "RH", (2.6, 0.3)) == []          # a start point outside S3 gives nothing
