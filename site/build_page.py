@@ -68,7 +68,6 @@ def collect_data() -> dict:
             "legend": legend.legend(),
             "route_example": legend.route_example(),
             "bodies": legend.body_figures(),
-            "state_example": legend.state_example(),
             "reach": legend.reach_figure(),
             "strength": legend.strength_figure(),
             "balance": legend.balance_figure(),
@@ -83,8 +82,7 @@ def collect_data() -> dict:
             "checker": legend.checker_figure(),
             "graph": legend.graph_figure(),
             "dijkstra": legend.search_figure(),
-            # the four typical holds of section 3.2; a sidepull faces right here
-            "direction_picks": [{"type": "jug"}, {"type": "sloper"}, {"type": "sidepull", "dir": 0}, {"type": "undercling"}],
+            "player": legend.player_figure(),
         },
     }
 

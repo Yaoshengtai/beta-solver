@@ -20,6 +20,12 @@ def html(tmp_path_factory):
     return build_page.build(out)
 
 
+@pytest.fixture(scope="module")
+def markup(html):
+    """The page without its <script> blocks: a slot only counts if the markup has it."""
+    return re.sub(r"<script\b.*?</script>", "", html, flags=re.S)
+
+
 def test_every_chapter_present_in_order(html):
     found = re.findall(r'<section class="chapter" id="([^"]+)"', html)
     assert found == CHAPTERS
@@ -62,12 +68,12 @@ def test_preview_has_no_document_wrapper(html):
     assert frag.lstrip().startswith("<title>")
 
 
-def test_legend_embedded_and_slots_present(html):
+def test_legend_embedded_and_slots_present(html, markup):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
     leg = json.loads(raw)["figures"]["legend"]
     assert len(leg["hold_types"]) == 8
-    for slot in ("wall", "hold-types", "markings", "climber", "climber-key"):
-        assert f'data-draw="{slot}"' in html
+    for slot in ("hold-types", "climber", "climber-key"):
+        assert f'data-draw="{slot}"' in markup
     assert "var Draw = (function ()" in html
 
 
@@ -88,13 +94,14 @@ def test_climbers_embedded(html):
     assert 'data-draw="climber-cards"' in html
 
 
-def test_body_data_embedded(html):
+def test_body_data_embedded(html, markup):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
     data = json.loads(raw)
     assert data["model"]["body"]["leg"] == 0.5
     assert len(data["figures"]["bodies"]) == 4
-    for slot in ("anchor-table", "anchors", "length-table", "to-scale"):
-        assert f'data-draw="{slot}"' in html
+    for slot in ("length-table", "to-scale"):
+        assert f'data-draw="{slot}"' in markup
+    assert 'data-text="anchors-text"' in markup and 'data-math="limb-lengths"' in markup
 
 
 def test_stance_overview_embedded(html):
@@ -102,7 +109,6 @@ def test_stance_overview_embedded(html):
     data = json.loads(raw)
     assert data["stance"]["sizes"]["four"] == 17
     assert len(data["stance"]["constraints"]) == 6
-    assert len(data["figures"]["state_example"]["poses"]) == 3
 
 
 def test_reach_figure_embedded(html):
@@ -112,8 +118,14 @@ def test_reach_figure_embedded(html):
     assert 'data-draw="reach"' in html
 
 
-def test_direction_figure_slots(html):
-    assert 'data-draw="direction"' in html and 'data-draw="direction-reset"' in html
+def test_check_sections(markup):
+    # chapter 2, slimmed: reach and flexibility together, one balance section
+    ids = re.findall(r'<h3 id="(check-[a-z]+)"', markup)
+    assert ids == ["check-unknowns", "check-reach", "check-direction", "check-strength", "check-balance",
+                   "check-problem", "check-solve"]
+    for slot in ('data-draw="reach"', 'data-math="flex-row"', 'data-draw="flex-table"', 'data-draw="balance"',
+                 'data-text="tip-facts"', 'data-text="door-facts"', 'data-math="full-problem"', 'data-draw="result-cards"'):
+        assert slot in markup
 
 
 def test_strength_figure_embedded(html):
@@ -131,7 +143,6 @@ def test_balance_figure_embedded(html):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
     B = json.loads(raw)["figures"]["balance"]
     assert [p["key"] for p in B["panels"]] == ["hang", "off", "sidepull"]
-    assert 'data-draw="balance"' in html and 'data-text="balance-strength"' in html
     assert "Planned · unit 2.4" not in html
 
 
@@ -139,8 +150,6 @@ def test_tipping_figure_embedded(html):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
     T = json.loads(raw)["figures"]["tipping"]
     assert len(T["views"]) == 2 and len(T["sweep"]) >= 10 and T["max_error"] < 0.01
-    for slot in ('data-draw="tipping"', 'data-draw="tipping-chart"', 'data-text="tip-strength"'):
-        assert slot in html
     assert "Planned · unit 2.5" not in html
 
 
@@ -148,11 +157,13 @@ def test_barndoor_figure_embedded(html):
     raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
     D = json.loads(raw)["figures"]["barndoor"]
     assert [p["ok"] for p in D["panels"]] == [True, False]
-    assert 'data-draw="barndoor"' in html and "Planned · unit 2.6" not in html
+    assert "Planned · unit 2.6" not in html
 
 
 def test_flex_figure_embedded(html):
-    assert 'data-draw="flex"' in html and 'data-draw="flex-table"' in html and "Planned · unit 2.7" not in html
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    X = json.loads(raw)["figures"]["flex"]
+    assert [p["ok"] for p in X["panels"]] == [True, False]
 
 
 def test_full_problem_and_cards(html):
@@ -186,7 +197,7 @@ def test_convex_figure_embedded(html):
     assert len(X["points"]) == 63 and all(p["ok"] for p in X["points"])
     assert max(p["t_min"] for p in X["points"]) <= X["difficulty"] + 2e-3
     assert X["sweep"]["all_feasible"] and X["sweep"]["moves"] == 100
-    assert 'data-draw="convex-chart"' in html and "Planned · unit 3.2" not in html
+    assert "Planned · unit 3.2" not in html
 
 
 
@@ -226,3 +237,22 @@ def test_dijkstra_figure_embedded(html):
     assert D["status"] == "ok" and D["steps"] and sum(1 for s in D["steps"] if s["crux"]) == 1
     assert all(a <= b + 1e-9 for a, b in zip(D["stage1"], D["stage1"][1:]))
     assert 'data-draw="dijkstra-charts"' in html and "Planned · unit 4.2" not in html
+
+
+
+def test_player_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    X = json.loads(raw)["figures"]["player"]
+    assert [r["climber"] for r in X["runs"]] == ["A", "B", "C"]
+    assert all(c["valid"] for c in X["smoothing"])
+    for r in X["runs"]:
+        assert r["status"] == "ok" and all(len(s["frames"]) == 4 for s in r["steps"])
+    assert 'data-draw="player"' in html and "Planned · unit 4." not in html   # chapter 4 is complete
+
+
+
+def test_move_sections(markup):
+    # chapter 3, slimmed
+    assert re.findall(r'<h3 id="(move-[a-z]+)"', markup) == ["move-phases", "move-why", "move-cost"]
+    for slot in ('data-draw="move"', 'data-draw="twochecks"', 'data-text="convex-facts"', 'data-draw="checker"'):
+        assert slot in markup
