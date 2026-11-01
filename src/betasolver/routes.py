@@ -149,4 +149,34 @@ EXAMPLES: list = [
              and all(R["C"]["fail"]["state"][f] in ("F1", "F2", None) for f in ("LF", "RF"))),
         ),
     ),
+    Example(
+        "ex4", "Monkey Bars",
+        "Feet off: once the footholds run out, every hand move hangs the whole body on one arm.",
+        _route("ex4", "Monkey Bars", [
+            ("S1", 1.35, 1.45, "jug"), ("S2", 1.65, 1.45, "jug"),
+            ("J1", 1.35, 1.95, "jug"), ("J2", 1.65, 2.45, "jug"), ("J3", 1.35, 2.95, "jug"),
+            ("J4", 1.65, 3.45, "jug"), ("T", 1.50, 3.90, "jug"),
+            ("F1", 1.35, 0.45, "foot_big"), ("F2", 1.65, 0.45, "foot_big"), ("F3", 1.50, 0.95, "foot_big")],
+            feet_on_hands=False),
+        ("A", "B", "C"),
+        {"A": "ok", "B": "ok", "C": "fail"},
+        (
+            "Good jugs all the way, 0.5 m apart, but the footholds stop at knee height. Above J2 the feet can "
+            "reach nothing and hang, and every time a hand lets go, the other hand holds the whole body.",
+            "{A.label} climbs it in {A.steps} moves (crux {A.crux}). Her feet come off by J2; from then on she "
+            "matches each jug before reaching for the next, and every reach needs t = 1/1.2 = 0.83.",
+            "{B.label} has the same jug strength, so the same crux ({B.crux}), but his long arms skip J1: "
+            "{B.steps} moves.",
+            "{C.label} gets both hands onto J2 with his feet hanging, which is fine while two hands share the "
+            "load. But moving a hand means hanging on the other one alone, which needs 1/0.8 = 1.25 of his jug "
+            "strength. Cal is {C.fail}.",
+        ),
+        (
+            ("Ben skips J1", lambda R: all(st["to"] != "J1" for st in R["B"]["steps"])),
+            ("Ben needs fewer moves than Ava", lambda R: len(R["B"]["steps"]) < len(R["A"]["steps"])),
+            ("Cal fails on strength with both feet off",
+             lambda R: R["C"]["fail"]["reason"] == "strength"
+             and R["C"]["fail"]["state"]["LF"] is None and R["C"]["fail"]["state"]["RF"] is None),
+        ),
+    ),
 ]
