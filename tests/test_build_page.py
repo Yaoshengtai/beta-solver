@@ -121,7 +121,6 @@ def test_strength_figure_embedded(html):
     data = json.loads(raw)
     S = data["figures"]["strength"]
     assert [r["climber"] for r in S["runs"]] == ["A", "B", "C"]
-    assert data["stance"]["strength"]["faces"] == 24
     assert [b["key"] for b in data["stance"]["effort_bands"]] == ["easy", "hard", "limit", "fail"]
     for slot in ("strength", "strength-bars", "strength-switch", "effort-table"):
         assert f'data-draw="{slot}"' in html
@@ -143,3 +142,28 @@ def test_tipping_figure_embedded(html):
     for slot in ('data-draw="tipping"', 'data-draw="tipping-chart"', 'data-text="tip-strength"'):
         assert slot in html
     assert "Planned · unit 2.5" not in html
+
+
+def test_barndoor_figure_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    D = json.loads(raw)["figures"]["barndoor"]
+    assert [p["ok"] for p in D["panels"]] == [True, False]
+    assert 'data-draw="barndoor"' in html and "Planned · unit 2.6" not in html
+
+
+def test_flex_figure_embedded(html):
+    assert 'data-draw="flex"' in html and 'data-draw="flex-table"' in html and "Planned · unit 2.7" not in html
+
+
+def test_full_problem_and_cards(html):
+    assert 'data-math="full-problem"' in html and 'data-draw="result-cards"' in html and "Planned · unit 2.8" not in html
+
+
+
+def test_solver_section_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    S = json.loads(raw)["figures"]["solver"]
+    assert S["summary"]["n"] == 300 and S["summary"]["disagree"] == 0
+    assert S["size"]["variables"] == 17 and S["size"]["cones"] == 8
+    assert 'data-draw="solver-stats"' in html
+    assert "Planned · unit 2." not in html  # chapter 2 is complete

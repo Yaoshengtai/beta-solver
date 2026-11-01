@@ -77,8 +77,8 @@ def test_strength_figure_matches_the_solver():
         t, share, limiting = effort(b, route, state, legend.STRENGTH_FORCES)
         assert abs(r["t"] - t) < TOL and r["limiting"] == limiting
         assert all(abs(r["frame"]["util"][l] - share[l]) < TOL for l in share)
-        assert abs(r["t_lp"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES, upto="inplane")["t"]) < TOL
-        assert r["t"] - TOL <= r["t_lp"] <= r["t"] / S["coverage"] + TOL
+        assert abs(r["t_solver"] - solve(b, route, state, fixed=legend.STRENGTH_FORCES, upto="inplane")["t"]) < TOL
+        assert abs(r["t_solver"] - r["t"]) < TOL
     by = {r["name"]: r for r in S["runs"]}
     # the three readings of t: Ava near the limit on the sloper, Ben on the crimp, Cal too weak
     assert by["Ava"]["band"] == "limit" and by["Ava"]["limiting"] == "RH"
@@ -109,7 +109,6 @@ def test_balance_figure_matches_the_solver():
 def test_solver_beats_the_fixed_strength_example():
     for r in legend.balance_figure()["strength_again"]:
         assert r["t"] < r["t_fixed"]
-        assert r["t"] - TOL <= r["t_lp"]
 
 
 def test_strength_figure_torso_is_balanced():
@@ -129,3 +128,27 @@ def test_tipping_figure_follows_d_over_h():
     assert all(abs(p["N"] - p["formula"]) <= 0.01 * p["formula"] for p in T["sweep"])
     for r in T["strength_again"]:
         assert r["t"] >= r["t_before"] - TOL and r["pull"] > 0
+
+
+def test_barndoor_figure():
+    D = legend.barndoor_figure()
+    between, side = D["panels"]
+    assert between["ok"] and abs(between["tau"]) <= between["cap"] + TOL and between["needed"] < TOL
+    assert not side["ok"] and side["needed"] > side["cap"]
+    assert min(between["feet_x"]) < between["hand_x"] < max(between["feet_x"])
+    assert min(side["feet_x"]) > side["hand_x"]
+
+
+def test_flex_figure():
+    X = legend.flex_figure()
+    ava, stiff = X["panels"]
+    assert ava["ok"] and ava["foot"] <= ava["limit"] + TOL
+    assert not stiff["ok"] and stiff["foot"] > stiff["best_limit"]
+
+
+def test_result_cards_cover_every_outcome():
+    cards = legend.result_cards()
+    assert [c["key"] for c in cards] == ["holds", "strength", "reach", "balance", "unusable"]
+    assert cards[0]["result"]["ok"] and cards[0]["result"]["t"] <= 1
+    assert all(c["result"]["reason"] == c["key"] for c in cards[1:])
+    assert cards[1]["result"]["t"] > 1

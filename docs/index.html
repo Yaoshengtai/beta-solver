@@ -155,7 +155,10 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 
 .chapter p, .chapter li { max-width: 68ch; }
 .chapter p { margin: 0 0 1em; }
 
-.math-block { overflow-x: auto; overflow-y: hidden; margin: 20px 0 24px; padding: 4px 0; }
+.math-block { margin: 20px 0 24px; padding: 4px 0; max-width: 100%; }
+/* a display formula never scrolls sideways: if it is wider than the column it scales down to fit */
+.math-block mjx-container[display="true"] { display: block; max-width: 100%; margin: 0 !important; }
+.math-block mjx-container[display="true"] > svg { max-width: 100%; height: auto; }
 
 .planned {
   border: 1px dashed var(--line);
@@ -444,7 +447,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <h3 id="intro-approach">The approach in one picture</h3>
   <ol class="pipeline">
     <li><b>States</b><span>Which hold each hand and foot is on. These are the nodes of a graph.</span></li>
-    <li><b>State check</b><span>A small linear program: can the climber hold still here, and how hard is the most loaded limb working?</span></li>
+    <li><b>State check</b><span>A small convex program: can the climber hold still here, and how hard is the most loaded limb working?</span></li>
     <li><b>Search</b><span>A shortest-path search over moves between states, scored by those efforts.</span></li>
   </ol>
   <p>The best beta is the one whose hardest move, the crux, is as easy as possible. Among all betas with that crux, it is the one with the lowest total cost. Writing \(w(e)\) for the cost of a move \(e\) and \(\mathcal{P}\) for all move sequences from the start to the top:</p>
@@ -461,47 +464,43 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Step 1</p>
     <h2>Holds, routes and climbers</h2>
-    <p class="lede">The inputs: what a hold is, how a route is written down, and the four climbers who try every route.</p>
+    <p class="lede">The inputs: holds, routes, and the four climbers who try them.</p>
   </header>
   <h3 id="data-wall">The wall</h3>
-  <p>Every route is set on the same flat, vertical wall. The figures on this site all use the same marks for walls, holds and climbers, so each mark is introduced here once.</p>
   <figure class="fig" id="fig-wall">
     <div class="fig-row">
       <div class="fig-main" data-draw="wall"></div>
       <div class="fig-key">
         <p class="key-h">The wall</p>
-        <p class="key-note">A flat vertical wall seen from the front. Lengths are in metres, with the origin at the bottom-left corner, \(x\) to the right and \(y\) up. Grid lines are every half metre.</p>
+        <p class="key-note">Flat and vertical, seen from the front. Metres, origin bottom left, \(x\) right, \(y\) up, half-metre grid.</p>
       </div>
     </div>
     <figcaption><b>Wall.</b> <span data-text="wall-size"></span></figcaption>
   </figure>
 
   <h3 id="data-holds">Hold types</h3>
-  <p>A hold is a point on the wall with a type. The type decides three things: the directions in which the hold can push on a hand or foot, which of the climber's strength limits applies, and, for hands, how well the hold lets you pull in toward the wall and resist twisting.</p>
+  <p>A hold is a point with a type. The type fixes the directions it can push a limb in, which strength limit applies, and for hands, how well it holds you in to the wall and resists twisting.</p>
   <figure class="fig" id="fig-holds">
     <div class="hold-grid" data-draw="hold-types"></div>
-    <figcaption><b>The eight hold types.</b> Each type has its own shape: a jug is a big round hold with a pocket, a pinch is narrow at the waist, and the two foot-only holds are a ledge and a small chip. The shaded sector is every direction in which the hold can push on the limb: it is centred on the dashed line, the hold's direction \(\theta\), and reaches \(\alpha\) to either side. A small arrow marks a hold that works in one direction only.</figcaption>
+    <figcaption><b>The eight hold types.</b> Shaded sector: the directions the hold can push in, \(\alpha\) either side of its direction \(\theta\) (dashed). A small arrow marks a one-way hold.</figcaption>
   </figure>
-  <p>The full parameters of each type:</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="hold-table"></table></div>
   <ul>
-    <li><b>Direction</b> \(\theta\) and <b>half-width</b> \(\alpha\) give the sector above. The force a hold puts on a limb must point inside it; the state check turns this into the direction constraint (<a href="#check-direction">Direction</a>).</li>
-    <li><b>Strength limit</b> says which of the climber's limits applies: the most force one hand can take on that kind of hold, or one foot. A sidepull is held like a pinch and an undercling like a crimp.</li>
-    <li><b>Pull-in</b> \(\beta\) and <b>grip torque</b> \(r\) only matter for hands. A hand can pull you toward the wall by at most \(\beta\) times the force along \(\theta\), and resist twisting by at most \(r\) times its strength (<a href="#check-tipping">no tipping</a>, <a href="#check-barndoor">no barn-door</a>). These two values are first guesses and may be tuned later.</li>
-    <li>A foot on a hand hold is treated as if it stood on a <code data-text="foot-on-handhold"></code>: that direction range and the foot's strength.</li>
+    <li><b>\(\theta\), \(\alpha\):</b> the sector; it becomes the <a href="#check-direction">direction</a> constraint.</li>
+    <li><b>Strength limit:</b> which of the climber's limits applies. A sidepull counts as a pinch, an undercling as a crimp.</li>
+    <li><b>\(\beta\), \(r\)</b> (hands only): the pull toward the wall is at most \(\beta\) times the force along \(\theta\), the twist at most \(r\) times the strength (<a href="#check-tipping">no tipping</a>, <a href="#check-barndoor">no barn-door</a>). First guesses, open to tuning.</li>
+    <li>A foot on a hand hold counts as a <code data-text="foot-on-handhold"></code>.</li>
   </ul>
 
   <h3 id="data-routes">Route format</h3>
-  <p>A route is a list of holds plus three facts: which two holds the hands start on, which hold is the top, and whether feet may use the hand holds. The climber has to finish with both hands matched on the top hold.</p>
   <div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td class="mono">id, title</td><td>Name of the route.</td></tr>
-      <tr><td class="mono">lesson</td><td>The one idea the route is meant to show.</td></tr>
-      <tr><td class="mono">holds</td><td>Every hold on the route. Each hold has an <code>id</code>, a position <code>x</code>, <code>y</code> in metres, a <code>type</code>, a direction <code>dir</code> (taken from the type unless given; a sidepull must give it, 0 for facing right or 180 for facing left) and <code>use</code>: <code>hand</code>, <code>foot</code> or <code>both</code>.</td></tr>
-      <tr><td class="mono">start_hands</td><td>The two hand holds the climber starts on.</td></tr>
-      <tr><td class="mono">finish</td><td>The top hold. The route is done when both hands are on it.</td></tr>
-      <tr><td class="mono">allow_feet_on_handholds</td><td>Whether feet may step on hand holds. True unless a route says otherwise; a campus route sets it to false.</td></tr>
+      <tr><td class="mono">id, title, lesson</td><td>Name, and the one idea the route shows.</td></tr>
+      <tr><td class="mono">holds</td><td>Each with <code>id</code>, <code>x</code>, <code>y</code>, <code>type</code>, <code>dir</code> (from the type unless given; a sidepull gives 0 for right or 180 for left) and <code>use</code>: <code>hand</code>, <code>foot</code> or <code>both</code>.</td></tr>
+      <tr><td class="mono">start_hands</td><td>The two start holds.</td></tr>
+      <tr><td class="mono">finish</td><td>The top hold; done when both hands are on it.</td></tr>
+      <tr><td class="mono">allow_feet_on_handholds</td><td>True unless the route says otherwise (a campus route).</td></tr>
     </tbody>
   </table></div>
   <figure class="fig" id="fig-route">
@@ -509,33 +508,31 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
       <div class="fig-main" data-draw="route-example"></div>
       <pre class="code" data-draw="route-json"></pre>
     </div>
-    <figcaption><b>A route and how it is written.</b> <span data-text="route-lesson"></span> Hold positions are checked when a route is loaded: every hold must be on the wall, ids must be unique, and the start and top holds must be hand holds.</figcaption>
+    <figcaption><b>A route and how it is written.</b> <span data-text="route-lesson"></span> Loading checks that holds are on the wall, ids are unique, and start and top are hand holds.</figcaption>
   </figure>
   <figure class="fig" id="fig-marks">
     <div data-draw="markings"></div>
-    <figcaption><b>Hold markings.</b> Start holds carry an <b>S</b>, the finish hold carries <b>TOP</b>. Holds the current beta uses have a heavy outline; holds it never touches are faded.</figcaption>
+    <figcaption><b>Markings.</b> <b>S</b>: start. <b>TOP</b>: finish. Heavy outline: used by the beta. Faded: never touched.</figcaption>
   </figure>
 
   <h3 id="data-climbers">The climbers</h3>
-  <p>Four climbers try every route. Each profile is a handful of numbers: height and arm span, how much force one hand can take on each kind of hold, how high a foot can go, and how much the climber dislikes crossing hands.</p>
   <div class="cards" data-draw="climber-cards"></div>
   <ul>
-    <li><b>Strength</b> is measured in body weights: <span data-text="strength-example"></span> A foot works the same way. Forces and limits both scale with weight, so in this model a climber's weight never matters. That is a deliberate simplification.</li>
-    <li>A sidepull is held like a pinch and an undercling like a crimp (see the table above), so a climber who cannot use crimps cannot use underclings either. A hold with a limit of zero is left out before the state check is even run.</li>
-    <li><b>Flexibility</b> \(\text{flex}\) is how far a foot can go above the hip, as a fraction of height \(H\). A negative value means the foot has to stay below the hip.</li>
-    <li><b>Crossing penalty</b> \(w_{\text{cross}}\) is a small extra cost on any move that crosses the hands. It is a matter of style, not physics.</li>
+    <li><b>Strength</b> is in body weights: <span data-text="strength-example"></span> Forces and limits both scale with weight, so weight itself never matters (a deliberate simplification).</li>
+    <li>A limit of zero rules a hold out before any solving; no crimps also means no underclings.</li>
+    <li><b>\(\text{flex}\):</b> how far a foot can go above the hip, as a fraction of height \(H\). Negative means below the hip.</li>
+    <li><b>\(w_{\text{cross}}\):</b> a small style cost for crossing the hands.</li>
   </ul>
-  <p>Some examples compare a climber with a copy that differs in exactly one attribute:</p>
+  <p>Variants that change exactly one attribute:</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="variant-table"></table></div>
 
   <h3 id="data-figures">Reading the figures</h3>
-  <p>On the example pages a climber moves across the wall. This is how a climber, the forces and the balance are drawn.</p>
   <figure class="fig" id="fig-climber">
     <div class="fig-row">
       <div class="fig-main" data-draw="climber"></div>
       <div class="fig-key" data-draw="climber-key"></div>
     </div>
-    <figcaption><b>The climber.</b> Torso and head in the climber's colour, each limb coloured by how much of its strength it is using. Arrows are the forces the holds put on the body in the plane of the wall. The inset at the bottom right is a side view: hands are pulled in toward the wall, feet are pushed out. The pose uses the body proportions of step 2; the forces and efforts in this figure are example values.</figcaption>
+    <figcaption><b>The climber.</b> Limbs coloured by the share of strength used; arrows are the in-wall forces from the holds; the inset is a side view (hands pulled in, feet pushed out). Forces here are example values.</figcaption>
   </figure>
 </section>
 
@@ -543,38 +540,36 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Step 2</p>
     <h2>The body model</h2>
-    <p class="lede">A torso that slides but does not rotate, with four limbs of fixed maximum length.</p>
+    <p class="lede">A torso that slides but does not turn, with four limbs of fixed greatest length.</p>
   </header>
   <h3 id="body-anchors">Shoulders, hips and limb lengths</h3>
-  <p>The state check needs to know one thing about the body: from a given torso position, which holds can each hand and foot reach? So the body is reduced to a torso with four attachment points, two shoulders and two hips, and a greatest length for each limb. The torso position \(x = (x_c, y_c)\) is also the centre of mass. It can slide anywhere on the wall but never turns.</p>
-  <p>The attachment points sit at fixed offsets from the centre of mass, scaled by the height \(H\) and taken from a standard table of body proportions. Left is negative \(x\):</p>
+  <p>The check only needs to know which holds each limb can reach from a given torso position. So the body is a torso \(x = (x_c, y_c)\), which is also the centre of mass, with two shoulders and two hips at fixed offsets (multiples of height \(H\), from standard body proportions; left is negative \(x\)):</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="anchor-table"></table></div>
-  <p>An arm reaches from the shoulder to the middle of the palm, which is where a hand grips. Half the arm span, minus half the shoulder width and the distance from palm to fingertip, gives the arm length. A leg is half the height:</p>
+  <p>An arm reaches from the shoulder to the middle of the palm; a leg is half the height:</p>
   <div class="math-block" data-math="limb-lengths"></div>
-  <p>A foot can also only go so high. With flexibility \(\text{flex}\) from the climber profile, a foot must stay below the hip height plus \(\text{flex}\cdot H\):</p>
+  <p>A foot must stay below the hip plus \(\text{flex}\cdot H\):</p>
   <div class="math-block" data-math="foot-limit"></div>
-  <p>Both rules only involve the torso position linearly or through a distance, which is what keeps the state check convex.</p>
 
   <figure class="fig" id="fig-anchors">
     <div class="seg" role="group" aria-label="Climber" data-draw="anchor-switch"></div>
     <div class="fig-main" data-draw="anchors"></div>
-    <figcaption><b>Attachment points and reach.</b> Each dashed circle has its centre at a shoulder or hip and a radius equal to that limb's length. A hand or foot can be anywhere inside its circle, and nowhere outside it. The red line is the highest a foot can go. The table gives each climber's lengths; the highest foot is measured from the hip. Switch climbers to compare; all three are drawn at the same scale.</figcaption>
+    <figcaption><b>Attachment points and reach.</b> Each dashed circle is one limb's reach around its shoulder or hip. Red line: the highest foot. Same scale for every climber.</figcaption>
   </figure>
 
   <div class="tbl-wrap"><table class="tbl" data-draw="length-table"></table></div>
 
   <figure class="fig" id="fig-scale">
     <div class="fig-main" data-draw="to-scale"></div>
-    <figcaption><b>The climbers to scale.</b> Each stands with straight legs and both arms up at full length, so the hands mark the highest point the climber can grip from the ground. <span data-text="same-body"></span></figcaption>
+    <figcaption><b>To scale,</b> arms up at full length: the hands mark the highest grip from the ground. <span data-text="same-body"></span></figcaption>
   </figure>
 
-  <h3 id="body-simplifications">What the body model leaves out</h3>
+  <h3 id="body-simplifications">What it leaves out</h3>
   <ul>
-    <li><b>The torso never turns.</b> Real climbers twist their hips into the wall to gain reach. Here the shoulders and hips keep the same offsets in every position.</li>
-    <li><b>A limb can fold completely.</b> There is a greatest length but no shortest one, so a hand can be right next to its shoulder. This rarely matters, because the state check prefers spread-out positions anyway.</li>
-    <li><b>The body is a fixed distance from the wall:</b> <span data-text="d-wall"></span> This distance matters for the out-of-wall balance (<a href="#check-tipping">no tipping</a>). Pressing the hips into the wall is not modelled.</li>
-    <li><b>Elbows and knees are only for drawing.</b> They are placed after the fact so the figure looks like a person: elbows bend down and out, knees bend out like a frog. They never enter the optimisation.</li>
-    <li><b>Only static moves.</b> There is no momentum, so a move the body cannot hold still at every point is not allowed. Dynos are out of scope (<a href="#limits">limits</a>).</li>
+    <li><b>No turning:</b> no twisting the hips in for reach.</li>
+    <li><b>Limbs fold completely:</b> a greatest length but no shortest one.</li>
+    <li><b>Fixed distance from the wall:</b> <span data-text="d-wall"></span> It matters for <a href="#check-tipping">no tipping</a>.</li>
+    <li><b>Elbows and knees are for drawing only</b> (elbows down and out, knees out).</li>
+    <li><b>Static moves only:</b> no momentum, no dynos (<a href="#limits">limits</a>).</li>
   </ul>
 </section>
 
@@ -582,158 +577,147 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   <header>
     <p class="eyebrow">Step 3</p>
     <h2>Checking a state</h2>
-    <p class="lede">With every limb on a fixed hold, can the climber hold still? If so, how hard is the most loaded limb working?</p>
+    <p class="lede">With every limb on a fixed hold, can the climber hold still, and how hard is the most loaded limb working?</p>
   </header>
   <h3 id="check-unknowns">Knowns and unknowns</h3>
-  <p>A <b>state</b> \(\sigma = (\text{LH}, \text{RH}, \text{LF}, \text{RF})\) says which hold each limb is on. Hands are always on a hold; a foot may hang. The holds alone do not fix the body: the check has to find a body position and forces that work, and the least tiring ones.</p>
-
+  <p>A <b>state</b> \(\sigma = (\text{LH}, \text{RH}, \text{LF}, \text{RF})\) says which hold each limb is on; a foot may hang. The holds do not fix the body, so the check looks for a body position and forces that work, and the least tiring ones.</p>
   <figure class="fig" id="fig-state">
     <div class="fig-main" data-draw="state-example"></div>
     <figcaption><b>One state, several body positions.</b> <span data-text="state-caption"></span> All three reach every hold.</figcaption>
   </figure>
-
-  <p><b>Known:</b> the holds and the climber. <b>Unknown:</b></p>
   <div class="tbl-wrap"><table class="tbl" data-draw="unknowns-table"></table></div>
   <p data-text="unknown-count"></p>
-
-  <p>With \(A\) the limbs on a hold, the unknowns must satisfy six constraints, one section each below:</p>
+  <p>\(A\) is the set of limbs on a hold, \(A_F\) those that push, and \(\Sigma_H\), \(\Sigma_F\) sum over the pushing hands and feet. Six constraints, one section each:</p>
   <div class="tbl-wrap"><table class="tbl" data-draw="constraints-table"></table></div>
-
-  <p>The check takes the smallest effort; the state can be held if it is at most 1:</p>
-  <div class="math-block">\[
-    t^\star(\sigma) \;=\; \min_{x,\, f,\, N,\, M,\, \tau,\, t} \; t \quad \text{subject to the six constraints}, \qquad \text{hold if } t^\star \le 1
-  \]</div>
-
-  <h4 class="sub-h">A limb that rests</h4>
-  <p>During a move one limb lets go (step 4). The option <code>no_force=k</code> keeps limb \(k\) within reach of its hold but gives it no force, so the forces and balance only involve \(A_F = A \setminus \{k\}\).</p>
-
-  <h4 class="sub-h">What a check returns</h4>
-  <p>The effort \(t^\star\), the body position, every limb's force, and the limb that limits \(t^\star\). A failed check gives one reason:</p>
+  <p>The check finds the smallest effort subject to all six, and the state holds if it is at most 1:</p>
+  <div class="math-block">\[ t^\star(\sigma) = \min\, t, \qquad t^\star \le 1 \]</div>
+  <p><b>A resting limb.</b> During a move one limb lets go (step 4). With <code>no_force=k</code>, limb \(k\) must still reach its hold but carries nothing, so \(A_F = A \setminus \{k\}\).</p>
+  <p><b>Output:</b> \(t^\star\), the body position, every force and the limiting limb, or one reason for failing:</p>
   <ul data-draw="reasons-list"></ul>
-  <h3 id="check-reach">Reach</h3>
-  <p><b>The idea.</b> Each hold must be within reach of its shoulder or hip. The shoulders and hips move with the body, so this really limits where the body can be.</p>
-  <p><b>The math.</b> For every limb \(k\) on a hold, with hold position \(p_k\), offset \(o_k\) of its shoulder or hip and limb length \(L_k\):</p>
-  <div class="math-block">\[ \big\| p_k - (x + o_k) \big\|_2 \;\le\; L_k, \qquad k \in A \]</div>
-  <p>Seen from the body, each hold must lie inside a circle around its shoulder or hip. Seen from the centre of mass, the positions that reach hold \(k\) form a disc with centre \(p_k - o_k\) and radius \(L_k\); the body can be anywhere in the overlap of the four discs. If they do not overlap, the state is out of reach. An overlap of discs is convex, which the move chapter relies on.</p>
 
+  <h3 id="check-reach">Reach</h3>
+  <p>Each hold must be within reach of its shoulder or hip, which moves with the body:</p>
+  <div class="math-block">\[ \| p_k - (x + o_k) \|_2 \le L_k, \qquad k \in A \]</div>
+  <p>with \(p_k\) the hold, \(o_k\) the shoulder or hip offset and \(L_k\) the limb length. So the body must lie in a disc of radius \(L_k\) around \(p_k - o_k\) for every limb; the overlap of the discs is convex.</p>
   <figure class="fig" id="fig-reach">
     <div class="seg" role="group" aria-label="Start from" data-draw="reach-presets"></div>
     <div class="reach-row" data-draw="reach"></div>
     <p class="reach-status" data-text="reach-status" aria-live="polite"></p>
-    <figcaption><b>Reach, two ways.</b> Drag the centre of mass in either panel, or focus a panel and use the arrow keys. Body view: circles around the shoulders and hips; a limb that cannot reach its hold turns red. Centre-of-mass view: the disc of body positions that reach each hold, and their overlap, shaded.</figcaption>
+    <figcaption><b>Reach, two ways.</b> Drag the centre of mass (or use the arrow keys). Left: reach circles on the body; a limb that misses turns red. Right: one disc of body positions per hold, and their overlap.</figcaption>
   </figure>
-
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p>The solver needs linear constraints, so each disc is replaced by the regular polygon with <span data-text="reach-sides"></span> sides inscribed in it: for each direction \(u_i\), \(u_i^\top (p_k - x - o_k) \le L_k \cos(\pi / n)\). The polygon sits inside the circle, so it can only call a reachable hold unreachable, never the reverse, and by at most <span data-text="reach-loss"></span> of the limb length. Before solving, a pair of holds farther apart than the two limbs plus the distance between their attachment points is ruled out at once. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>reach_rows</code>, <code>torso_region</code>, <code>precheck</code>.</p>
+    <p>Each disc is a second-order cone, used as is. A pair of holds farther apart than both limbs plus the gap between their attachment points is ruled out before solving. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>reach_cones</code>, <code>precheck</code>.</p>
   </details>
-  <h3 id="check-direction">Direction</h3>
-  <p><b>The idea.</b> A hold can only push on a hand or foot within a range of directions: a jug holds you from almost anywhere, a sloper only from right below. Here \(f_k\) is the force <i>from the hold on the limb</i>; hanging still, it points up.</p>
-  <p><b>The math.</b> With \(\theta_k\) the hold's direction and \(\alpha_k\) its half-width (step 1), \(f_k\) must lie in the cone</p>
-  <div class="math-block">\[ f_k \in K_k = \big\{\, f \in \mathbb{R}^2 : d_k^\top f \ge \|f\|_2 \cos\alpha_k \,\big\}, \qquad d_k = (\cos\theta_k,\ \sin\theta_k), \qquad k \in A_F \]</div>
-  <p>that is, at most \(\alpha_k\) away from \(d_k\). Every \(\alpha_k\) is below 90°, so each \(K_k\) is a convex cone. A foot on a hand hold uses the foothold cone.</p>
 
+  <h3 id="check-direction">Direction</h3>
+  <p>A hold pushes a limb only within its sector: \(f_k\), the force from the hold on the limb, may be at most \(\alpha_k\) from the hold's direction \(d_k = (\cos\theta_k, \sin\theta_k)\):</p>
+  <div class="math-block">\[ d_k^\top f_k \ge \|f_k\|_2 \cos\alpha_k, \qquad k \in A_F \]</div>
+  <p>Every \(\alpha_k < 90^\circ\), so this is a convex cone. A foot on a hand hold uses the foothold sector.</p>
   <figure class="fig" id="fig-direction">
     <div class="dir-row" data-draw="direction"></div>
     <div class="seg" role="group" aria-label="Reset"><button type="button" data-draw="direction-reset">Reset: just hanging</button></div>
-    <figcaption><b>Which forces a hold can give.</b> Drag the tip of each arrow, or focus a panel and use the arrow keys. Green: the hold can push this way. Red: the hand would slip off. Hanging straight down works on a jug and a sloper, but a sidepull or an undercling needs another limb pushing the other way.</figcaption>
+    <figcaption><b>Which forces a hold can give.</b> Drag an arrow tip (or use the arrow keys). Green holds, red slips. Hanging straight down works on a jug or a sloper; a sidepull or undercling needs another limb pushing back.</figcaption>
   </figure>
-
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p>In two dimensions a cone is exactly the space between its two edges, so ② becomes two linear inequalities per limb with no approximation: \(n_k^{-} \cdot f_k \ge 0\) and \(n_k^{+} \cdot f_k \ge 0\), with \(n_k^{\pm}\) the inward normals of the edges at \(\theta_k \mp \alpha_k\). Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>cone</code>, <code>direction_rows</code>.</p>
+    <p>In the plane a cone is exactly the space between its two edges: two linear inequalities per limb, \(n_k^{\pm} \cdot f_k \ge 0\). Code: <code>direction_rows</code>.</p>
   </details>
+
   <h3 id="check-strength">Strength and effort</h3>
-  <p><b>The idea.</b> Every hand and foot has a limit: the most force it can take on that kind of hold, from the climber's profile. The effort \(t\) is the share of its limit that the most loaded limb uses. The total counts the in-wall force \(f_k\) and also the part perpendicular to the wall: the hand's pull toward the wall \(N_k\) and the wall's push on a foot \(M_k\), which the <a href="#check-tipping">out-of-wall balance</a> brings in.</p>
-  <p><b>The math.</b> With \(F_k(\text{type}_k)\) the limit of limb \(k\) on its hold (a sidepull uses the pinch limit, a foot always the foot limit):</p>
-  <div class="math-block">\[ \big\| (f_k,\ N_k) \big\|_2 \le t\, F_k(\text{type}_k) \ \ (\text{hands}), \qquad \big\| (f_k,\ M_k) \big\|_2 \le t\, F_{\text{foot}} \ \ (\text{feet}), \qquad k \in A_F, \qquad t \ge 0 \]</div>
-  <p>Every limb's share \(\|(f_k, N_k)\| / F_k\) is at most \(t\), so minimising \(t\) pushes the largest share as low as it will go. That is how a climber settles into a position: shift the weight off whichever limb is closest to letting go.</p>
+  <p>No limb may exceed its limit \(F_k\) on its hold. The total counts the in-wall force and the pull toward the wall (\(N_k\), hands) or push from it (\(M_k\), feet):</p>
+  <div class="math-block">\[ \begin{aligned} \|(f_k, N_k)\|_2 &\le t\, F_k && \text{hands} \\ \|(f_k, M_k)\|_2 &\le t\, F_{\text{foot}} && \text{feet} \end{aligned} \]</div>
+  <p>So \(t\) is the largest share of strength any limb uses, and minimising it moves load off the limb closest to letting go.</p>
   <p data-text="effort-example"></p>
   <div class="tbl-wrap"><table class="tbl" data-draw="effort-table"></table></div>
-
   <figure class="fig" id="fig-strength">
     <div class="seg" role="group" aria-label="Climber" data-draw="strength-switch"></div>
     <div class="fig-row">
       <div class="fig-main" data-draw="strength"></div>
       <div class="fig-key" data-draw="strength-bars"></div>
     </div>
-    <figcaption><b>Same holds, same forces, three climbers.</b> Dashed circle: the limb's limit on its hold. Filled disc: the total force on it, including the part toward or away from the wall, so the ratio of the two radii is the share of strength used. Arrow: the in-wall force. Limbs and bars are coloured by their share. The forces are fixed example values here; once <a href="#check-inplane">balance</a> is in, the solver chooses them.</figcaption>
+    <figcaption><b>Same holds and forces, three climbers.</b> Dashed circle: the limit. Filled disc: the total force, so the ratio of radii is the share used. Arrow: the in-wall force. The forces are fixed examples here; from <a href="#check-inplane">balance</a> on, the solver chooses them.</figcaption>
   </figure>
-
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p data-text="strength-impl"></p>
-    <p>Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>strength_rows</code>, <code>coverage</code>, <code>effort</code>, <code>solve</code>.</p>
+    <p>One second-order cone per pushing limb, \((t F_k, f_k, N_k)\), used as is. Code: <code>strength_cones</code>, <code>effort</code>.</p>
   </details>
-  <h3 id="check-inplane">In-plane balance</h3>
-  <p><b>The idea.</b> Seen from the front, the forces from the holds and gravity must cancel: no net force, so the climber neither falls nor slides sideways, and no net turning, so the body does not swing. Gravity is \((0, -1)\) in body weights, acting at the centre of mass \(x\).</p>
-  <p><b>The math.</b> Summing over the limbs that push:</p>
-  <div class="math-block">\[ \sum_{k \in A_F} f_k = (0,\ 1) \qquad \text{(no falling, no sliding)} \]</div>
-  <div class="math-block">\[ \sum_{k \in A_F} \big( p_{k,x}\, f_{k,y} - p_{k,y}\, f_{k,x} \big) = x_c \qquad \text{(no swinging)} \]</div>
-  <p><b>Force balance.</b> The holds together push up by exactly one body weight, and the sideways pushes cancel. A right hand on a sidepull that pulls the hand to the right needs another limb pushing to the left, such as a foot, or the body slides off sideways.</p>
-  <p><b>Moment balance.</b> The clearest case is hanging from one hand. Force balance makes that hand carry everything, \(f = (0, 1)\). The moment equation then reads \(p_x = x_c\): <b>the centre of mass must be right below the hand</b>. Anywhere else, the body swings back like a pendulum. With more limbs on, the idea is the same: together they must hold the body up without turning it.</p>
-  <p><b>Why moments about the wall origin.</b> About the origin, the hold positions \(p_k\) are known numbers, so the equation is linear in the unknowns \(f\) and \(x\). About the centre of mass it would contain \((p_k - x) \times f_k\), a product of two unknowns, and the problem would no longer be convex. The two give the same answer: when the forces add up to zero, the total moment is the same about every point.</p>
 
+  <h3 id="check-inplane">In-plane balance</h3>
+  <p>Seen from the front, the hold forces and gravity \((0, -1)\) at the centre of mass must cancel: no falling or sliding, and no swinging.</p>
+  <div class="math-block">\[ \begin{gathered} \textstyle\sum_{k \in A_F} f_k = (0,\ 1) \\ \textstyle\sum_{k \in A_F} \big( p_{k,x} f_{k,y} - p_{k,y} f_{k,x} \big) = x_c \end{gathered} \]</div>
+  <p>Hanging from one hand, that hand carries \(f = (0, 1)\), and the moment equation reads \(p_x = x_c\): <b>the centre of mass must be right below the hand</b>. Moments are taken about the wall origin, where \(p_k\) are known numbers, so the equation stays linear; about the centre of mass it would multiply two unknowns. With zero net force both give the same answer.</p>
   <figure class="fig" id="fig-balance">
     <div class="bal-row" data-draw="balance"></div>
-    <figcaption><b>Balance in three cases, each solved with constraints ① to ④.</b> Solid arrows: forces from the holds. Dashed arrow: gravity at the centre of mass. A dashed grey arm only touches its hold and carries nothing (<code>no_force</code>). In the third panel the arrows are also drawn head to tail: they close up, which is what "no net force" looks like.</figcaption>
+    <figcaption><b>Three cases, solved with constraints ① to ④.</b> Solid arrows: hold forces. Dashed: gravity. Dashed grey arm: touching only (<code>no_force</code>). Right: the forces drawn head to tail close up.</figcaption>
   </figure>
-
-  <h4 class="sub-h">Back to the strength example</h4>
   <p data-text="balance-strength"></p>
-
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p>The three equations are added as equality rows <code>A z = b</code>: one each for the sideways force, the vertical force and the moment, with \(-x_c\) moved to the left side. They are exact, with no approximation. Because the strength polyhedron has flat faces, several force splits can share the same optimal \(t\); some of them have two limbs squeezing sideways against each other for no reason. A second linear program therefore holds \(t\) at its optimum and minimises \(\sum_k |f_{k,x}| + \sum_k N_k + \sum_k M_k\). It never changes \(t\), only which of the equally good solutions is reported. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>balance_rows</code>, <code>moment</code>, <code>solve</code>, <code>_tidy</code>.</p>
+    <p>Three exact equality rows. Only the most loaded limb is pinned down by the optimal \(t\), so a second solve keeps \(t\) at its optimum and minimises \(\sum |f_{k,x}| + \sum |\tau_k| + \sum N_k + \sum M_k\), dropping squeezes and twists that do nothing. Code: <code>balance_rows</code>, <code>_tidy</code>.</p>
   </details>
+
   <h3 id="check-tipping">Out-of-wall balance: no tipping</h3>
-  <p><b>The idea.</b> The front view is not enough. Standing on two big footholds satisfies in-plane balance with the hands doing nothing at all. But the centre of mass sits some way out from the wall, so gravity tips the body backwards, and the hands have to keep pulling it in. So each contact force is treated as a 3D vector, and the remaining balance equations are added. No 3D body is needed: the wall is flat, every contact is on it, and the centre of mass stays a fixed distance \(d\) from it, so the new equations are still linear.</p>
-  <p><b>Setup.</b> The \(z\) axis points out of the wall. The centre of mass is at \((x_c, y_c, d)\) with <span data-text="tip-d"></span> The wall pulls hand \(k\) in with \(N_k \ge 0\) and pushes foot \(k\) out with \(M_k \ge 0\). A 3D body needs six balance equations:</p>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Equation</th><th>Meaning</th><th>Where</th></tr></thead>
-    <tbody>
-      <tr><td>Sideways force is zero</td><td>no sliding</td><td><a href="#check-inplane">in-plane balance</a></td></tr>
-      <tr><td>Vertical force is zero</td><td>no falling</td><td><a href="#check-inplane">in-plane balance</a></td></tr>
-      <tr><td>Moment about the axis out of the wall is zero</td><td>no swinging, seen from the front</td><td><a href="#check-inplane">in-plane balance</a></td></tr>
-      <tr><td>Force toward or away from the wall is zero</td><td>no moving off the wall</td><td>(a) below</td></tr>
-      <tr><td>Moment about a horizontal axis in the wall is zero</td><td>no tipping backwards</td><td>(b) below</td></tr>
-      <tr><td>Moment about a vertical axis is zero</td><td>no swinging open like a door</td><td><a href="#check-barndoor">barn-door</a>, next section</td></tr>
-    </tbody>
-  </table></div>
-  <p><b>The math.</b></p>
-  <div class="math-block">\[ \text{(a)}\quad \sum_{k \in A_F \cap \text{feet}} M_k \;=\; \sum_{k \in A_F \cap \text{hands}} N_k \]</div>
-  <div class="math-block">\[ \text{(b)}\quad \sum_{k \in A_F \cap \text{hands}} p_{k,y}\, N_k \;-\; \sum_{k \in A_F \cap \text{feet}} p_{k,y}\, M_k \;=\; d \]</div>
-  <p>Equation (b) says the moment of the hands' pull, high up, minus that of the feet's push, low down, must cancel gravity's moment, which is \(d\) times one body weight. A hold also limits how hard it can hold a hand in. With \(\beta\) from the hold table:</p>
-  <div class="math-block">\[ N_k \;\le\; \beta_{\text{type}}\; d_k^\top f_k, \qquad k \in A_F \cap \text{hands} \]</div>
-  <p>The pull-in is at most \(\beta\) times the force along the hold's direction. A sloper can only hold you in by friction from pressing down, so its \(\beta\) is small; a jug hooks the fingers, so its \(\beta\) is large. All of this is linear. <b>With both feet off,</b> the body swings in under the hands and hangs flat against the wall: \(d = 0\), and every \(N_k\) and \(M_k\) is zero.</p>
-
-  <h4 class="sub-h">Feet up high: the hands work harder</h4>
-  <p>Take one hand and one foot, with height difference \(h\). Equation (a) gives \(M = N\), and (b) then gives \(N\,h = d\):</p>
-  <div class="math-block">\[ N = \frac{d}{h} \]</div>
-  <p data-text="tip-example"></p>
-
+  <p>The front view alone lets a climber stand on two footholds with idle hands. But the centre of mass is a distance <span data-text="tip-d"></span> out from the wall, so gravity tips the body back and the hands must pull it in. Treating forces as 3D adds three more balance equations, still linear because the wall is flat and \(d\) is fixed. Here are two; the third is the <a href="#check-barndoor">barn-door</a>.</p>
+  <div class="math-block">\[ \begin{aligned} \text{(a)}\ \ & \Sigma_F\, M_k = \Sigma_H\, N_k \\ \text{(b)}\ \ & \Sigma_H\, p_{k,y} N_k - \Sigma_F\, p_{k,y} M_k = d \\ & N_k \le \beta_k\, d_k^\top f_k \ \ \text{(hands)} \end{aligned} \]</div>
+  <p>(a): the feet push out as hard as the hands pull in. (b): their moments cancel gravity's. The pull-in is limited by the hold: a sloper (small \(\beta\)) can hardly hold you in. With both feet off, \(d = 0\) and every \(N_k, M_k\) is zero.</p>
+  <p><b>Feet up high, hands work harder.</b> One hand and one foot a height \(h\) apart: (a) gives \(M = N\), then (b) gives \(N = d / h\). <span data-text="tip-example"></span></p>
   <figure class="fig" id="fig-tipping">
     <div class="tip-row" data-draw="tipping"></div>
     <div class="fig-main" data-draw="tipping-chart"></div>
     <p class="t-note" data-text="tip-check"></p>
-    <figcaption><b>Side view: the wall on the left, the climber facing it.</b> The hand is pulled toward the wall, the foot pushed away from it, and gravity acts at the centre of mass, a distance \(d\) out. Raising the foot shortens \(h\) and lengthens the hand's arrow. Below: the hand's pull-in from the state check at many foot heights (dots) against \(d/h\) (line).</figcaption>
+    <figcaption><b>Side view, wall on the left.</b> Hand pulled in, foot pushed out, gravity at the centre of mass. Below: the check's pull-in at many foot heights (dots) against \(d/h\) (line).</figcaption>
   </figure>
-
-  <h4 class="sub-h">Back to the strength example, again</h4>
   <p data-text="tip-strength"></p>
-
   <details class="impl">
     <summary>How it is implemented</summary>
-    <p>Equations (a) and (b) are two more equality rows, and the pull-in limit is one inequality row per hand, all exact. When no foot pushes, the right side of (b) is 0 instead of \(d\). Earlier figures on this page are still drawn with the constraints of their own sections, so they keep showing what they explain. Code: <a data-src="src/betasolver/stance.py">stance.py</a>, <code>tipping_rows</code>, <code>wall_distance</code>, and the <code>upto</code> option of <code>solve</code>.</p>
+    <p>Two equality rows and one inequality per hand, all exact. Earlier figures keep using the constraints of their own sections (the <code>upto</code> option). Code: <code>tipping_rows</code>, <code>wall_distance</code>.</p>
   </details>
+
   <h3 id="check-barndoor">Out-of-wall balance: no barn-door</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.6</span><p>With one hand on, the body swings open unless the feet are placed on both sides.</p></div>
+  <p>The pulls and pushes must also line up left to right, or they twist the body open about a vertical axis like a door. A hand can resist a little by gripping hard, a twist \(\tau_k\):</p>
+  <div class="math-block">\[ \begin{aligned} \text{(c)}\ \ & \Sigma_H\, p_{k,x} N_k - \Sigma_F\, p_{k,x} M_k + \Sigma_H\, \tau_k = 0 \\ & |\tau_k| \le r_k F_k \end{aligned} \]</div>
+  <p>With one hand and two feet, the middle of every hand move, the hand must sit at the push-weighted middle of the feet, give or take what the grip can twist. Both feet on one side and the body swings open.</p>
+  <figure class="fig" id="fig-barndoor">
+    <div class="tip-row" data-draw="barndoor"></div>
+    <figcaption><b>One hand, two feet.</b> \(\otimes\): hand pulled in; \(\odot\): foot pushed out; size follows force. Dashed: the vertical axis through the hand. Right: everything else balances, but only with more twist than the grip can give.</figcaption>
+  </figure>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p data-text="door-impl"></p>
+  </details>
+
   <h3 id="check-flex">Flexibility</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.7</span><p>A foot cannot go too far above the hip.</p></div>
+  <p>A foot cannot go too far above the hip, which moves with the body; a high foot means the body must come up. For every foot on a hold:</p>
+  <div class="math-block" data-math="flex-row"></div>
+  <div class="tbl-wrap"><table class="tbl" data-draw="flex-table"></table></div>
+  <figure class="fig" id="fig-flex">
+    <div class="tip-row" data-draw="flex"></div>
+    <figcaption><b>One high foothold, two versions of Ava.</b> Grey dashed: hip. Band and red line: the highest foot. With Ben's stiff hips, even standing as tall as the low foot allows leaves the foothold above the line.</figcaption>
+  </figure>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>One linear inequality on the body height per foot on a hold, a resting foot included. Code: <code>flex_rows</code>.</p>
+  </details>
+
   <h3 id="check-problem">The full problem and why it fails</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.8</span><p>All six constraints as one convex program, solved exactly, with an example of each failure reason.</p></div>
-  <h3 id="check-lp">From cones to a linear program</h3>
-  <div class="planned"><span class="chip">Planned · unit 2.9</span><p>Replacing circles and cones by polygons, and how close the linear program stays to the exact answer.</p></div>
+  <div class="math-block" data-math="full-problem"></div>
+  <p><b>Convex.</b> The objective is linear, reach and strength are second-order cones, direction is a convex cone, and the rest is linear: a second-order cone program. So \(t^\star\) is unique, and for any bound on \(t\) the workable body positions form a convex set, which makes moves safe (<a href="#move">One move</a>).</p>
+  <ul>
+    <li><b>Not strong enough:</b> a solution with \(t^\star > 1\); the report names the most loaded limb and its hold.</li>
+    <li><b>Cannot reach:</b> no solution, even with only reach and flexibility; the report blames a foot too high for the hip, or else the hold farthest out of reach.</li>
+    <li><b>Direction or balance:</b> no solution, though reach and flexibility alone can be met.</li>
+    <li><b>Unusable hold:</b> no strength for that hold type; found before solving.</li>
+  </ul>
+  <div class="cards" data-draw="result-cards"></div>
+
+  <h3 id="check-solve">Solving it</h3>
+  <p data-text="solver-size"></p>
+  <ul data-draw="solver-stats"></ul>
+  <details class="impl">
+    <summary>How it is implemented</summary>
+    <p>The program is assembled row by row in Clarabel's standard form (equalities, inequalities, then cones) and solved directly, which skips the modelling overhead of cvxpy. The cross-check writes the same problem straight from the formula above in cvxpy, on random states (four climbers, random hand holds of every type, zero to two footholds, sometimes a resting limb), and the test suite fails if the two ever disagree. Code: <code>run</code>, <code>assemble</code>, <a data-src="src/betasolver/reference.py">reference.py</a>, <a data-src="src/betasolver/compare.py">compare.py</a>.</p>
+  </details>
 </section>
 
 <section class="chapter" id="move" data-group="The model" data-short="One move" hidden>
@@ -844,7 +828,7 @@ details.impl p { margin: 10px 0 0; font-size: 0.95rem; }
   </main>
 </div>
 
-<script type="application/json" id="site-data">{"meta":{"version":"0.0.1","built":"2026-11-01","repo":"https://github.com/Yaoshengtai/beta-solver"},"model":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"name":"jug","dir":90,"alpha":70,"grip":"jug","beta":1.5,"r":0.05,"feet_only":false,"note":"Like a hook: it holds you in almost any direction."},{"name":"crimp","dir":90,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"A thin edge: pull down, within a moderate range."},{"name":"sloper","dir":90,"alpha":15,"grip":"sloper","beta":0.3,"r":0.0,"feet_only":false,"note":"Nothing to hook: the body must hang right below it."},{"name":"pinch","dir":90,"alpha":55,"grip":"pinch","beta":1.0,"r":0.04,"feet_only":false,"note":"Squeezed from both sides, so it holds a wide range."},{"name":"sidepull","dir":null,"alpha":35,"grip":"pinch","beta":0.8,"r":0.03,"feet_only":false,"note":"Faces sideways: another limb has to push the other way."},{"name":"undercling","dir":270,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"Faces down: the hand pulls up, so a foot must push."},{"name":"foot_big","dir":90,"alpha":60,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A big foothold to stand on."},{"name":"foot_chip","dir":90,"alpha":35,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A small chip: the foot must push nearly straight down."}],"foot_on_handhold":"foot_big","climbers":[{"key":"A","name":"Ava","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Short, with strong fingers and flexible hips.","d_wall":0.24},{"key":"B","name":"Ben","H":1.85,"span":1.9,"F":{"jug":1.2,"crimp":0.6,"sloper":0.55,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Tall with a long reach; weaker on crimps, better on slopers, stiff hips.","d_wall":0.2775},{"key":"C","name":"Cal","H":1.7,"span":1.7,"F":{"jug":0.8,"crimp":0.35,"sloper":0.25,"pinch":0.35,"foot":1.5},"flex":0.0,"w_cross":0.15,"blurb":"A beginner: average size, a weaker grip on everything.","d_wall":0.255},{"key":"D","name":"Ava (injured)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.0,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Ava with an injured finger: she cannot pull on crimps at all.","d_wall":0.24}],"variants":[{"key":"A_stiff","name":"Ava (less flexible)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Ava with Ben's hip flexibility. Used in example 4.","d_wall":0.24,"base":"A"},{"key":"A_cross0","name":"Ava (crosses freely)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.0,"blurb":"Ava with no dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"},{"key":"A_cross4","name":"Ava (avoids crossing)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.4,"blurb":"Ava with a strong dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"}],"body":{"shoulder":[0.13,0.26],"hip":[0.095,-0.03],"head":[0.37,0.065],"leg":0.5,"grip_inset":0.03,"shoulder_width_in_span":0.259,"upper_arm":0.186,"thigh":0.245,"d_wall":0.15}},"stance":{"unknowns":[{"name":"x","tex":"x = (x_c,\\ y_c)","size":2,"per":"body","meaning":"Centre of mass on the wall: the body position.","climbing":"Sit low or high, lean left or right."},{"name":"f","tex":"f_k","size":2,"per":"pushing","meaning":"In-wall force from the hold on limb k.","climbing":"How each hand and foot is loaded."},{"name":"N","tex":"N_k \\ge 0","size":1,"per":"pushing hand","meaning":"Pull of hand k toward the wall.","climbing":"Holding yourself in."},{"name":"M","tex":"M_k \\ge 0","size":1,"per":"pushing foot","meaning":"Push of the wall on foot k.","climbing":"Pressing the foot in."},{"name":"tau","tex":"\\tau_k","size":1,"per":"pushing hand","meaning":"Twist of hand k about a vertical axis.","climbing":"Gripping against a barn-door."},{"name":"t","tex":"t","size":1,"per":"body","meaning":"Effort: the largest share of strength any limb uses.","climbing":"How tiring the position is."}],"constraints":[{"n":1,"key":"reach","name":"Reach","section":"check-reach","climbing":"Every hold is within reach of its arm or leg.","limits":"body position"},{"n":2,"key":"direction","name":"Direction","section":"check-direction","climbing":"Each hold can only push you in certain directions.","limits":"direction of the in-wall forces"},{"n":3,"key":"strength","name":"Strength","section":"check-strength","climbing":"No hand or foot goes over its strength.","limits":"size of the forces; defines t"},{"n":4,"key":"inplane","name":"In-plane balance","section":"check-inplane","climbing":"No falling, no sliding sideways, no swinging.","limits":"in-wall forces and body position"},{"n":5,"key":"outofwall","name":"Out-of-wall balance","section":"check-tipping","climbing":"No tipping backwards, no barn-door.","limits":"hand pull, foot push, grip torque"},{"n":6,"key":"flex","name":"Flexibility","section":"check-flex","climbing":"A foot cannot go too far above the hip.","limits":"body position"}],"reasons":{"unusable":"a hold this climber cannot use at all","reach":"cannot reach","strength":"not strong enough","balance":"direction or balance does not work"},"reach_sides":16,"strength":{"azimuths":8,"elevations":[5.0,35.0,70.0],"faces":24,"coverage":0.9188},"effort_bands":[{"upto":0.5,"key":"easy","name":"easy"},{"upto":0.8,"key":"hard","name":"hard work"},{"upto":1.0,"key":"limit","name":"near the limit"},{"upto":null,"key":"fail","name":"cannot hold: not strong enough"}],"sizes":{"four":17,"one_foot":14,"no_feet":11}},"figures":{"legend":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"type":"jug","use":"both","dir":90},{"type":"crimp","use":"both","dir":90},{"type":"sloper","use":"both","dir":90},{"type":"pinch","use":"both","dir":90},{"type":"sidepull","use":"both","dir":0},{"type":"undercling","use":"both","dir":270},{"type":"foot_big","use":"foot","dir":90},{"type":"foot_chip","use":"foot","dir":90}],"markings":[{"id":"S1","x":0.25,"y":0.25,"type":"jug","dir":90,"role":"start","used":true},{"id":"T1","x":0.75,"y":0.25,"type":"jug","dir":90,"role":"finish","used":true},{"id":"U1","x":1.25,"y":0.25,"type":"jug","dir":90,"role":"normal","used":true},{"id":"N1","x":1.75,"y":0.25,"type":"jug","dir":90,"role":"normal","used":false}],"climber":{"key":"A","H":1.6,"span":1.6,"d_wall":0.24,"head":[0.592,0.104]},"scene":{"x0":0.75,"y0":0.45,"x1":2.85,"y1":3.05,"holds":[{"id":"H1","x":1.15,"y":2.3,"type":"jug","dir":90,"role":"normal"},{"id":"H2","x":1.85,"y":2.05,"type":"crimp","dir":90,"role":"normal"},{"id":"H3","x":1.55,"y":2.75,"type":"sloper","dir":90,"role":"normal"},{"id":"H4","x":2.15,"y":2.55,"type":"pinch","dir":90,"role":"normal"},{"id":"F1","x":1.25,"y":0.75,"type":"foot_big","dir":90,"role":"normal"},{"id":"F2","x":1.75,"y":0.95,"type":"foot_chip","dir":90,"role":"normal"},{"id":"F3","x":1.0,"y":1.2,"type":"foot_big","dir":90,"role":"normal"}],"frame":{"torso":[1.5,1.42],"joints":{"LH":{"shoulder":[1.292,1.836],"elbow":[1.095,2.059],"end":[1.15,2.3]},"RH":{"shoulder":[1.708,1.836],"elbow":[2.005,1.857],"end":[1.85,2.05]},"LF":{"hip":[1.348,1.372],"knee":[1.057,1.109],"end":[1.25,0.75]},"RF":{"hip":[1.652,1.372],"knee":[2.025,1.251],"end":[1.75,0.95]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.32],"n":0.21},"RH":{"f":[-0.1,0.16],"n":0.12},"LF":{"f":[0.07,0.29],"m":0.2},"RF":{"f":[-0.03,0.23],"m":0.13}},"util":{"LH":0.32,"RH":0.71,"LF":0.19,"RF":0.88}},"trail":[[1.42,1.3],[1.47,1.36],[1.5,1.42]]},"climbers":[{"key":"A","name":"Ava"},{"key":"B","name":"Ben"},{"key":"C","name":"Cal"},{"key":"D","name":"Ava (injured)"}],"force_scale":0.3,"util_bands":[0.5,0.8]},"route_example":{"id":"format-demo","title":"Format example","lesson":"A small route that only shows how routes are written down.","wall":{"w":3.0,"h":4.2},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"start_hands":["H1","H2"],"finish":"H6","allow_feet_on_handholds":true},"bodies":[{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92},{"climber":"B","H":1.85,"offsets":{"LH":[-0.241,0.481],"RH":[0.241,0.481],"LF":[-0.176,-0.056],"RF":[0.176,-0.056]},"L":{"LH":0.655,"RH":0.655,"LF":0.925,"RF":0.925},"seg":{"LH":[0.344,0.311],"RH":[0.344,0.311],"LF":[0.453,0.472],"RF":[0.453,0.472]},"head":[0.684,0.12],"d_wall":0.278,"flex":-0.1,"name":"Ben","span":1.9,"stand":{"torso":[0.0,0.971],"joints":{"LH":{"shoulder":[-0.241,1.452],"elbow":[-0.241,1.797],"end":[-0.241,2.107]},"RH":{"shoulder":[0.241,1.452],"elbow":[0.241,1.797],"end":[0.241,2.107]},"LF":{"hip":[-0.176,0.916],"knee":[-0.239,0.467],"end":[-0.304,0.0]},"RF":{"hip":[0.176,0.916],"knee":[0.239,0.467],"end":[0.304,0.0]}}},"reach":2.107,"foot_limit":0.731},{"climber":"C","H":1.7,"offsets":{"LH":[-0.221,0.442],"RH":[0.221,0.442],"LF":[-0.162,-0.051],"RF":[0.162,-0.051]},"L":{"LH":0.579,"RH":0.579,"LF":0.85,"RF":0.85},"seg":{"LH":[0.316,0.263],"RH":[0.316,0.263],"LF":[0.416,0.433],"RF":[0.416,0.433]},"head":[0.629,0.111],"d_wall":0.255,"flex":0.0,"name":"Cal","span":1.7,"stand":{"torso":[0.0,0.893],"joints":{"LH":{"shoulder":[-0.221,1.335],"elbow":[-0.221,1.651],"end":[-0.221,1.914]},"RH":{"shoulder":[0.221,1.335],"elbow":[0.221,1.651],"end":[0.221,1.914]},"LF":{"hip":[-0.162,0.842],"knee":[-0.219,0.429],"end":[-0.28,0.0]},"RF":{"hip":[0.162,0.842],"knee":[0.219,0.429],"end":[0.28,0.0]}}},"reach":1.914,"foot_limit":0.842},{"climber":"D","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava (injured)","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92}],"state_example":{"route":"format-demo","state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"poses":[{"torso":[1.36,0.84],"joints":{"LH":{"shoulder":[1.152,1.256],"elbow":[0.976,1.496],"end":[1.2,1.6]},"RH":{"shoulder":[1.568,1.256],"elbow":[1.857,1.327],"end":[1.75,1.55]},"LF":{"hip":[1.208,0.792],"knee":[0.869,0.595],"end":[1.25,0.45]},"RF":{"hip":[1.512,0.792],"knee":[1.758,1.097],"end":[1.85,0.7]}}},{"torso":[1.52,0.96],"joints":{"LH":{"shoulder":[1.312,1.376],"elbow":[1.02,1.431],"end":[1.2,1.6]},"RH":{"shoulder":[1.728,1.376],"elbow":[1.994,1.51],"end":[1.75,1.55]},"LF":{"hip":[1.368,0.912],"knee":[1.001,0.773],"end":[1.25,0.45]},"RF":{"hip":[1.672,0.912],"knee":[2.033,1.065],"end":[1.85,0.7]}}},{"torso":[1.7,0.76],"joints":{"LH":{"shoulder":[1.492,1.176],"elbow":[1.258,1.36],"end":[1.2,1.6]},"RH":{"shoulder":[1.908,1.176],"elbow":[1.65,1.324],"end":[1.75,1.55]},"LF":{"hip":[1.548,0.712],"knee":[1.182,0.852],"end":[1.25,0.45]},"RF":{"hip":[1.852,0.712],"knee":[1.916,1.099],"end":[1.85,0.7]}}}]},"reach":{"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"body":{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08},"centres":{"LH":[1.408,1.184],"RH":[1.542,1.134],"LF":[1.402,0.498],"RF":[1.698,0.748]},"region":[[1.287,0.653],[1.289,0.652],[1.315,0.647],[1.341,0.643],[1.368,0.641],[1.395,0.639],[1.421,0.639],[1.448,0.641],[1.475,0.643],[1.501,0.647],[1.527,0.652],[1.553,0.659],[1.579,0.667],[1.604,0.676],[1.629,0.686],[1.653,0.697],[1.677,0.71],[1.699,0.724],[1.722,0.739],[1.743,0.755],[1.764,0.771],[1.784,0.789],[1.803,0.808],[1.821,0.828],[1.837,0.849],[1.853,0.87],[1.868,0.893],[1.882,0.915],[1.895,0.939],[1.906,0.963],[1.916,0.988],[1.925,1.013],[1.933,1.039],[1.94,1.065],[1.944,1.086],[1.925,1.104],[1.894,1.129],[1.863,1.152],[1.83,1.174],[1.796,1.194],[1.762,1.213],[1.726,1.229],[1.69,1.244],[1.653,1.258],[1.615,1.269],[1.577,1.279],[1.539,1.286],[1.5,1.292],[1.461,1.296],[1.422,1.298],[1.382,1.298],[1.343,1.296],[1.304,1.292],[1.265,1.286],[1.227,1.279],[1.189,1.269],[1.151,1.258],[1.114,1.244],[1.078,1.229],[1.049,1.216],[1.044,1.209],[1.022,1.176],[1.002,1.142],[0.997,1.134],[0.997,1.121],[0.999,1.094],[1.001,1.067],[1.005,1.041],[1.01,1.015],[1.017,0.989],[1.025,0.963],[1.034,0.938],[1.044,0.913],[1.055,0.889],[1.068,0.865],[1.082,0.843],[1.097,0.82],[1.113,0.799],[1.129,0.778],[1.147,0.758],[1.166,0.739],[1.186,0.721],[1.207,0.705],[1.228,0.689],[1.251,0.674],[1.273,0.66]],"presets":{"good":[1.44,0.954],"low":[1.44,0.534]},"view":{"x0":0.55,"y0":0.05,"x1":2.45,"y1":2.25}},"strength":{"holds":[{"id":"H1","x":1.2,"y":2.1,"type":"crimp","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.75,"y":2.2,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.1,"y":0.8,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.9,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"runs":[{"climber":"A","name":"Ava","H":1.6,"head":[0.592,0.104],"frame":{"torso":[1.407,1.444],"joints":{"LH":{"shoulder":[1.199,1.86],"elbow":[0.961,2.039],"end":[1.2,2.1]},"RH":{"shoulder":[1.615,1.86],"elbow":[1.882,1.991],"end":[1.75,2.2]},"LF":{"hip":[1.255,1.396],"knee":[0.933,1.172],"end":[1.1,0.8]},"RF":{"hip":[1.559,1.396],"knee":[1.939,1.298],"end":[1.85,0.9]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.4],"n":0.197},"RH":{"f":[-0.03,0.29],"n":0.071},"LF":{"f":[-0.01,0.16],"m":0.13},"RF":{"f":[-0.02,0.15],"m":0.138}},"util":{"LH":0.5,"RH":0.857,"LF":0.138,"RF":0.137}},"limits":{"LH":0.9,"RH":0.35,"LF":1.5,"RF":1.5},"t":0.857,"t_lp":0.918,"limiting":"RH","band":"limit"},{"climber":"B","name":"Ben","H":1.85,"head":[0.684,0.12],"frame":{"torso":[1.407,1.422],"joints":{"LH":{"shoulder":[1.167,1.903],"elbow":[0.889,2.106],"end":[1.2,2.1]},"RH":{"shoulder":[1.647,1.903],"elbow":[1.98,1.991],"end":[1.75,2.2]},"LF":{"hip":[1.231,1.366],"knee":[0.819,1.179],"end":[1.1,0.8]},"RF":{"hip":[1.583,1.366],"knee":[2.035,1.334],"end":[1.85,0.9]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.4],"n":0.197},"RH":{"f":[-0.03,0.29],"n":0.071},"LF":{"f":[-0.01,0.16],"m":0.13},"RF":{"f":[-0.02,0.15],"m":0.138}},"util":{"LH":0.75,"RH":0.546,"LF":0.138,"RF":0.137}},"limits":{"LH":0.6,"RH":0.55,"LF":1.5,"RF":1.5},"t":0.75,"t_lp":0.788,"limiting":"LH","band":"hard"},{"climber":"C","name":"Cal","H":1.7,"head":[0.629,0.111],"frame":{"torso":[1.407,1.44],"joints":{"LH":{"shoulder":[1.186,1.882],"elbow":[0.938,2.079],"end":[1.2,2.1]},"RH":{"shoulder":[1.628,1.882],"elbow":[1.921,2.001],"end":[1.75,2.2]},"LF":{"hip":[1.246,1.389],"knee":[0.887,1.178],"end":[1.1,0.8]},"RF":{"hip":[1.569,1.389],"knee":[1.978,1.314],"end":[1.85,0.9]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.4],"n":0.197},"RH":{"f":[-0.03,0.29],"n":0.071},"LF":{"f":[-0.01,0.16],"m":0.13},"RF":{"f":[-0.02,0.15],"m":0.138}},"util":{"LH":1.285,"RH":1.2,"LF":0.138,"RF":0.137}},"limits":{"LH":0.35,"RH":0.25,"LF":1.5,"RF":1.5},"t":1.285,"t_lp":1.351,"limiting":"LH","band":"fail"}],"bands":[{"upto":0.5,"key":"easy","name":"easy"},{"upto":0.8,"key":"hard","name":"hard work"},{"upto":1.0,"key":"limit","name":"near the limit"},{"upto":null,"key":"fail","name":"cannot hold: not strong enough"}],"coverage":0.919,"force_scale":0.25,"view":{"x0":0.68,"y0":0.4,"x1":2.32,"y1":2.42}},"balance":{"climber":{"key":"A","H":1.6,"head":[0.592,0.104],"name":"Ava"},"panels":[{"key":"hang","ok":true,"state":{"LH":"H1","RH":"H1","LF":null,"RF":null},"rest":"RH","holds":[{"id":"H1","x":1.5,"y":2.3,"type":"jug","dir":90.0,"use":"both","role":"normal"}],"torso":[1.5,1.411],"joints":{"LH":{"shoulder":[1.292,1.827],"elbow":[1.485,2.053],"end":[1.5,2.3]},"RH":{"shoulder":[1.708,1.827],"elbow":[1.515,2.053],"end":[1.5,2.3]},"LF":{"hip":[1.348,1.363],"knee":[1.191,1.004],"end":[1.268,0.603]},"RF":{"hip":[1.652,1.363],"knee":[1.809,1.004],"end":[1.732,0.603]}},"forces":{"LH":{"f":[-0.0,1.0],"n":0.0}},"share":{"LH":0.833},"t":0.833,"moment":1.5,"hold_x":1.5,"shift":0.0},{"key":"off","ok":false,"state":{"LH":"H1","RH":"H1","LF":null,"RF":null},"rest":"RH","holds":[{"id":"H1","x":1.5,"y":2.3,"type":"jug","dir":90.0,"use":"both","role":"normal"}],"torso":[1.7,1.545],"joints":{"LH":{"shoulder":[1.492,1.961],"elbow":[1.286,2.176],"end":[1.5,2.3]},"RH":{"shoulder":[1.908,1.961],"elbow":[1.645,2.1],"end":[1.5,2.3]},"LF":{"hip":[1.548,1.497],"knee":[1.391,1.138],"end":[1.468,0.737]},"RF":{"hip":[1.852,1.497],"knee":[2.009,1.138],"end":[1.932,0.737]}},"forces":{"LH":{"f":[0.0,1.0],"n":0.0}},"share":null,"t":null,"moment":1.5,"hold_x":1.5,"shift":0.2},{"key":"sidepull","ok":true,"state":{"LH":"H1","RH":"H2","LF":null,"RF":"F1"},"rest":"LH","holds":[{"id":"H1","x":1.2,"y":2.05,"type":"crimp","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.9,"y":2.0,"type":"sidepull","dir":0,"use":"both","role":"normal"},{"id":"F1","x":1.75,"y":1.0,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"torso":[1.508,1.471],"joints":{"LH":{"shoulder":[1.3,1.887],"elbow":[1.003,1.9],"end":[1.2,2.05]},"RH":{"shoulder":[1.716,1.887],"elbow":[1.99,1.77],"end":[1.9,2.0]},"LF":{"hip":[1.356,1.423],"knee":[1.2,1.063],"end":[1.276,0.663]},"RF":{"hip":[1.66,1.423],"knee":[2.031,1.296],"end":[1.75,1.0]}},"forces":{"RH":{"f":[0.27,0.189],"n":0.0},"RF":{"f":[-0.27,0.811],"m":0.0}},"share":{"RH":0.549,"RF":0.57},"t":0.57,"limiting":"RF","moment":1.508}],"strength_again":[{"climber":"A","name":"Ava","t_fixed":0.857,"t":0.235,"t_lp":0.255,"share":{"LH":0.235,"RH":0.235,"LF":0.235,"RF":0.235},"limiting":"LF"},{"climber":"B","name":"Ben","t_fixed":0.75,"t":0.241,"t_lp":0.261,"share":{"LH":0.241,"RH":0.241,"LF":0.241,"RF":0.241},"limiting":"LH"},{"climber":"C","name":"Cal","t_fixed":1.285,"t":0.278,"t_lp":0.301,"share":{"LH":0.278,"RH":0.278,"LF":0.278,"RF":0.278},"limiting":"RH"}],"force_scale":0.3,"view":{"x0":1.0,"y0":0.5,"x1":2.15,"y1":2.68}},"tipping":{"climber":{"key":"A","name":"Ava","H":1.6,"head":[0.592,0.104],"shoulder":0.416,"hip":-0.048},"d":0.24,"views":[{"h":1.2,"hand_y":2.3,"foot_y":1.1,"torso":[1.5,1.657],"N":0.2,"M":0.2,"share":0.405,"formula":0.2},{"h":0.6,"hand_y":2.3,"foot_y":1.7,"torso":[1.5,1.884],"N":0.4,"M":0.4,"share":0.478,"formula":0.4}],"sweep":[{"h":0.4,"N":0.6,"formula":0.6},{"h":0.5,"N":0.48,"formula":0.48},{"h":0.6,"N":0.4,"formula":0.4},{"h":0.7,"N":0.343,"formula":0.343},{"h":0.8,"N":0.3,"formula":0.3},{"h":0.9,"N":0.267,"formula":0.267},{"h":1.0,"N":0.24,"formula":0.24},{"h":1.1,"N":0.218,"formula":0.218},{"h":1.2,"N":0.2,"formula":0.2},{"h":1.3,"N":0.185,"formula":0.185},{"h":1.4,"N":0.171,"formula":0.171},{"h":1.5,"N":0.16,"formula":0.16}],"max_error":0.0,"force_scale":0.5,"strength_again":[{"climber":"A","name":"Ava","t_before":0.235,"t":0.281,"pull":0.183,"share":{"LH":0.277,"RH":0.268,"LF":0.281,"RF":0.224},"limiting":"LF"},{"climber":"B","name":"Ben","t_before":0.241,"t":0.395,"pull":0.209,"share":{"LH":0.395,"RH":0.383,"LF":0.39,"RF":0.044},"limiting":"LH"},{"climber":"C","name":"Cal","t_before":0.278,"t":0.668,"pull":0.193,"share":{"LH":0.668,"RH":0.648,"LF":0.46,"RF":0.0},"limiting":"LH"}]},"direction_picks":[{"type":"jug"},{"type":"sloper"},{"type":"sidepull","dir":0},{"type":"undercling"}]}}</script>
+<script type="application/json" id="site-data">{"meta":{"version":"0.0.1","built":"2026-11-01","repo":"https://github.com/Yaoshengtai/beta-solver"},"model":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"name":"jug","dir":90,"alpha":70,"grip":"jug","beta":1.5,"r":0.05,"feet_only":false,"note":"Like a hook: it holds you in almost any direction."},{"name":"crimp","dir":90,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"A thin edge: pull down, within a moderate range."},{"name":"sloper","dir":90,"alpha":15,"grip":"sloper","beta":0.3,"r":0.0,"feet_only":false,"note":"Nothing to hook: the body must hang right below it."},{"name":"pinch","dir":90,"alpha":55,"grip":"pinch","beta":1.0,"r":0.04,"feet_only":false,"note":"Squeezed from both sides, so it holds a wide range."},{"name":"sidepull","dir":null,"alpha":35,"grip":"pinch","beta":0.8,"r":0.03,"feet_only":false,"note":"Faces sideways: another limb has to push the other way."},{"name":"undercling","dir":270,"alpha":40,"grip":"crimp","beta":0.8,"r":0.02,"feet_only":false,"note":"Faces down: the hand pulls up, so a foot must push."},{"name":"foot_big","dir":90,"alpha":60,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A big foothold to stand on."},{"name":"foot_chip","dir":90,"alpha":35,"grip":"foot","beta":null,"r":null,"feet_only":true,"note":"A small chip: the foot must push nearly straight down."}],"foot_on_handhold":"foot_big","climbers":[{"key":"A","name":"Ava","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Short, with strong fingers and flexible hips.","d_wall":0.24},{"key":"B","name":"Ben","H":1.85,"span":1.9,"F":{"jug":1.2,"crimp":0.6,"sloper":0.55,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Tall with a long reach; weaker on crimps, better on slopers, stiff hips.","d_wall":0.2775},{"key":"C","name":"Cal","H":1.7,"span":1.7,"F":{"jug":0.8,"crimp":0.35,"sloper":0.25,"pinch":0.35,"foot":1.5},"flex":0.0,"w_cross":0.15,"blurb":"A beginner: average size, a weaker grip on everything.","d_wall":0.255},{"key":"D","name":"Ava (injured)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.0,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.15,"blurb":"Ava with an injured finger: she cannot pull on crimps at all.","d_wall":0.24}],"variants":[{"key":"A_stiff","name":"Ava (less flexible)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":-0.1,"w_cross":0.15,"blurb":"Ava with Ben's hip flexibility. Used in example 4.","d_wall":0.24,"base":"A"},{"key":"A_cross0","name":"Ava (crosses freely)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.0,"blurb":"Ava with no dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"},{"key":"A_cross4","name":"Ava (avoids crossing)","H":1.6,"span":1.6,"F":{"jug":1.2,"crimp":0.9,"sloper":0.35,"pinch":0.6,"foot":1.5},"flex":0.08,"w_cross":0.4,"blurb":"Ava with a strong dislike of crossing hands. Used in example 7.","d_wall":0.24,"base":"A"}],"body":{"shoulder":[0.13,0.26],"hip":[0.095,-0.03],"head":[0.37,0.065],"leg":0.5,"grip_inset":0.03,"shoulder_width_in_span":0.259,"upper_arm":0.186,"thigh":0.245,"d_wall":0.15}},"stance":{"unknowns":[{"name":"x","tex":"x = (x_c,\\ y_c)","size":2,"per":"body","meaning":"Centre of mass on the wall: the body position.","climbing":"Sit low or high, lean left or right."},{"name":"f","tex":"f_k","size":2,"per":"pushing","meaning":"In-wall force from the hold on limb k.","climbing":"How each hand and foot is loaded."},{"name":"N","tex":"N_k \\ge 0","size":1,"per":"pushing hand","meaning":"Pull of hand k toward the wall.","climbing":"Holding yourself in."},{"name":"M","tex":"M_k \\ge 0","size":1,"per":"pushing foot","meaning":"Push of the wall on foot k.","climbing":"Pressing the foot in."},{"name":"tau","tex":"\\tau_k","size":1,"per":"pushing hand","meaning":"Twist of hand k about a vertical axis.","climbing":"Gripping against a barn-door."},{"name":"t","tex":"t","size":1,"per":"body","meaning":"Effort: the largest share of strength any limb uses.","climbing":"How tiring the position is."}],"constraints":[{"n":1,"key":"reach","name":"Reach","section":"check-reach","climbing":"Every hold is within reach of its arm or leg.","limits":"body position"},{"n":2,"key":"direction","name":"Direction","section":"check-direction","climbing":"Each hold can only push you in certain directions.","limits":"direction of the in-wall forces"},{"n":3,"key":"strength","name":"Strength","section":"check-strength","climbing":"No hand or foot goes over its strength.","limits":"size of the forces; defines t"},{"n":4,"key":"inplane","name":"In-plane balance","section":"check-inplane","climbing":"No falling, no sliding sideways, no swinging.","limits":"in-wall forces and body position"},{"n":5,"key":"outofwall","name":"Out-of-wall balance","section":"check-tipping","climbing":"No tipping backwards, no barn-door.","limits":"hand pull, foot push, grip torque"},{"n":6,"key":"flex","name":"Flexibility","section":"check-flex","climbing":"A foot cannot go too far above the hip.","limits":"body position"}],"reasons":{"unusable":"a hold this climber cannot use at all","reach":"cannot reach","strength":"not strong enough","balance":"direction or balance does not work"},"effort_bands":[{"upto":0.5,"key":"easy","name":"easy"},{"upto":0.8,"key":"hard","name":"hard work"},{"upto":1.0,"key":"limit","name":"near the limit"},{"upto":null,"key":"fail","name":"cannot hold: not strong enough"}],"sizes":{"four":17,"one_foot":14,"no_feet":11}},"figures":{"legend":{"wall":{"w":3.0,"h":4.2},"hold_types":[{"type":"jug","use":"both","dir":90},{"type":"crimp","use":"both","dir":90},{"type":"sloper","use":"both","dir":90},{"type":"pinch","use":"both","dir":90},{"type":"sidepull","use":"both","dir":0},{"type":"undercling","use":"both","dir":270},{"type":"foot_big","use":"foot","dir":90},{"type":"foot_chip","use":"foot","dir":90}],"markings":[{"id":"S1","x":0.25,"y":0.25,"type":"jug","dir":90,"role":"start","used":true},{"id":"T1","x":0.75,"y":0.25,"type":"jug","dir":90,"role":"finish","used":true},{"id":"U1","x":1.25,"y":0.25,"type":"jug","dir":90,"role":"normal","used":true},{"id":"N1","x":1.75,"y":0.25,"type":"jug","dir":90,"role":"normal","used":false}],"climber":{"key":"A","H":1.6,"span":1.6,"d_wall":0.24,"head":[0.592,0.104]},"scene":{"x0":0.75,"y0":0.45,"x1":2.85,"y1":3.05,"holds":[{"id":"H1","x":1.15,"y":2.3,"type":"jug","dir":90,"role":"normal"},{"id":"H2","x":1.85,"y":2.05,"type":"crimp","dir":90,"role":"normal"},{"id":"H3","x":1.55,"y":2.75,"type":"sloper","dir":90,"role":"normal"},{"id":"H4","x":2.15,"y":2.55,"type":"pinch","dir":90,"role":"normal"},{"id":"F1","x":1.25,"y":0.75,"type":"foot_big","dir":90,"role":"normal"},{"id":"F2","x":1.75,"y":0.95,"type":"foot_chip","dir":90,"role":"normal"},{"id":"F3","x":1.0,"y":1.2,"type":"foot_big","dir":90,"role":"normal"}],"frame":{"torso":[1.5,1.42],"joints":{"LH":{"shoulder":[1.292,1.836],"elbow":[1.095,2.059],"end":[1.15,2.3]},"RH":{"shoulder":[1.708,1.836],"elbow":[2.005,1.857],"end":[1.85,2.05]},"LF":{"hip":[1.348,1.372],"knee":[1.057,1.109],"end":[1.25,0.75]},"RF":{"hip":[1.652,1.372],"knee":[2.025,1.251],"end":[1.75,0.95]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.32],"n":0.21},"RH":{"f":[-0.1,0.16],"n":0.12},"LF":{"f":[0.07,0.29],"m":0.2},"RF":{"f":[-0.03,0.23],"m":0.13}},"util":{"LH":0.32,"RH":0.71,"LF":0.19,"RF":0.88}},"trail":[[1.42,1.3],[1.47,1.36],[1.5,1.42]]},"climbers":[{"key":"A","name":"Ava"},{"key":"B","name":"Ben"},{"key":"C","name":"Cal"},{"key":"D","name":"Ava (injured)"}],"force_scale":0.3,"util_bands":[0.5,0.8]},"route_example":{"id":"format-demo","title":"Format example","lesson":"A small route that only shows how routes are written down.","wall":{"w":3.0,"h":4.2},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"start_hands":["H1","H2"],"finish":"H6","allow_feet_on_handholds":true},"bodies":[{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92},{"climber":"B","H":1.85,"offsets":{"LH":[-0.241,0.481],"RH":[0.241,0.481],"LF":[-0.176,-0.056],"RF":[0.176,-0.056]},"L":{"LH":0.655,"RH":0.655,"LF":0.925,"RF":0.925},"seg":{"LH":[0.344,0.311],"RH":[0.344,0.311],"LF":[0.453,0.472],"RF":[0.453,0.472]},"head":[0.684,0.12],"d_wall":0.278,"flex":-0.1,"name":"Ben","span":1.9,"stand":{"torso":[0.0,0.971],"joints":{"LH":{"shoulder":[-0.241,1.452],"elbow":[-0.241,1.797],"end":[-0.241,2.107]},"RH":{"shoulder":[0.241,1.452],"elbow":[0.241,1.797],"end":[0.241,2.107]},"LF":{"hip":[-0.176,0.916],"knee":[-0.239,0.467],"end":[-0.304,0.0]},"RF":{"hip":[0.176,0.916],"knee":[0.239,0.467],"end":[0.304,0.0]}}},"reach":2.107,"foot_limit":0.731},{"climber":"C","H":1.7,"offsets":{"LH":[-0.221,0.442],"RH":[0.221,0.442],"LF":[-0.162,-0.051],"RF":[0.162,-0.051]},"L":{"LH":0.579,"RH":0.579,"LF":0.85,"RF":0.85},"seg":{"LH":[0.316,0.263],"RH":[0.316,0.263],"LF":[0.416,0.433],"RF":[0.416,0.433]},"head":[0.629,0.111],"d_wall":0.255,"flex":0.0,"name":"Cal","span":1.7,"stand":{"torso":[0.0,0.893],"joints":{"LH":{"shoulder":[-0.221,1.335],"elbow":[-0.221,1.651],"end":[-0.221,1.914]},"RH":{"shoulder":[0.221,1.335],"elbow":[0.221,1.651],"end":[0.221,1.914]},"LF":{"hip":[-0.162,0.842],"knee":[-0.219,0.429],"end":[-0.28,0.0]},"RF":{"hip":[0.162,0.842],"knee":[0.219,0.429],"end":[0.28,0.0]}}},"reach":1.914,"foot_limit":0.842},{"climber":"D","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08,"name":"Ava (injured)","span":1.6,"stand":{"torso":[0.0,0.84],"joints":{"LH":{"shoulder":[-0.208,1.256],"elbow":[-0.208,1.554],"end":[-0.208,1.801]},"RH":{"shoulder":[0.208,1.256],"elbow":[0.208,1.554],"end":[0.208,1.801]},"LF":{"hip":[-0.152,0.792],"knee":[-0.207,0.404],"end":[-0.263,0.0]},"RF":{"hip":[0.152,0.792],"knee":[0.207,0.404],"end":[0.263,0.0]}}},"reach":1.801,"foot_limit":0.92}],"state_example":{"route":"format-demo","state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"poses":[{"torso":[1.36,0.84],"joints":{"LH":{"shoulder":[1.152,1.256],"elbow":[0.976,1.496],"end":[1.2,1.6]},"RH":{"shoulder":[1.568,1.256],"elbow":[1.857,1.327],"end":[1.75,1.55]},"LF":{"hip":[1.208,0.792],"knee":[0.869,0.595],"end":[1.25,0.45]},"RF":{"hip":[1.512,0.792],"knee":[1.758,1.097],"end":[1.85,0.7]}}},{"torso":[1.52,0.96],"joints":{"LH":{"shoulder":[1.312,1.376],"elbow":[1.02,1.431],"end":[1.2,1.6]},"RH":{"shoulder":[1.728,1.376],"elbow":[1.994,1.51],"end":[1.75,1.55]},"LF":{"hip":[1.368,0.912],"knee":[1.001,0.773],"end":[1.25,0.45]},"RF":{"hip":[1.672,0.912],"knee":[2.033,1.065],"end":[1.85,0.7]}}},{"torso":[1.7,0.76],"joints":{"LH":{"shoulder":[1.492,1.176],"elbow":[1.258,1.36],"end":[1.2,1.6]},"RH":{"shoulder":[1.908,1.176],"elbow":[1.65,1.324],"end":[1.75,1.55]},"LF":{"hip":[1.548,0.712],"knee":[1.182,0.852],"end":[1.25,0.45]},"RF":{"hip":[1.852,0.712],"knee":[1.916,1.099],"end":[1.85,0.7]}}}]},"reach":{"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"holds":[{"id":"H1","x":1.2,"y":1.6,"type":"jug","dir":90.0,"use":"both","role":"start"},{"id":"H2","x":1.75,"y":1.55,"type":"crimp","dir":90.0,"use":"both","role":"start"},{"id":"H3","x":1.05,"y":2.35,"type":"pinch","dir":90.0,"use":"both","role":"normal"},{"id":"H4","x":1.95,"y":2.55,"type":"sidepull","dir":180,"use":"both","role":"normal"},{"id":"H5","x":1.4,"y":3.05,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"H6","x":1.6,"y":3.65,"type":"jug","dir":90.0,"use":"both","role":"finish"},{"id":"F1","x":1.25,"y":0.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.7,"type":"foot_chip","dir":90.0,"use":"foot","role":"normal"},{"id":"F3","x":1.5,"y":1.1,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"climber":{"key":"A","H":1.6,"head":[0.592,0.104]},"body":{"climber":"A","H":1.6,"offsets":{"LH":[-0.208,0.416],"RH":[0.208,0.416],"LF":[-0.152,-0.048],"RF":[0.152,-0.048]},"L":{"LH":0.545,"RH":0.545,"LF":0.8,"RF":0.8},"seg":{"LH":[0.298,0.247],"RH":[0.298,0.247],"LF":[0.392,0.408],"RF":[0.392,0.408]},"head":[0.592,0.104],"d_wall":0.24,"flex":0.08},"centres":{"LH":[1.408,1.184],"RH":[1.542,1.134],"LF":[1.402,0.498],"RF":[1.698,0.748]},"region":[[1.287,0.653],[1.289,0.652],[1.315,0.647],[1.341,0.643],[1.368,0.641],[1.395,0.639],[1.421,0.639],[1.448,0.641],[1.475,0.643],[1.501,0.647],[1.527,0.652],[1.553,0.659],[1.579,0.667],[1.604,0.676],[1.629,0.686],[1.653,0.697],[1.677,0.71],[1.699,0.724],[1.722,0.739],[1.743,0.755],[1.764,0.771],[1.784,0.789],[1.803,0.808],[1.821,0.828],[1.837,0.849],[1.853,0.87],[1.868,0.893],[1.882,0.915],[1.895,0.939],[1.906,0.963],[1.916,0.988],[1.925,1.013],[1.933,1.039],[1.94,1.065],[1.944,1.086],[1.925,1.104],[1.894,1.129],[1.863,1.152],[1.83,1.174],[1.796,1.194],[1.762,1.213],[1.726,1.229],[1.69,1.244],[1.653,1.258],[1.615,1.269],[1.577,1.279],[1.539,1.286],[1.5,1.292],[1.461,1.296],[1.422,1.298],[1.382,1.298],[1.343,1.296],[1.304,1.292],[1.265,1.286],[1.227,1.279],[1.189,1.269],[1.151,1.258],[1.114,1.244],[1.078,1.229],[1.049,1.216],[1.044,1.209],[1.022,1.176],[1.002,1.142],[0.997,1.134],[0.997,1.121],[0.999,1.094],[1.001,1.067],[1.005,1.041],[1.01,1.015],[1.017,0.989],[1.025,0.963],[1.034,0.938],[1.044,0.913],[1.055,0.889],[1.068,0.865],[1.082,0.843],[1.097,0.82],[1.113,0.799],[1.129,0.778],[1.147,0.758],[1.166,0.739],[1.186,0.721],[1.207,0.705],[1.228,0.689],[1.251,0.674],[1.273,0.66]],"presets":{"good":[1.44,0.954],"low":[1.44,0.534]},"view":{"x0":0.55,"y0":0.05,"x1":2.45,"y1":2.25}},"strength":{"holds":[{"id":"H1","x":1.2,"y":2.1,"type":"crimp","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.75,"y":2.2,"type":"sloper","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.1,"y":0.8,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.85,"y":0.9,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"runs":[{"climber":"A","name":"Ava","H":1.6,"head":[0.592,0.104],"frame":{"torso":[1.407,1.444],"joints":{"LH":{"shoulder":[1.199,1.86],"elbow":[0.961,2.039],"end":[1.2,2.1]},"RH":{"shoulder":[1.615,1.86],"elbow":[1.882,1.991],"end":[1.75,2.2]},"LF":{"hip":[1.255,1.396],"knee":[0.933,1.172],"end":[1.1,0.8]},"RF":{"hip":[1.559,1.396],"knee":[1.939,1.298],"end":[1.85,0.9]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.4],"n":0.197},"RH":{"f":[-0.03,0.29],"n":0.071},"LF":{"f":[-0.01,0.16],"m":0.13},"RF":{"f":[-0.02,0.15],"m":0.138}},"util":{"LH":0.5,"RH":0.857,"LF":0.138,"RF":0.137}},"limits":{"LH":0.9,"RH":0.35,"LF":1.5,"RF":1.5},"t":0.857,"t_solver":0.857,"limiting":"RH","band":"limit"},{"climber":"B","name":"Ben","H":1.85,"head":[0.684,0.12],"frame":{"torso":[1.407,1.422],"joints":{"LH":{"shoulder":[1.167,1.903],"elbow":[0.889,2.106],"end":[1.2,2.1]},"RH":{"shoulder":[1.648,1.903],"elbow":[1.98,1.991],"end":[1.75,2.2]},"LF":{"hip":[1.231,1.366],"knee":[0.819,1.179],"end":[1.1,0.8]},"RF":{"hip":[1.583,1.366],"knee":[2.035,1.334],"end":[1.85,0.9]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.4],"n":0.197},"RH":{"f":[-0.03,0.29],"n":0.071},"LF":{"f":[-0.01,0.16],"m":0.13},"RF":{"f":[-0.02,0.15],"m":0.138}},"util":{"LH":0.75,"RH":0.546,"LF":0.138,"RF":0.137}},"limits":{"LH":0.6,"RH":0.55,"LF":1.5,"RF":1.5},"t":0.75,"t_solver":0.75,"limiting":"LH","band":"hard"},{"climber":"C","name":"Cal","H":1.7,"head":[0.629,0.111],"frame":{"torso":[1.407,1.44],"joints":{"LH":{"shoulder":[1.186,1.882],"elbow":[0.938,2.079],"end":[1.2,2.1]},"RH":{"shoulder":[1.628,1.882],"elbow":[1.921,2.001],"end":[1.75,2.2]},"LF":{"hip":[1.246,1.389],"knee":[0.887,1.178],"end":[1.1,0.8]},"RF":{"hip":[1.569,1.389],"knee":[1.978,1.314],"end":[1.85,0.9]}},"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"forces":{"LH":{"f":[0.06,0.4],"n":0.197},"RH":{"f":[-0.03,0.29],"n":0.071},"LF":{"f":[-0.01,0.16],"m":0.13},"RF":{"f":[-0.02,0.15],"m":0.138}},"util":{"LH":1.285,"RH":1.2,"LF":0.138,"RF":0.137}},"limits":{"LH":0.35,"RH":0.25,"LF":1.5,"RF":1.5},"t":1.285,"t_solver":1.285,"limiting":"LH","band":"fail"}],"bands":[{"upto":0.5,"key":"easy","name":"easy"},{"upto":0.8,"key":"hard","name":"hard work"},{"upto":1.0,"key":"limit","name":"near the limit"},{"upto":null,"key":"fail","name":"cannot hold: not strong enough"}],"force_scale":0.25,"view":{"x0":0.68,"y0":0.4,"x1":2.32,"y1":2.42}},"balance":{"climber":{"key":"A","H":1.6,"head":[0.592,0.104],"name":"Ava"},"panels":[{"key":"hang","ok":true,"state":{"LH":"H1","RH":"H1","LF":null,"RF":null},"rest":"RH","holds":[{"id":"H1","x":1.5,"y":2.3,"type":"jug","dir":90.0,"use":"both","role":"normal"}],"torso":[1.5,1.411],"joints":{"LH":{"shoulder":[1.292,1.827],"elbow":[1.485,2.053],"end":[1.5,2.3]},"RH":{"shoulder":[1.708,1.827],"elbow":[1.515,2.053],"end":[1.5,2.3]},"LF":{"hip":[1.348,1.363],"knee":[1.191,1.004],"end":[1.268,0.603]},"RF":{"hip":[1.652,1.363],"knee":[1.809,1.004],"end":[1.732,0.603]}},"forces":{"LH":{"f":[-0.0,1.0],"n":0.0,"tau":-0.0}},"share":{"LH":0.833},"t":0.833,"moment":1.5,"hold_x":1.5,"shift":0.0},{"key":"off","ok":false,"state":{"LH":"H1","RH":"H1","LF":null,"RF":null},"rest":"RH","holds":[{"id":"H1","x":1.5,"y":2.3,"type":"jug","dir":90.0,"use":"both","role":"normal"}],"torso":[1.7,1.545],"joints":{"LH":{"shoulder":[1.492,1.961],"elbow":[1.286,2.176],"end":[1.5,2.3]},"RH":{"shoulder":[1.908,1.961],"elbow":[1.645,2.1],"end":[1.5,2.3]},"LF":{"hip":[1.548,1.497],"knee":[1.391,1.138],"end":[1.468,0.737]},"RF":{"hip":[1.852,1.497],"knee":[2.009,1.138],"end":[1.932,0.737]}},"forces":{"LH":{"f":[0.0,1.0],"n":0.0}},"share":null,"t":null,"moment":1.5,"hold_x":1.5,"shift":0.2},{"key":"sidepull","ok":true,"state":{"LH":"H1","RH":"H2","LF":null,"RF":"F1"},"rest":"LH","holds":[{"id":"H1","x":1.2,"y":2.05,"type":"crimp","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.9,"y":2.0,"type":"sidepull","dir":0,"use":"both","role":"normal"},{"id":"F1","x":1.75,"y":1.0,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"torso":[1.5,1.47],"joints":{"LH":{"shoulder":[1.292,1.886],"elbow":[0.996,1.911],"end":[1.2,2.05]},"RH":{"shoulder":[1.708,1.886],"elbow":[1.981,1.766],"end":[1.9,2.0]},"LF":{"hip":[1.348,1.422],"knee":[1.191,1.062],"end":[1.268,0.662]},"RF":{"hip":[1.652,1.422],"knee":[2.025,1.301],"end":[1.75,1.0]}},"forces":{"RH":{"f":[0.279,0.195],"n":0.0,"tau":-0.0},"RF":{"f":[-0.279,0.805],"m":0.0}},"share":{"RH":0.568,"RF":0.568},"t":0.568,"limiting":"RF","moment":1.5}],"strength_again":[{"climber":"A","name":"Ava","t_fixed":0.857,"t":0.235,"share":{"LH":0.235,"RH":0.235,"LF":0.235,"RF":0.235},"limiting":"LF"},{"climber":"B","name":"Ben","t_fixed":0.75,"t":0.241,"share":{"LH":0.241,"RH":0.241,"LF":0.241,"RF":0.241},"limiting":"RF"},{"climber":"C","name":"Cal","t_fixed":1.285,"t":0.278,"share":{"LH":0.278,"RH":0.278,"LF":0.278,"RF":0.278},"limiting":"RF"}],"force_scale":0.3,"view":{"x0":1.0,"y0":0.5,"x1":2.15,"y1":2.68}},"tipping":{"climber":{"key":"A","name":"Ava","H":1.6,"head":[0.592,0.104],"shoulder":0.416,"hip":-0.048},"d":0.24,"views":[{"h":1.2,"hand_y":2.3,"foot_y":1.1,"torso":[1.5,1.657],"N":0.2,"M":0.2,"share":0.399,"formula":0.2},{"h":0.6,"hand_y":2.3,"foot_y":1.7,"torso":[1.5,1.884],"N":0.4,"M":0.4,"share":0.476,"formula":0.4}],"sweep":[{"h":0.4,"N":0.6,"formula":0.6},{"h":0.5,"N":0.48,"formula":0.48},{"h":0.6,"N":0.4,"formula":0.4},{"h":0.7,"N":0.343,"formula":0.343},{"h":0.8,"N":0.3,"formula":0.3},{"h":0.9,"N":0.267,"formula":0.267},{"h":1.0,"N":0.24,"formula":0.24},{"h":1.1,"N":0.218,"formula":0.218},{"h":1.2,"N":0.2,"formula":0.2},{"h":1.3,"N":0.185,"formula":0.185},{"h":1.4,"N":0.171,"formula":0.171},{"h":1.5,"N":0.16,"formula":0.16}],"max_error":0.0,"force_scale":0.5,"strength_again":[{"climber":"A","name":"Ava","t_before":0.235,"t":0.275,"pull":0.182,"share":{"LH":0.275,"RH":0.275,"LF":0.257,"RF":0.25},"limiting":"LH"},{"climber":"B","name":"Ben","t_before":0.241,"t":0.392,"pull":0.209,"share":{"LH":0.392,"RH":0.392,"LF":0.257,"RF":0.191},"limiting":"RH"},{"climber":"C","name":"Cal","t_before":0.278,"t":0.663,"pull":0.192,"share":{"LH":0.663,"RH":0.663,"LF":0.269,"RF":0.203},"limiting":"RH"}]},"barndoor":{"climber":{"key":"A","name":"Ava","H":1.6,"head":[0.592,0.104]},"r":0.05,"F":1.2,"panels":[{"key":"between","ok":true,"holds":[{"id":"H1","x":1.5,"y":2.2,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.22,"y":1.0,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.78,"y":1.0,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H1","LF":"F1","RF":"F2"},"rest":"RH","torso":[1.5,1.476],"joints":{"LH":{"shoulder":[1.292,1.892],"elbow":[1.58,1.966],"end":[1.5,2.2]},"RH":{"shoulder":[1.708,1.892],"elbow":[1.42,1.966],"end":[1.5,2.2]},"LF":{"hip":[1.348,1.428],"knee":[0.97,1.323],"end":[1.22,1.0]},"RF":{"hip":[1.652,1.428],"knee":[2.03,1.323],"end":[1.78,1.0]}},"forces":{"LH":{"f":[0.0,0.242],"n":0.2,"tau":0.0},"LF":{"f":[-0.0,0.379],"m":0.1},"RF":{"f":[-0.0,0.379],"m":0.1}},"t":0.261,"tau":0.0,"needed":0.0,"cap":0.06,"hand_x":1.5,"feet_x":[1.22,1.78]},{"key":"side","ok":false,"holds":[{"id":"H1","x":1.5,"y":2.2,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.86,"y":1.0,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":2.14,"y":1.0,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H1","LF":"F1","RF":"F2"},"rest":"RH","torso":[1.837,1.78],"joints":{"LH":{"shoulder":[1.629,2.196],"elbow":[1.45,1.958],"end":[1.5,2.2]},"RH":{"shoulder":[2.045,2.196],"elbow":[1.747,2.198],"end":[1.5,2.2]},"LF":{"hip":[1.685,1.732],"knee":[1.639,1.343],"end":[1.86,1.0]},"RF":{"hip":[1.989,1.732],"knee":[2.202,1.403],"end":[2.14,1.0]}},"forces":{"LH":{"f":[0.036,0.24],"n":0.2,"tau":0.0},"LF":{"f":[-0.017,0.381],"m":0.097},"RF":{"f":[-0.018,0.379],"m":0.103}},"t":null,"tau":null,"needed":0.072,"cap":0.06,"hand_x":1.5,"feet_x":[1.86,2.14]}],"force_scale":0.3,"view":{"x0":0.95,"y0":0.62,"x1":2.5,"y1":2.5}},"flex":{"holds":[{"id":"H1","x":1.3,"y":2.25,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.75,"y":2.3,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.85,"y":1.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.25,"y":0.75,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":"F2","RF":"F1"},"panels":[{"climber":"A","name":"Ava","flex":0.08,"H":1.6,"ok":true,"torso":[1.548,1.477],"joints":{"LH":{"shoulder":[1.34,1.893],"elbow":[1.114,2.087],"end":[1.3,2.25]},"RH":{"shoulder":[1.756,1.893],"elbow":[1.932,2.133],"end":[1.75,2.3]},"LF":{"hip":[1.396,1.429],"knee":[1.131,1.14],"end":[1.25,0.75]},"RF":{"hip":[1.7,1.429],"knee":[1.787,1.047],"end":[1.85,1.45]}},"head":[0.592,0.104],"hip":1.429,"limit":1.557,"foot":1.45,"best_limit":1.664,"t":0.198},{"climber":"A_stiff","name":"Ava (less flexible)","flex":-0.1,"H":1.6,"ok":false,"torso":[1.548,1.579],"joints":{"LH":{"shoulder":[1.34,1.995],"elbow":[1.079,2.138],"end":[1.3,2.25]},"RH":{"shoulder":[1.756,1.995],"elbow":[1.975,2.197],"end":[1.75,2.3]},"LF":{"hip":[1.396,1.531],"knee":[1.28,1.157],"end":[1.25,0.75]},"RF":{"hip":[1.7,1.531],"knee":[1.928,1.85],"end":[1.85,1.45]}},"head":[0.592,0.104],"hip":1.531,"limit":1.371,"foot":1.45,"best_limit":1.376,"t":null}],"view":{"x0":0.85,"y0":0.55,"x1":2.25,"y1":2.6}},"cards":[{"key":"holds","text":"Two jugs and two good footholds.","climber":"A","name":"Ava","head":[0.592,0.104],"holds":[{"id":"H1","x":1.25,"y":2.0,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.75,"y":2.0,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.3,"y":0.9,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.7,"y":0.95,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"result":{"ok":true,"t":0.203,"torso":[1.501,1.523],"forces":{"LH":{"f":[-0.0,0.216],"n":0.112,"tau":-0.001},"RH":{"f":[0.0,0.217],"n":0.111,"tau":-0.001},"LF":{"f":[0.0,0.281],"m":0.116},"RF":{"f":[0.0,0.285],"m":0.107}},"limiting":"LF","reason":null,"limb":null,"hold":null},"color":"A","draw_torso":[1.501,1.288],"joints":{"LH":{"shoulder":[1.293,1.704],"elbow":[1.043,1.865],"end":[1.25,2.0]},"RH":{"shoulder":[1.709,1.704],"elbow":[1.958,1.867],"end":[1.75,2.0]},"LF":{"hip":[1.349,1.24],"knee":[0.97,1.14],"end":[1.3,0.9]},"RF":{"hip":[1.653,1.24],"knee":[2.04,1.176],"end":[1.7,0.95]}},"share":{"LH":0.203,"RH":0.203,"LF":0.203,"RF":0.203}},{"key":"strength","text":"Hanging from two crimps with no feet.","climber":"C","name":"Cal","head":[0.629,0.111],"holds":[{"id":"H1","x":1.3,"y":2.0,"type":"crimp","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.7,"y":2.0,"type":"crimp","dir":90.0,"use":"both","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":null,"RF":null},"result":{"ok":false,"t":1.429,"torso":[1.5,1.527],"forces":{"LH":{"f":[-0.0,0.5],"n":0.0,"tau":0.0},"RH":{"f":[-0.0,0.5],"n":0.0,"tau":0.0}},"limiting":"LH","reason":"strength","limb":"LH","hold":"H1"},"color":"C","draw_torso":[1.5,1.049],"joints":{"LH":{"shoulder":[1.279,1.491],"elbow":[1.154,1.782],"end":[1.3,2.0]},"RH":{"shoulder":[1.721,1.491],"elbow":[1.846,1.782],"end":[1.7,2.0]},"LF":{"hip":[1.338,0.998],"knee":[1.172,0.616],"end":[1.253,0.191]},"RF":{"hip":[1.661,0.998],"knee":[1.828,0.616],"end":[1.746,0.191]}},"share":{"LH":1.429,"RH":1.429},"hold_type":"crimp"},{"key":"reach","text":"The high foothold of the flexibility figure.","climber":"A_stiff","name":"Ava (less flexible)","head":[0.592,0.104],"holds":[{"id":"H1","x":1.3,"y":2.25,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.75,"y":2.3,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"F2","x":1.25,"y":0.75,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F1","x":1.85,"y":1.45,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":"F2","RF":"F1"},"result":{"ok":false,"t":null,"torso":null,"forces":{},"limiting":null,"reason":"reach","limb":"RF","hold":"F1"},"color":"A","hold_type":"foot_big"},{"key":"balance","text":"Both hands on one sidepull, no feet.","climber":"A","name":"Ava","head":[0.592,0.104],"holds":[{"id":"H1","x":1.6,"y":2.2,"type":"sidepull","dir":0,"use":"both","role":"normal"}],"state":{"LH":"H1","RH":"H1","LF":null,"RF":null},"result":{"ok":false,"t":null,"torso":null,"forces":{},"limiting":null,"reason":"balance","limb":null,"hold":null},"color":"A"},{"key":"unusable","text":"A crimp, for a climber with an injured finger.","climber":"D","name":"Ava (injured)","head":[0.592,0.104],"holds":[{"id":"H1","x":1.25,"y":2.0,"type":"jug","dir":90.0,"use":"both","role":"normal"},{"id":"H2","x":1.75,"y":2.0,"type":"crimp","dir":90.0,"use":"both","role":"normal"},{"id":"F1","x":1.3,"y":0.9,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"},{"id":"F2","x":1.7,"y":0.95,"type":"foot_big","dir":90.0,"use":"foot","role":"normal"}],"state":{"LH":"H1","RH":"H2","LF":"F1","RF":"F2"},"result":{"ok":false,"t":null,"torso":null,"forces":{},"limiting":null,"reason":"unusable","limb":"RH","hold":"H2"},"color":"D","hold_type":"crimp"}],"solver":{"summary":{"n":300,"both":177,"neither":123,"disagree":0,"max_diff":0.0,"held":143,"ms":0.798,"ms_tidy":1.085,"ref_ms":27.689},"size":{"variables":17,"equalities":6,"inequalities":21,"cones":8,"cone_sizes":[3,4]},"max_diff":1.2812057552658018e-06},"direction_picks":[{"type":"jug"},{"type":"sloper"},{"type":"sidepull","dir":0},{"type":"undercling"}]}}</script>
 <script>
 /* ---------- drawing module: wall, holds, climber, forces ----------
    World coordinates are metres, origin bottom-left, y up. A scene maps them
@@ -1568,8 +1552,8 @@ var Draw = (function () {
 
     // formulas, built from the constants so no number is typed twice
     document.querySelector('[data-math="limb-lengths"]').textContent =
-      "\\[ L_{\\text{arm}} = \\frac{\\text{span} - " + B.shoulder_width_in_span + "\\,H}{2} - " + B.grip_inset +
-      "\\,H, \\qquad L_{\\text{leg}} = " + B.leg.toFixed(2) + "\\,H \\]";
+      "\\[ \\begin{aligned} L_{\\text{arm}} &= \\frac{\\text{span} - " + B.shoulder_width_in_span + "\\,H}{2} - " + B.grip_inset +
+      "\\,H \\\\ L_{\\text{leg}} &= " + B.leg.toFixed(2) + "\\,H \\end{aligned} \\]";
     document.querySelector('[data-math="foot-limit"]').textContent =
       "\\[ y_{\\text{foot}} \\;\\le\\; \\underbrace{y_c - " + Math.abs(B.hip[1]) + "\\,H}_{\\text{hip height}} \\;+\\; \\text{flex}\\cdot H \\]";
 
@@ -1761,12 +1745,9 @@ var Draw = (function () {
   if (DATA.stance) renderCheckIntro(DATA.stance, DATA.figures.state_example);
 
   /* ---------- #check: reach (unit 2.1) ---------- */
-  function renderReach(R, sides) {
+  function renderReach(R) {
     var row = document.querySelector('[data-draw="reach"]');
     if (!row) return;
-    var n = sides, loss = 1 - Math.cos(Math.PI / n);
-    document.querySelector('[data-text="reach-sides"]').textContent = String(n);
-    document.querySelector('[data-text="reach-loss"]').textContent = (loss * 100).toFixed(1) + "%";
     var byId = {}, ends = {}, names = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
     R.holds.forEach(function (h) { byId[h.id] = h; });
     Object.keys(R.state).forEach(function (l) { var h = byId[R.state[l]]; if (h) ends[l] = [h.x, h.y]; });
@@ -1856,7 +1837,7 @@ var Draw = (function () {
     });
     draw();
   }
-  if (DATA.figures && DATA.figures.reach) renderReach(DATA.figures.reach, DATA.stance.reach_sides);
+  if (DATA.figures && DATA.figures.reach) renderReach(DATA.figures.reach);
 
   /* ---------- #check: direction (unit 2.2) ---------- */
   function inCone(f, theta, alpha) {
@@ -1921,7 +1902,7 @@ var Draw = (function () {
   if (DATA.model) renderDirection(DATA.model.hold_types, DATA.figures.direction_picks || []);
 
   /* ---------- #check: strength and effort (unit 2.3) ---------- */
-  function renderStrength(S, info, bands) {
+  function renderStrength(S, bands) {
     var slot = document.querySelector('[data-draw="strength"]');
     if (!slot) return;
     var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
@@ -1955,21 +1936,8 @@ var Draw = (function () {
     var ava = S.runs[0], u = ava.frame.util;
     function typeOf(l) { var h = byId[S.state[l]]; return l[1] === "F" ? "foothold" : h.type; }
     document.querySelector('[data-text="effort-example"]').textContent =
-      "Example: " + ava.name + "'s left hand on a " + typeOf("LH") + " uses " + pct(u.LH) + " of its limit of " + ava.limits.LH.toFixed(2) +
-      ", the right hand on a " + typeOf("RH") + " uses " + pct(u.RH) + " of " + ava.limits.RH.toFixed(2) +
-      ", and the feet about " + pct((u.LF + u.RF) / 2) + " each. So t = " + two(ava.t) + " and the right hand is the bottleneck. " +
-      "Once balance is in, the solver will try to move the body so that some of that load goes to the left hand or the feet.";
-
-    var c = info.coverage;
-    document.querySelector('[data-text="strength-impl"]').textContent =
-      "The solver needs linear constraints, so each ball is replaced by a polyhedron with " + info.faces + " faces: " +
-      info.azimuths + " directions around the wall plane at each of " + info.elevations.length + " tilts toward the wall (" +
-      info.elevations.map(function (e) { return e + "°"; }).join(", ") + "), every other ring turned by half a step. " +
-      "Each face u gives one row u·(f_k, N_k) ≤ c·t·F_k. The coverage factor c = " + c.toFixed(3) +
-      " shrinks the polyhedron until its farthest corner touches the ball, so the solver can understate a limb's strength by at most " +
-      ((1 - c) * 100).toFixed(1) + "% and never overstate it. In the figure, the linear program with the forces held fixed gives t = " +
-      S.runs.map(function (r) { return r.t_lp.toFixed(3) + " for " + r.name; }).join(", ") +
-      ", against exact values of " + S.runs.map(function (r) { return r.t.toFixed(3); }).join(", ") + ".";
+      "Example: " + ava.name + "'s left hand on a " + typeOf("LH") + " uses " + pct(u.LH) + " of its limit, the right hand on a " +
+      typeOf("RH") + " " + pct(u.RH) + ", the feet about " + pct((u.LF + u.RF) / 2) + ": t = " + two(ava.t) + ", set by the right hand.";
 
     // the figure
     var v = S.view, sc = Draw.scene(slot, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 230, pad: 4, title: "Forces against strength limits" });
@@ -2015,7 +1983,7 @@ var Draw = (function () {
       rd.appendChild(document.createTextNode(", " + b.name + ". The largest share is the " + NAMES[run.limiting] + " on the " + typeOf(run.limiting) + "."));
       keyEl.appendChild(rd);
       var nt = document.createElement("p"); nt.className = "t-note";
-      nt.textContent = "Dashed line: 100% of the limit. Linear program with these forces: t = " + run.t_lp.toFixed(3) + ".";
+      nt.textContent = "Dashed line: 100% of the limit. Solver, with these forces held fixed: t = " + run.t_solver.toFixed(3) + ".";
       keyEl.appendChild(nt);
     }
     var sw = document.querySelector('[data-draw="strength-switch"]'), btns = [];
@@ -2033,7 +2001,7 @@ var Draw = (function () {
     });
     draw(S.runs[0]);
   }
-  if (DATA.figures && DATA.figures.strength) renderStrength(DATA.figures.strength, DATA.stance.strength, DATA.stance.effort_bands);
+  if (DATA.figures && DATA.figures.strength) renderStrength(DATA.figures.strength, DATA.stance.effort_bands);
 
   /* ---------- #check: in-plane balance (unit 2.4) ---------- */
   function renderBalance(B) {
@@ -2063,8 +2031,7 @@ var Draw = (function () {
       st.className = "st " + (P.ok ? "ok" : "bad"); note.className = "note";
       if (P.key === "hang") {
         st.textContent = "✓ Holds";
-        note.textContent = "Centre of mass right below the hand: x_c = " + m2(P.torso[0]) + " m, hand at x = " + m2(P.hold_x) +
-          " m. The left hand carries (" + m2(P.forces.LH.f[0]) + ", " + m2(P.forces.LH.f[1]) + "), " + pct(P.share.LH) + " of its limit.";
+        note.textContent = "x_c = " + m2(P.torso[0]) + " m, right below the hand. Hand force (" + m2(P.forces.LH.f[0]) + ", " + m2(P.forces.LH.f[1]) + "), " + pct(P.share.LH) + " of its limit.";
       } else if (P.key === "off") {
         // the body would swing back toward the point below the hand
         var hx = P.hold_x, hy = P.joints.LH.end[1];
@@ -2079,7 +2046,7 @@ var Draw = (function () {
         Draw.el(sc.layers.over, "line", { x1: sc.X(hx), y1: sc.Y(P.torso[1] - 0.2), x2: sc.X(P.torso[0]), y2: sc.Y(P.torso[1] - 0.2) }, "anno-line");
         Draw.el(sc.layers.over, "text", { x: sc.X((hx + P.torso[0]) / 2), y: sc.Y(P.torso[1] - 0.2) + 13, "text-anchor": "middle" }, "anno-strong").textContent = m2(P.shift) + " m";
         st.textContent = "✗ Swings";
-        note.textContent = "The same hang with the centre of mass held " + m2(P.shift) + " m to the side. The hand force and gravity are equal and opposite but not in line, so they turn the body. The solver finds no forces that balance it.";
+        note.textContent = "Body held " + m2(P.shift) + " m to the side: hand force and gravity are not in line and turn the body. No solution.";
       } else {
         // head-to-tail: f_RH, f_RF, gravity, back to the start
         var vecs = [], o = [v.x1 - 0.22, v.y0 + 0.1];
@@ -2097,9 +2064,8 @@ var Draw = (function () {
         Draw.el(sc.layers.over, "text", { x: sc.X(v.x1) - 6, y: sc.Y(o[1]) + 14, "text-anchor": "end" }, "anno").textContent = "head to tail: closed";
         var lim = P.limiting;
         st.textContent = "✓ Holds";
-        note.textContent = "The sidepull pulls the hand right, (" + m2(P.forces.RH.f[0]) + ", " + m2(P.forces.RH.f[1]) + "), and the foot pushes left, (" +
-          m2(P.forces.RF.f[0]) + ", " + m2(P.forces.RF.f[1]) + "). Sidepull " + pct(P.share.RH) + ", foot " + pct(P.share.RF) +
-          " of their limits. Moment " + m2(P.moment) + " = x_c " + m2(P.torso[0]) + ".";
+        note.textContent = "Sidepull pulls right (" + m2(P.forces.RH.f[0]) + ", " + m2(P.forces.RH.f[1]) + "), foot pushes left (" +
+          m2(P.forces.RF.f[0]) + ", " + m2(P.forces.RF.f[1]) + "); shares " + pct(P.share.RH) + " and " + pct(P.share.RF) + ".";
       }
       cell.appendChild(st); cell.appendChild(note);
       row.appendChild(cell);
@@ -2107,9 +2073,9 @@ var Draw = (function () {
 
     var A = B.strength_again;
     document.querySelector('[data-text="balance-strength"]').textContent =
-      "In the strength figure above, the forces were fixed by hand. With balance in, the solver chooses them. On the same four holds it spreads the load until every limb uses the same share of its limit: t = " +
-      A.map(function (r) { return m2(r.t) + " for " + r.name + " (" + m2(r.t_fixed) + " with the fixed forces)"; }).join(", ") +
-      ". Nothing yet makes the hands pull the body in toward the wall; they carry load only because sharing it lowers t. The out-of-wall balance in the next section changes that.";
+      "Back to the strength example: choosing the forces itself, the solver spreads the load evenly, t = " +
+      A.map(function (r) { return m2(r.t) + " for " + r.name + " (" + m2(r.t_fixed) + " fixed)"; }).join(", ") +
+      ". The hands carry load only because sharing lowers t; nothing yet makes them pull in. That comes next.";
   }
   if (DATA.figures && DATA.figures.balance) renderBalance(DATA.figures.balance);
 
@@ -2121,12 +2087,11 @@ var Draw = (function () {
     function m2(x) { return x.toFixed(2); }
     function pct(u) { return Math.round(u * 100 + 1e-6) + "%"; }
     document.querySelector('[data-text="tip-d"]').textContent =
-      "d = " + DATA.model.body.d_wall.toFixed(2) + " H, " + Math.round(d * 100) + " cm for " + C.name + ".";
+      "d = " + DATA.model.body.d_wall.toFixed(2) + " H (" + Math.round(d * 100) + " cm for " + C.name + ")";
     var lo = T.views[0], hi = T.views[1];
     document.querySelector('[data-text="tip-example"]').textContent =
-      "With d = " + m2(d) + " m: hand and foot " + m2(lo.h) + " m apart give N = " + m2(lo.N) + "; " + m2(hi.h) +
-      " m apart give N = " + m2(hi.N) + ". The pull-in counts against the hand's strength like any other force, so finger strength matters in every state, and stepping the feet up makes the hands work harder: here the hand's share goes from " +
-      pct(lo.share) + " to " + pct(hi.share) + ".";
+      "With d = " + m2(d) + " m, h = " + m2(lo.h) + " m gives N = " + m2(lo.N) + " and h = " + m2(hi.h) + " m gives N = " + m2(hi.N) +
+      ". N counts against the hand's strength, so its share rises from " + pct(lo.share) + " to " + pct(hi.share) + ".";
 
     var y0 = Math.min.apply(null, T.views.map(function (v) { return v.foot_y; })) - 0.15;
     var y1 = Math.max.apply(null, T.views.map(function (v) { return Math.max(v.hand_y + 0.1, v.torso[1] + C.head[0] + C.head[1] + 0.06); }));
@@ -2204,16 +2169,215 @@ var Draw = (function () {
     Draw.el(svg, "circle", { cx: lx + 10, cy: ly + 18, r: 5 }, "chart-dot");
     Draw.el(svg, "text", { x: lx + 26, y: ly + 22 }, "chart-label").textContent = "state check";
     document.querySelector('[data-text="tip-check"]').textContent =
-      T.sweep.length + " foot heights from " + m2(T.sweep[0].h) + " to " + m2(T.sweep[T.sweep.length - 1].h) +
-      " m; largest gap between the state check and d/h: " + (T.max_error * 100 < 0.1 ? "below 0.1%" : (T.max_error * 100).toFixed(1) + "%") + ". Hover a dot for its values.";
+      T.sweep.length + " foot heights; largest gap to d/h " + (T.max_error * 100 < 0.1 ? "below 0.1%" : (T.max_error * 100).toFixed(1) + "%") + ". Hover a dot for values.";
 
     var A = T.strength_again;
     document.querySelector('[data-text="tip-strength"]').textContent =
-      "On the strength example's four holds, the hands now have to pull the body in as well. The total pull-in is about " + m2(A[0].pull) +
-      " body weights, and t rises: " + A.map(function (r) { return r.name + " " + m2(r.t_before) + " → " + m2(r.t); }).join(", ") +
-      ". Cal rises most: Cal\u2019s crimp limit is the lowest of the three, and the sloper can hardly help, since its β lets it hold the body in only a little.";
+      "Back to the strength example: the hands now also pull in (about " + m2(A[0].pull) + " body weights), and t rises: " +
+      A.map(function (r) { return r.name + " " + m2(r.t_before) + " \u2192 " + m2(r.t); }).join(", ") +
+      ". Cal rises most, with the weakest crimp and a sloper that can hardly pull in.";
   }
   if (DATA.figures && DATA.figures.tipping) renderTipping(DATA.figures.tipping);
+
+  /* ---------- #check: no barn-door (unit 2.6) ---------- */
+  function renderBarndoor(D) {
+    var row = document.querySelector('[data-draw="barndoor"]');
+    if (!row) return;
+    var v = D.view, C = D.climber, s = D.force_scale;
+    function m2(x) { return x.toFixed(2); }
+    function m3(x) { return x.toFixed(3); }
+    D.panels.forEach(function (P) {
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var sc = Draw.scene(cell, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 200, pad: 4, title: P.ok ? "Hand between the feet" : "Both feet to one side" });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      P.holds.forEach(function (h) { Draw.hold(sc, h, { used: true }); });
+      var cls = {}; cls[P.rest] = "limb-rest";
+      Draw.figure(sc, { torso: P.torso, joints: P.joints }, { key: C.key, head: C.head }, { limbClass: cls });
+      Draw.com(sc, P.torso);
+      // vertical axis through the hand
+      Draw.el(sc.layers.over, "line", { x1: sc.X(P.hand_x), y1: sc.Y(v.y1), x2: sc.X(P.hand_x), y2: sc.Y(v.y0) }, "anno-line");
+      // out-of-wall forces: into the wall at the hand, out of it at the feet
+      Object.keys(P.forces).forEach(function (l) {
+        var F = P.forces[l], j = P.joints[l].end, val = l[1] === "H" ? F.n : F.m;
+        if (val < 1e-3) return;
+        var x = sc.X(j[0]), y = sc.Y(j[1]) + (l[1] === "H" ? -26 : 24), r = 5 + 30 * val;
+        var g = Draw.el(sc.layers.over, "g", null, "");
+        Draw.el(g, "circle", { cx: x, cy: y, r: r.toFixed(1) }, "tip");
+        if (l[1] === "H") {
+          var q = r * 0.6;
+          Draw.el(g, "path", { d: "M" + (x - q) + " " + (y - q) + "L" + (x + q) + " " + (y + q) + "M" + (x + q) + " " + (y - q) + "L" + (x - q) + " " + (y + q) }, "com");
+        } else {
+          Draw.el(g, "circle", { cx: x, cy: y, r: 2.6 }, "trail-dot");
+        }
+        if (l[1] === "H") Draw.el(sc.layers.over, "text", { x: x + r + 4, y: y + 4 }, "anno-strong").textContent = "N " + m2(val);
+        else Draw.el(sc.layers.over, "text", { x: x, y: y + r + 13, "text-anchor": "middle" }, "anno-strong").textContent = "M " + m2(val);
+      });
+      if (!P.ok) {
+        // swinging open about the axis: an elliptical arc at hip height
+        var cy = P.torso[1] - 0.05, rx = 0.32, ry = 0.07, pts = [];
+        for (var i = 0; i <= 20; i++) { var a = Math.PI * (1.15 + 0.8 * i / 20); pts.push([sc.X(P.hand_x + rx * Math.cos(a)), sc.Y(cy + ry * Math.sin(a))]); }
+        Draw.el(sc.layers.over, "path", { d: "M" + pts.map(function (p) { return p.join(" "); }).join("L") }, "swing");
+        var q2 = pts[pts.length - 2], e = pts[pts.length - 1];
+        Draw.arrowPx(sc.layers.over, q2[0], q2[1], e[0], e[1], "swing-head", 9);
+      }
+      var st = document.createElement("span"); st.className = "st " + (P.ok ? "ok" : "bad");
+      st.style.fontWeight = "600"; st.style.color = P.ok ? "var(--easy)" : "var(--limit)";
+      st.textContent = P.ok ? "✓ Holds" : "✗ Barn-door";
+      var note = document.createElement("span");
+      note.textContent = P.ok
+        ? "Hand between the feet. Twist needed " + m3(P.needed) + ", grip limit " + m3(P.cap) + "."
+        : "Both feet to the right. Twist needed at least " + m3(P.needed) + ", grip limit " + m3(P.cap) + ".";
+      cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+    });
+    document.querySelector('[data-text="door-impl"]').textContent =
+      "One equality row, and two inequalities per hand for |\u03c4| \u2264 rF. Grip limit here: r F = " + m2(D.r) + " m \u00d7 " + m2(D.F) + " = " + m3(D.panels[0].cap) +
+      " (" + C.name + ", jug). \u201cTwist needed\u201d is the smallest twist over all solutions of the other constraints with t \u2264 1, from a separate solve. Code: barndoor_rows.";
+  }
+  if (DATA.figures && DATA.figures.barndoor) renderBarndoor(DATA.figures.barndoor);
+
+  /* ---------- #check: flexibility (unit 2.7) ---------- */
+  function renderFlex(X, B) {
+    var row = document.querySelector('[data-draw="flex"]');
+    if (!row) return;
+    function m2(x) { return x.toFixed(2); }
+    function cm(x) { return Math.round(Math.abs(x) * 100) + " cm"; }
+    var hip = Math.abs(B.hip[1]);
+    document.querySelector('[data-math="flex-row"]').textContent =
+      "\\[ p_{k,y} \\le y_c - " + hip + "\\,H + \\text{flex}\\cdot H \\]";
+    var tb = document.querySelector('[data-draw="flex-table"]');
+    tb.innerHTML = "<thead><tr><th>Climber</th><th>flex</th><th>Highest foot</th></tr></thead>";
+    var body = document.createElement("tbody");
+    var rows = DATA.model.climbers.concat(DATA.model.variants.filter(function (v) { return v.flex !== undefined && v.key === "A_stiff"; }));
+    rows.forEach(function (c) {
+      var tr = document.createElement("tr"), off = c.flex * c.H;
+      [c.name, (c.flex > 0 ? "+" : c.flex < 0 ? "−" : "") + Math.abs(c.flex).toFixed(2),
+       off === 0 ? "at hip height" : cm(off) + (off > 0 ? " above the hip" : " below the hip")].forEach(function (t, i) {
+        var td = document.createElement("td"); td.textContent = t; if (i === 1) td.className = "num"; tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    tb.appendChild(body);
+
+    var v = X.view;
+    X.panels.forEach(function (P) {
+      var cell = document.createElement("div"); cell.className = "tip-cell";
+      var sc = Draw.scene(cell, { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, k: 190, pad: 4, title: P.name });
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      var lo = Math.min(P.hip, P.limit), hi = Math.max(P.hip, P.limit);
+      Draw.el(sc.layers.trail, "rect", { x: sc.X(v.x0), y: sc.Y(hi), width: ((v.x1 - v.x0) * sc.k).toFixed(1), height: ((hi - lo) * sc.k).toFixed(1) }, "region");
+      Draw.el(sc.layers.over, "line", { x1: sc.X(v.x0), y1: sc.Y(P.hip), x2: sc.X(v.x1), y2: sc.Y(P.hip) }, "anno-line");
+      Draw.el(sc.layers.over, "line", { x1: sc.X(v.x0), y1: sc.Y(P.limit), x2: sc.X(v.x1), y2: sc.Y(P.limit) }, "limit-line");
+      Draw.el(sc.layers.over, "text", { x: sc.X(v.x0) + 4, y: sc.Y(P.hip) + (P.limit > P.hip ? 13 : -5) }, "anno").textContent = "hip";
+      Draw.el(sc.layers.over, "text", { x: sc.X(v.x0) + 4, y: sc.Y(P.limit) + (P.limit > P.hip ? -5 : 13) }, "limit-text").textContent = "highest foot";
+      X.holds.forEach(function (h) { Draw.hold(sc, h, { used: true }); });
+      Draw.figure(sc, { torso: P.torso, joints: P.joints }, { key: "A", head: P.head }, P.ok ? {} : { limbClass: { RF: "limb-out" } });
+      Draw.com(sc, P.torso);
+      var st = document.createElement("span");
+      st.style.fontWeight = "600"; st.style.color = P.ok ? "var(--easy)" : "var(--limit)";
+      st.textContent = P.ok ? "✓ Holds" : "✗ Not flexible enough";
+      var note = document.createElement("span");
+      note.textContent = P.name + " (flex " + (P.flex > 0 ? "+" : "−") + Math.abs(P.flex).toFixed(2) + "): " + (P.ok
+        ? "foothold " + m2(P.foot) + " m, limit " + m2(P.limit) + " m."
+        : "at most " + m2(P.best_limit) + " m, foothold " + m2(P.foot) + " m.");
+      cell.appendChild(st); cell.appendChild(note);
+      row.appendChild(cell);
+    });
+  }
+  if (DATA.figures && DATA.figures.flex) renderFlex(DATA.figures.flex, DATA.model.body);
+
+  /* ---------- #check: the full problem and result cards (unit 2.8) ---------- */
+  function renderProblem(cards, B) {
+    var fm = document.querySelector('[data-math="full-problem"]');
+    if (!fm) return;
+    var hip = Math.abs(B.hip[1]);
+    fm.textContent = "\\[ \\begin{aligned}" +
+      " & \\min\\ t \\quad \\text{over } x, f, N, M, \\tau, t \\\\" +
+      " \\text{\u2460}\\ & \\|p_k - x - o_k\\|_2 \\le L_k \\\\" +
+      " \\text{\u2461}\\ & d_k^\\top f_k \\ge \\|f_k\\|_2 \\cos\\alpha_k \\\\" +
+      " \\text{\u2462}\\ & \\|(f_k, N_k)\\|_2 \\le t F_k, \\ \\ \\|(f_k, M_k)\\|_2 \\le t F_{\\text{foot}} \\\\" +
+      " \\text{\u2463}\\ & \\textstyle\\sum f_k = (0, 1), \\ \\ \\sum (p_{k,x} f_{k,y} - p_{k,y} f_{k,x}) = x_c \\\\" +
+      " \\text{\u2464}\\ & \\Sigma_F M_k = \\Sigma_H N_k, \\ \\ \\Sigma_H p_{k,y} N_k - \\Sigma_F p_{k,y} M_k = d \\\\" +
+      " & \\Sigma_H p_{k,x} N_k - \\Sigma_F p_{k,x} M_k + \\Sigma_H \\tau_k = 0 \\\\" +
+      " & N_k \\le \\beta_k d_k^\\top f_k, \\ \\ |\\tau_k| \\le r_k F_k \\\\" +
+      " \\text{\u2465}\\ & p_{k,y} \\le y_c - " + hip + "H + \\text{flex}\\cdot H \\\\" +
+      " & N_k, M_k, t \\ge 0 \\end{aligned} \\]";
+
+    var wrap = document.querySelector('[data-draw="result-cards"]');
+    var NAMES = { LH: "left hand", RH: "right hand", LF: "left foot", RF: "right foot" };
+    function pct(u) { return Math.round(u * 100 + 1e-6) + "%"; }
+    cards.forEach(function (c) {
+      var R = c.result;
+      var card = document.createElement("div"); card.className = "card cl-" + c.color;
+      var h = document.createElement("h4");
+      var sw = document.createElement("span"); sw.className = "swatch"; h.appendChild(sw);
+      h.appendChild(document.createTextNode(c.name));
+      card.appendChild(h);
+      var p = document.createElement("p"); p.className = "blurb"; p.textContent = c.text; card.appendChild(p);
+      var xs = c.holds.map(function (q) { return q.x; }), ys = c.holds.map(function (q) { return q.y; });
+      var x0 = Math.min.apply(null, xs) - 0.45, x1 = Math.max.apply(null, xs) + 0.45;
+      var y0 = Math.min(Math.min.apply(null, ys), c.draw_torso ? c.draw_torso[1] - 0.9 : 9) - 0.2, y1 = Math.max.apply(null, ys) + 0.3;
+      if (y1 - y0 < 1.0) y0 = y1 - 1.0;
+      var holder = document.createElement("div"); holder.className = "fig-main";
+      var sc = Draw.scene(holder, { x0: x0, y0: y0, x1: x1, y1: y1, k: 120, pad: 2, title: c.text });
+      card.appendChild(holder);
+      Draw.wall(sc, { w: 3, h: 4.2 }, { grid: 0.5, clip: true });
+      var used = {};
+      Object.keys(c.state).forEach(function (l) { if (c.state[l]) used[c.state[l]] = (used[c.state[l]] ? used[c.state[l]] + "+" : "") + l; });
+      c.holds.forEach(function (q) {
+        Draw.hold(sc, q, { used: true });
+        Draw.el(sc.layers.over, "text", { x: sc.X(q.x), y: sc.Y(q.y) + 18, "text-anchor": "middle" }, "h-label").textContent = q.id + " " + (used[q.id] || "");
+      });
+      if (c.joints) {
+        var cls = {};
+        if (R.limb) cls[R.limb] = "limb-out";
+        Draw.figure(sc, { torso: c.draw_torso, joints: c.joints }, { key: c.color, head: c.head }, { limbClass: cls });
+        Draw.com(sc, c.draw_torso);
+      }
+      var v = document.createElement("p"); v.className = "t-read";
+      var b = document.createElement("b");
+      b.className = R.ok ? "easy" : "fail";
+      if (R.ok) {
+        b.textContent = "\u2713 Holds, t* = " + R.t.toFixed(2);
+        v.appendChild(b);
+        v.appendChild(document.createTextNode(" (largest share: " + NAMES[R.limiting] + ")."));
+      } else {
+        var head = { strength: "Not strong enough", reach: "Cannot reach", balance: "Direction or balance does not work", unusable: "Unusable hold" }[R.reason];
+        b.textContent = "\u2717 " + head;
+        v.appendChild(b);
+        var why = "";
+        if (R.reason === "strength") why = ": t* = " + R.t.toFixed(2) + "; the " + NAMES[R.limb] + " on the " + c.hold_type + " (" + R.hold + ") would need " + pct(c.share[R.limb]) + " of its limit.";
+        else if (R.reason === "reach") why = ": " + NAMES[R.limb] + " cannot reach " + R.hold + ".";
+        else if (R.reason === "balance") why = ": the holds can be reached, but no forces balance the body.";
+        else why = ": " + c.name + " has no strength for the " + c.hold_type + " (" + R.hold + "), found before solving.";
+        v.appendChild(document.createTextNode(why));
+      }
+      card.appendChild(v);
+      wrap.appendChild(card);
+    });
+  }
+  if (DATA.figures && DATA.figures.cards) renderProblem(DATA.figures.cards, DATA.model.body);
+
+  /* ---------- #check: solving it (unit 2.9) ---------- */
+  function renderSolver(V) {
+    var st = document.querySelector('[data-draw="solver-stats"]');
+    if (!st) return;
+    var M = V.summary, Z = V.size;
+    document.querySelector('[data-text="solver-size"]').textContent =
+      "With four limbs on, the program has " + Z.variables + " unknowns, " + Z.equalities + " equations, " + Z.inequalities +
+      " linear inequalities and " + Z.cones + " second-order cones (sizes " + Z.cone_sizes.join(" and ") +
+      "). Clarabel, an interior-point solver, takes about " + M.ms.toFixed(1) + " ms per state, or " + M.ms_tidy.toFixed(1) +
+      " ms with the second stage (median). The search will call it many thousands of times.";
+    [["Random states, solved and cross-checked against cvxpy", String(M.n)],
+     ["Same verdict", String(M.n - M.disagree) + " of " + M.n + " (" + M.both + " with a solution, " + M.neither + " without)"],
+     ["Largest difference in t*", V.max_diff.toExponential(1)],
+     ["Time per state", M.ms.toFixed(1) + " ms here, " + M.ref_ms.toFixed(0) + " ms through cvxpy"]
+    ].forEach(function (r) {
+      var li = document.createElement("li"); var b = document.createElement("b"); b.textContent = r[0] + ": ";
+      li.appendChild(b); li.appendChild(document.createTextNode(r[1])); st.appendChild(li);
+    });
+  }
+  if (DATA.figures && DATA.figures.solver) renderSolver(DATA.figures.solver);
 
   /* source links */
   Array.prototype.forEach.call(document.querySelectorAll("a[data-src]"), function (a) {
