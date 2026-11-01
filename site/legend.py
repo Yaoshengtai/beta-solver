@@ -236,11 +236,12 @@ def strength_figure() -> dict:
         region = torso_region(body, route, state)
         if not region:
             raise ValueError(f"{c.name} cannot reach the strength example")
-        torso = (float(sum(p[0] for p in region) / len(region)), float(sum(p[1] for p in region) / len(region)))
         t, share, limiting = effort(body, route, state, STRENGTH_FORCES)
         lp = solve(body, route, state, fixed=STRENGTH_FORCES)
         if not lp["ok"]:
             raise ValueError(f"the example forces break a constraint for {c.name}: {lp['message']}")
+        # in-plane balance fixes x_c for these forces; y_c is free, so draw it mid-range
+        torso = (lp["torso"][0], mid_y(region, lp["torso"][0]))
         runs.append({
             "climber": key, "name": c.name, "H": c.H, "head": list(body.head),
             "frame": {"torso": list(torso), "joints": body.joints(torso, ends), "state": state.as_dict(),
@@ -258,4 +259,97 @@ def strength_figure() -> dict:
         "coverage": coverage(),
         "force_scale": 0.25,
         "view": {"x0": 0.68, "y0": 0.4, "x1": 2.32, "y1": 2.42},
+    })
+
+
+def mid_y(region, x: float, frac: float = 0.5) -> float:
+    """A point of the vertical extent of a convex polygon at a given x: 0 bottom, 0.5 middle, 1 top."""
+    ys = []
+    n = len(region)
+    for i in range(n):
+        (x1, y1), (x2, y2) = region[i], region[(i + 1) % n]
+        if (x1 - x) * (x2 - x) <= 0 and x1 != x2:
+            ys.append(y1 + (y2 - y1) * (x - x1) / (x2 - x1))
+    if not ys:
+        raise ValueError("x is outside the region")
+    return float(min(ys) + frac * (max(ys) - min(ys)))
+
+
+# ------------------------------------------------------------ ④ in-plane balance
+
+def _route(rid, holds, start):
+    return Route(rid, rid, "", holds, start, holds[-1].id)
+
+
+def balance_figure() -> dict:
+    """Data for the in-plane balance figure in #check: three panels, all checked by the solver.
+
+    1. Hanging from one hand: the solver puts the centre of mass right below it.
+    2. The same with the body held 0.2 m to the side: no forces balance it.
+    3. A sidepull and a foot: the solver's forces, which close into a triangle with gravity.
+    Also the strength example of unit 2.3, now with the solver choosing the forces.
+    """
+    from betasolver.stance import State, effort, moment, solve, torso_region
+
+    body = make_body(AVA)
+    panels = []
+
+    hang = _route("hang", [Hold("H1", 1.50, 2.30, "jug"), Hold("T", 1.50, 3.60, "jug")], ("H1", "H1"))
+    s1 = State("H1", "H1")
+    region = torso_region(body, hang, s1)
+    r1 = solve(body, hang, s1, no_force="RH")
+    if not r1["ok"]:
+        raise ValueError("one-hand hang should hold")
+    # hanging: draw the body low in its range, arms nearly straight
+    torso1 = (r1["torso"][0], mid_y(region, r1["torso"][0], 0.03))
+    shift = 0.20
+    # same height if the arm still reaches, otherwise as low as it reaches
+    torso2 = (torso1[0] + shift, max(torso1[1], mid_y(region, torso1[0] + shift, 0.03)))
+    r2 = solve(body, hang, s1, no_force="RH", torso=torso2)
+    if r2["ok"]:
+        raise ValueError("a body to the side of a single hand must not balance")
+    hold1 = hang.hold("H1")
+    ends1 = {"LH": (hold1.x, hold1.y), "RH": (hold1.x, hold1.y)}
+    for key, torso, res in (("hang", torso1, r1), ("off", torso2, None)):
+        forces = res["forces"] if res else {"LH": {"f": (0.0, 1.0), "n": 0.0}}
+        panels.append({
+            "key": key, "ok": res is not None, "state": s1.as_dict(), "rest": "RH",
+            "holds": [{**hang.to_dict()["holds"][0], "role": "normal"}],
+            "torso": list(torso), "joints": body.joints(torso, ends1), "forces": forces,
+            "share": res["share"] if res else None, "t": res["t_exact"] if res else None,
+            "moment": moment(hang, s1, forces), "hold_x": hold1.x, "shift": torso[0] - hold1.x,
+        })
+
+    side = _route("side", [Hold("H1", 1.20, 2.05, "crimp"), Hold("H2", 1.90, 2.00, "sidepull", dir=0),
+                           Hold("F1", 1.75, 1.00, "foot_big"), Hold("T", 1.50, 3.60, "jug")], ("H1", "H2"))
+    s3 = State("H1", "H2", None, "F1")
+    r3 = solve(body, side, s3, no_force="LH")
+    if not r3["ok"]:
+        raise ValueError("the sidepull example should hold")
+    torso3 = (r3["torso"][0], mid_y(torso_region(body, side, s3), r3["torso"][0]))
+    ends3 = {l: (side.hold(h).x, side.hold(h).y) for l, h in s3.as_dict().items() if h}
+    panels.append({
+        "key": "sidepull", "ok": True, "state": s3.as_dict(), "rest": "LH",
+        "holds": [{**h, "role": "normal"} for h in side.to_dict()["holds"] if h["id"] != "T"],
+        "torso": list(torso3), "joints": body.joints(torso3, ends3), "forces": r3["forces"],
+        "share": r3["share"], "t": r3["t_exact"], "limiting": r3["limiting"],
+        "moment": moment(side, s3, r3["forces"]),
+    })
+
+    # back to the strength example: same state, the solver now chooses the forces
+    route, state = strength_route(), State("H1", "H2", "F1", "F2")
+    again = []
+    for key in ("A", "B", "C"):
+        c = PROFILES[key]
+        b = make_body(c)
+        res = solve(b, route, state)
+        again.append({"climber": key, "name": c.name, "t_fixed": effort(b, route, state, STRENGTH_FORCES)[0],
+                      "t": res["t_exact"], "t_lp": res["t"], "share": res["share"], "limiting": res["limiting"]})
+
+    return _round({
+        "climber": {"key": AVA.key, "H": AVA.H, "head": list(body.head), "name": AVA.name},
+        "panels": panels,
+        "strength_again": again,
+        "force_scale": 0.3,
+        "view": {"x0": 1.0, "y0": 0.5, "x1": 2.15, "y1": 2.68},
     })

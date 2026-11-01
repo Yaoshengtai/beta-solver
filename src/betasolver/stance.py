@@ -6,9 +6,9 @@ find a body position and contact forces that satisfy six constraints, with
 the smallest effort t.
 
 This module holds the framework (states, unknowns, result type, checks done
-before any solving) and the constraints built so far: reach, direction and
-strength, plus the linear program that puts them together. The other three
-constraints are added in units 2.4 to 2.9.
+before any solving) and the constraints built so far: reach, direction,
+strength, in-plane balance, plus the linear program that puts them
+together. Out-of-wall balance and flexibility are added in units 2.5 to 2.9.
 """
 
 from __future__ import annotations
@@ -439,11 +439,59 @@ def variable_bounds(lay: Layout) -> list:
     return b
 
 
-def assemble(body: Body, route: Route, state: State, no_force: str | None = None):
-    """The constraints built so far (① reach, ② direction, ③ strength) as G z <= h.
+# ------------------------------------------------------------ ④ in-plane balance
 
-    Returns (layout, G, h, owners); owners names the constraint and limb of each row.
+def balance_rows(route: Route, state: State, AF: tuple[str, ...], lay: Layout):
+    """④ as linear equations A z = b, with gravity (0, -1) acting at the centre of mass x.
+
+    Three rows, summing over the limbs that push:
+        sum f_kx = 0                                (no sliding sideways)
+        sum f_ky = 1                                (no falling)
+        sum (p_kx f_ky - p_ky f_kx) - x_c = 0       (no swinging)
+    Moments are taken about the wall origin, where the hold positions p_k are
+    known numbers, so every row is linear in the unknowns. Taken about the
+    centre of mass, the moment would contain (p_k - x) x f_k, a product of
+    two unknowns.
     """
+    A = np.zeros((3, lay.size))
+    b = np.array([0.0, 1.0, 0.0])
+    for limb in AF:
+        h = route.hold(state.hold(limb))
+        sf = lay[("f", limb)]
+        A[0, sf.start] = 1.0
+        A[1, sf.start + 1] = 1.0
+        A[2, sf.start] = -h.y
+        A[2, sf.start + 1] = h.x
+    A[2, lay[("x", None)].start] = -1.0
+    return A, b, ["force x", "force y", "moment"]
+
+
+def moment(route: Route, state: State, forces: dict) -> float:
+    """Total moment of the contact forces about the wall origin: sum p_kx f_ky - p_ky f_kx."""
+    out = 0.0
+    for limb, F in forces.items():
+        h = route.hold(state.hold(limb))
+        out += h.x * F["f"][1] - h.y * F["f"][0]
+    return out
+
+
+# ------------------------------------------------------- the linear program
+
+@dataclass(frozen=True)
+class Program:
+    """The state check as a linear program: minimise t subject to G z <= h and A z = b."""
+
+    layout: Layout
+    G: np.ndarray
+    h: np.ndarray
+    owners: list  # (constraint, limb) of each row of G
+    A: np.ndarray
+    b: np.ndarray
+    eq_owners: list  # (constraint, name) of each row of A
+
+
+def assemble(body: Body, route: Route, state: State, no_force: str | None = None) -> Program:
+    """The constraints built so far: ① reach, ② direction, ③ strength and ④ in-plane balance."""
     A, AF = limb_sets(state, no_force)
     lay = layout(AF)
     Gr, hr, orr = reach_rows(body, route, state)
@@ -452,19 +500,61 @@ def assemble(body: Body, route: Route, state: State, no_force: str | None = None
     G2, h2, o2 = direction_rows(route, state, AF, lay)
     G3, h3, o3 = strength_rows(body, route, state, AF, lay)
     owners = [("reach", l) for l in orr] + [("direction", l) for l in o2] + [("strength", l) for l in o3]
-    return lay, np.vstack([G1, G2, G3]), np.concatenate([hr, h2, h3]), owners
+    Ab, bb, ob = balance_rows(route, state, AF, lay)
+    return Program(lay, np.vstack([G1, G2, G3]), np.concatenate([hr, h2, h3]), owners,
+                   Ab, bb, [("inplane", n) for n in ob])
 
 
-def solve(body: Body, route: Route, state: State, no_force: str | None = None, fixed: dict | None = None) -> dict:
-    """Minimise t subject to the constraints built so far, with scipy's HiGHS.
+def _tidy(P: Program, bounds: list, t_star: float, AF: tuple[str, ...]):
+    """Second stage: keep t at its optimum and remove force that does nothing.
 
-    fixed: optional forces held at given values, in the format of `effort`.
-    Until in-plane balance is added (unit 2.4) nothing makes a limb carry
-    weight, so this is only meaningful with fixed forces.
+    The polyhedron has flat faces, so many force splits share the optimal t;
+    some of them have two limbs squeezing sideways against each other for no
+    reason. Holding t <= t*, minimise sum |f_kx| + sum N_k + sum M_k. This
+    never changes t, only which of the equally good solutions is reported.
     """
     from scipy.optimize import linprog
 
-    lay, G, h, _ = assemble(body, route, state, no_force)
+    lay, n, k = P.layout, P.layout.size, len(AF)
+    G = np.hstack([P.G, np.zeros((len(P.G), k))])
+    extra, rhs = [], []
+    for i, limb in enumerate(AF):
+        fx = lay[("f", limb)].start
+        for sign in (1.0, -1.0):
+            row = np.zeros(n + k)
+            row[fx], row[n + i] = sign, -1.0
+            extra.append(row)
+            rhs.append(0.0)
+    row = np.zeros(n + k)
+    row[lay[("t", None)].start] = 1.0
+    extra.append(row)
+    rhs.append(t_star * (1 + 1e-9) + 1e-12)
+    G = np.vstack([G, np.array(extra)])
+    h = np.concatenate([P.h, rhs])
+    A = np.hstack([P.A, np.zeros((len(P.A), k))])
+    c = np.zeros(n + k)
+    c[n:] = 1.0
+    for limb in AF:
+        c[lay[(_normal(limb), limb)].start] = 1.0
+    res = linprog(c, A_ub=G, b_ub=h, A_eq=A, b_eq=P.b, bounds=bounds + [(0.0, None)] * k, method="highs")
+    return res.x[:n] if res.status == 0 else None
+
+
+def solve(body: Body, route: Route, state: State, no_force: str | None = None,
+          fixed: dict | None = None, torso=None, tidy: bool = True) -> dict:
+    """Minimise t subject to the constraints built so far, with scipy's HiGHS.
+
+    fixed: optional forces held at given values, in the format of `effort`.
+    torso: optional body position (x_c, y_c) held fixed.
+    tidy: run the second stage (`_tidy`) that removes useless squeezing.
+    Returns ok, t, the body position, every pushing limb's forces, each
+    limb's exact share of its strength and the limiting limb. The
+    out-of-wall unknowns are only bounded by strength until unit 2.5.
+    """
+    from scipy.optimize import linprog
+
+    P = assemble(body, route, state, no_force)
+    lay = P.layout
     bounds = variable_bounds(lay)
     for limb, F in (fixed or {}).items():
         sf = lay[("f", limb)]
@@ -472,14 +562,28 @@ def solve(body: Body, route: Route, state: State, no_force: str | None = None, f
         v = F.get("n", 0.0) if limb in HANDS else F.get("m", 0.0)
         sn = lay[(_normal(limb), limb)]
         bounds[sn.start] = (v, v)
+    if torso is not None:
+        sx = lay[("x", None)]
+        bounds[sx.start], bounds[sx.start + 1] = (torso[0],) * 2, (torso[1],) * 2
     c = np.zeros(lay.size)
     c[lay[("t", None)]] = 1.0
-    res = linprog(c, A_ub=G, b_ub=h, bounds=bounds, method="highs")
+    res = linprog(c, A_ub=P.G, b_ub=P.h, A_eq=P.A, b_eq=P.b, bounds=bounds, method="highs")
     if res.status != 0:
         return {"ok": False, "status": res.status, "message": res.message}
     z = res.x
+    AF = limb_sets(state, no_force)[1]
+    if tidy:
+        z2 = _tidy(P, bounds, float(z[lay[("t", None)]][0]), AF)
+        if z2 is not None:
+            z = z2
+    forces = {}
+    for limb in AF:
+        f = z[lay[("f", limb)]]
+        out = float(z[lay[(_normal(limb), limb)]][0])
+        forces[limb] = {"f": (float(f[0]), float(f[1])), ("n" if limb in HANDS else "m"): out}
+    t_exact, share, limiting = effort(body, route, state, forces)
     return {"ok": True, "t": float(z[lay[("t", None)]][0]), "torso": tuple(float(v) for v in z[lay[("x", None)]]),
-            "z": z, "layout": lay}
+            "forces": forces, "share": share, "t_exact": t_exact, "limiting": limiting, "z": z, "layout": lay}
 
 
 def check(body: Body, route: Route, state: State, no_force: str | None = None) -> Result:
@@ -491,4 +595,4 @@ def check(body: Body, route: Route, state: State, no_force: str | None = None) -
         return early
     if not torso_region(body, route, state, REACH_SIDES):
         return Result(ok=False, reason="reach")
-    raise NotImplementedError("balance and flexibility are added in units 2.4 to 2.9")
+    raise NotImplementedError("out-of-wall balance and flexibility are added in units 2.5 to 2.9")
