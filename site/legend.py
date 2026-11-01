@@ -834,13 +834,18 @@ def graph_figure() -> dict:
     })
 
 
+@functools.lru_cache(maxsize=8)
+def toy_beta(key: str):
+    """The best beta on the toy route for one climber, computed once per build."""
+    from betasolver.search import solve
+    return solve(toy_route(), PROFILES[key])
+
+
 @functools.lru_cache(maxsize=1)
 def search_figure() -> dict:
     """Data for the two-stage Dijkstra section in #search: both stages on the toy route, and the beta."""
-    from betasolver.search import solve
-
     r = toy_route()
-    b = solve(r, AVA)
+    b = toy_beta("A")
     steps = []
     for i, (m, res, w) in enumerate(b.steps):
         steps.append({"n": i + 1, "describe": m.describe(r), "limb": m.limb, "kind": m.kind,
@@ -856,3 +861,22 @@ def search_figure() -> dict:
         "stats": b.stats,
         "full_graph": graph_figure()["stats"]["states"]["reachable"],
     })
+
+
+
+@functools.lru_cache(maxsize=1)
+def player_figure() -> dict:
+    """Data for the beta player in #search: Ava, Ben and Cal on the toy route, smoothed and exported."""
+    from betasolver.body import make_body
+    from betasolver.export import SLACK, export_run, smoothing_check
+
+    r = toy_route()
+    runs, checks = [], []
+    for key in ("A", "B", "C"):
+        c, b = PROFILES[key], toy_beta(key)
+        run = export_run(r, c, b)
+        run["body"] = _round(make_body(c).to_dict())
+        runs.append(run)
+        checks.append({"climber": key, **smoothing_check(r, c, b)})
+    return {"route": _round(r.to_dict()), "runs": runs, "slack": SLACK, "smoothing": checks,
+            "bands": [0.5, 0.8], "force_scale": 0.3, "view": {"x0": 0.85, "y0": 0.3, "x1": 2.75, "y1": 3.3}}

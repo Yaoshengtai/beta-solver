@@ -226,3 +226,14 @@ def test_dijkstra_figure_embedded(html):
     assert D["status"] == "ok" and D["steps"] and sum(1 for s in D["steps"] if s["crux"]) == 1
     assert all(a <= b + 1e-9 for a, b in zip(D["stage1"], D["stage1"][1:]))
     assert 'data-draw="dijkstra-charts"' in html and "Planned · unit 4.2" not in html
+
+
+
+def test_player_embedded(html):
+    raw = re.search(r'<script type="application/json" id="site-data">(.*?)</script>', html, re.S).group(1)
+    X = json.loads(raw)["figures"]["player"]
+    assert [r["climber"] for r in X["runs"]] == ["A", "B", "C"]
+    assert all(c["valid"] for c in X["smoothing"])
+    for r in X["runs"]:
+        assert r["status"] == "ok" and all(len(s["frames"]) == 4 for s in r["steps"])
+    assert 'data-draw="player"' in html and "Planned · unit 4." not in html   # chapter 4 is complete
